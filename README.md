@@ -97,6 +97,6 @@ Para garantir **velocidade de desenvolvimento**, **simplicidade de deploy** e **
 ## 🚀 Instalação e Execução
 
 1. Clonar o repositório:
-   ```bash
+   \`\`\`bash
    git clone https://github.com/AngreeCloud/InternLink.git
    cd InternLink
