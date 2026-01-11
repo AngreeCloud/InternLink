@@ -10,6 +10,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff, Mail, Lock } from "lucide-react"
 import Link from "next/link"
+import { signInWithEmailAndPassword } from "firebase/auth"
+import { auth } from "@/lib/firebase"
+import { useRouter } from "next/navigation"
 
 export function LoginForm() {
   const [email, setEmail] = useState("")
@@ -17,6 +20,7 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -24,16 +28,11 @@ export function LoginForm() {
     setError("")
 
     try {
-      // TODO: Implement Firebase authentication
-      console.log("Login attempt:", { email, password })
-
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // For now, just show success
-      alert("Login functionality will be implemented with Firebase")
+      await signInWithEmailAndPassword(auth, email, password)
+      router.push("/dashboard")
     } catch (err) {
-      setError("Erro ao fazer login. Tente novamente.")
+      setError("Erro ao fazer login. Verifique suas credenciais e tente novamente.")
+      console.error(err)
     } finally {
       setIsLoading(false)
     }
