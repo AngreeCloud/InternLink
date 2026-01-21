@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff, Mail, Lock } from "lucide-react"
 import Link from "next/link"
 import { signInWithEmailAndPassword } from "firebase/auth"
-import { auth } from "@/lib/firebase"
+import { getAuthRuntime } from "@/lib/firebase-runtime"
 import { useRouter } from "next/navigation"
 
 export function LoginForm() {
@@ -28,10 +28,12 @@ export function LoginForm() {
     setError("")
 
     try {
+      const auth = await getAuthRuntime()
       await signInWithEmailAndPassword(auth, email, password)
       router.push("/dashboard")
     } catch (err) {
-      setError("Erro ao fazer login. Verifique suas credenciais e tente novamente.")
+      const message = err instanceof Error ? err.message : String(err)
+      setError(message.includes("Firebase config") ? message : "Erro ao fazer login. Verifique as suas credenciais e tente novamente.")
       console.error(err)
     } finally {
       setIsLoading(false)
@@ -42,7 +44,7 @@ export function LoginForm() {
     <Card className="w-full">
       <CardHeader className="space-y-1">
         <CardTitle className="text-2xl text-center">Entrar</CardTitle>
-        <CardDescription className="text-center">Entre com suas credenciais para acessar a plataforma</CardDescription>
+        <CardDescription className="text-center">Entre com as suas credenciais para aceder à plataforma</CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
@@ -59,7 +61,7 @@ export function LoginForm() {
               <Input
                 id="email"
                 type="email"
-                placeholder="seu@email.com"
+                placeholder="teu@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="pl-10"
@@ -69,13 +71,13 @@ export function LoginForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Senha</Label>
+            <Label htmlFor="password">Palavra-passe</Label>
             <div className="relative">
               <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
                 id="password"
                 type={showPassword ? "text" : "password"}
-                placeholder="Sua senha"
+                placeholder="A tua palavra-passe"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="pl-10 pr-10"
@@ -99,14 +101,14 @@ export function LoginForm() {
         </CardContent>
 
         <CardFooter className="flex flex-col space-y-4">
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? "Entrando..." : "Entrar"}
+          <Button type="submit" className="w-full mt-1" disabled={isLoading}>
+            {isLoading ? "A entrar..." : "Entrar"}
           </Button>
 
           <div className="text-center text-sm text-muted-foreground">
             Não tem uma conta?{" "}
             <Link href="/register" className="text-primary hover:underline">
-              Registrar-se
+              Registe-se
             </Link>
           </div>
         </CardFooter>

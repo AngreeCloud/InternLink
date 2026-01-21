@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { registerTutor } from "@/actions/register";
+import { useRouter } from "next/navigation";
 
 const tutorSchema = z.object({
   nome: z.string().min(3, "O nome é obrigatório."),
@@ -33,10 +34,16 @@ export default function TutorRegisterPage() {
     },
   });
 
+  const router = useRouter();
+
   async function onSubmit(values: z.infer<typeof tutorSchema>) {
     try {
-      await registerTutor(values);
-      alert("Conta criada com sucesso! Aguarde associação a um estágio.");
+      const result = await registerTutor(values);
+      router.push(
+        `/account-status?email=${encodeURIComponent(result.email ?? values.email)}&createdAt=${encodeURIComponent(
+          result.createdAt ?? ""
+        )}`
+      );
     } catch (error) {
       console.error("Erro ao criar conta de tutor:", error);
       alert("Erro ao criar conta. Tente novamente.");
@@ -63,7 +70,7 @@ export default function TutorRegisterPage() {
                <FormField control={form.control} name="email" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Email</FormLabel>
-                  <FormControl><Input type="email" placeholder="seu@email.com" {...field} /></FormControl>
+                  <FormControl><Input type="email" placeholder="teu@email.com" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -102,7 +109,7 @@ export default function TutorRegisterPage() {
                   <FormMessage />
                 </FormItem>
               )} />
-              <Button type="submit" className="w-full">Criar Conta</Button>
+              <Button type="submit" className="w-full mt-1">Criar Conta</Button>
             </form>
           </Form>
         </CardContent>

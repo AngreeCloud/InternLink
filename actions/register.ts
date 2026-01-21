@@ -1,6 +1,8 @@
-import { createUserWithEmailAndPassword } from "firebase/auth";
+"use client";
+
+import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 
 export async function registerAluno(data: {
   nome: string;
@@ -18,8 +20,13 @@ export async function registerAluno(data: {
     throw new Error("Campos obrigatórios não preenchidos.");
   }
 
+  const auth = await getAuthRuntime();
+  const db = await getDbRuntime();
+
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-  const userId = userCredential.user.uid;
+  const user = userCredential.user;
+  await sendEmailVerification(user);
+  const userId = user.uid;
 
   const userDoc = {
     role: "aluno",
@@ -36,6 +43,7 @@ export async function registerAluno(data: {
   };
 
   await setDoc(doc(db, "users", userId), userDoc);
+  return { uid: userId, email: user.email, createdAt: user.metadata.creationTime };
 }
 
 export async function registerProfessor(data: {
@@ -53,8 +61,13 @@ export async function registerProfessor(data: {
     throw new Error("Campos obrigatórios não preenchidos.");
   }
 
+  const auth = await getAuthRuntime();
+  const db = await getDbRuntime();
+
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-  const userId = userCredential.user.uid;
+  const user = userCredential.user;
+  await sendEmailVerification(user);
+  const userId = user.uid;
 
   const userDoc = {
     role: "professor",
@@ -69,6 +82,7 @@ export async function registerProfessor(data: {
   };
 
   await setDoc(doc(db, "users", userId), userDoc);
+  return { uid: userId, email: user.email, createdAt: user.metadata.creationTime };
 }
 
 export async function registerTutor(data: {
@@ -86,8 +100,13 @@ export async function registerTutor(data: {
     throw new Error("Campos obrigatórios não preenchidos.");
   }
 
+  const auth = await getAuthRuntime();
+  const db = await getDbRuntime();
+
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-  const userId = userCredential.user.uid;
+  const user = userCredential.user;
+  await sendEmailVerification(user);
+  const userId = user.uid;
 
   const userDoc = {
     role: "tutor",
@@ -102,4 +121,5 @@ export async function registerTutor(data: {
   };
 
   await setDoc(doc(db, "users", userId), userDoc);
+  return { uid: userId, email: user.email, createdAt: user.metadata.creationTime };
 }

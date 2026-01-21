@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { registerAluno } from "@/actions/register";
+import { useRouter } from "next/navigation";
 
 const studentSchema = z.object({
   nome: z.string().min(3, "O nome é obrigatório."),
@@ -35,10 +36,16 @@ export default function StudentRegisterPage() {
     },
   });
 
+  const router = useRouter();
+
   async function onSubmit(values: z.infer<typeof studentSchema>) {
     try {
-      await registerAluno(values);
-      alert("Conta criada com sucesso! Aguarde validação do professor.");
+      const result = await registerAluno(values);
+      router.push(
+        `/account-status?email=${encodeURIComponent(result.email ?? values.email)}&createdAt=${encodeURIComponent(
+          result.createdAt ?? ""
+        )}`
+      );
     } catch (error) {
       console.error("Erro ao criar conta de aluno:", error);
       alert("Erro ao criar conta. Tente novamente.");
@@ -111,7 +118,7 @@ export default function StudentRegisterPage() {
                   <FormMessage />
                 </FormItem>
               )} />
-              <Button type="submit" className="w-full">Criar Conta</Button>
+              <Button type="submit" className="w-full mt-1">Criar Conta</Button>
             </form>
           </Form>
         </CardContent>
