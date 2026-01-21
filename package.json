@@ -2,6 +2,24 @@
   "name": "internlink-pap",
   "version": "0.1.0",
   "private": true,
+  "description": "",
+  "keywords": [
+    "internship"
+  ],
+  "homepage": "https://github.com/AngreeCloud/InternLink#readme",
+  "bugs": {
+    "url": "https://github.com/AngreeCloud/InternLink/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AngreeCloud/InternLink.git"
+  },
+  "license": "MIT",
+  "author": "AngryCloud",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib"
+  },
   "scripts": {
     "build": "next build",
     "dev": "next dev",
@@ -73,23 +91,5 @@
     "tailwindcss": "^4.1.9",
     "tw-animate-css": "1.3.3",
     "typescript": "^5"
-  },
-  "main": "index.js",
-  "directories": {
-    "lib": "lib"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/AngreeCloud/InternLink.git"
-  },
-  "keywords": [
-    "internship"
-  ],
-  "author": "AngryCloud",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/AngreeCloud/InternLink/issues"
-  },
-  "homepage": "https://github.com/AngreeCloud/InternLink#readme",
-  "description": ""
+  }
 }

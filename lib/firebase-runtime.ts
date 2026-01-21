@@ -71,4 +71,3 @@ export async function getStorageRuntime(): Promise<FirebaseStorage> {
   await ensureFirebaseInitialized();
   return storage!;
 }
-
