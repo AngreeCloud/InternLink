@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="InternLink">
+  <!-- Simplified graduation cap icon (mirrors the landing page icon choice) -->
+  <path d="M22 10L12 4 2 10l10 6 10-6Z"/>
+  <path d="M6 12v5c3 2 9 2 12 0v-5"/>
+  <path d="M22 10v6"/>
+</svg>

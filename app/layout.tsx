@@ -7,8 +7,14 @@ import { Suspense } from "react"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "FCT Platform - Gestão de Estágios",
+  title: {
+    default: "InternLink",
+    template: "InternLink - %s",
+  },
   description: "Plataforma para gestão de estágios curriculares entre alunos, escolas e empresas",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+  },
   generator: "v0.app",
 }
 

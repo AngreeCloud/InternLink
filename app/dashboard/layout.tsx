@@ -1,10 +1,10 @@
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "Registo",
+  title: "Dashboard",
 }
 
-export default function RegisterLayout({
+export default function DashboardSegmentLayout({
   children,
 }: {
   children: React.ReactNode

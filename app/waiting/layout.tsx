@@ -1,10 +1,10 @@
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "Registo",
+  title: "Aguardar aprovação",
 }
 
-export default function RegisterLayout({
+export default function WaitingLayout({
   children,
 }: {
   children: React.ReactNode

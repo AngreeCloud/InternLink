@@ -63,7 +63,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="flex h-full flex-col">
             <div className="flex h-16 items-center gap-2 px-6 border-b border-border">
               <GraduationCap className="h-6 w-6 text-primary" />
-              <span className="font-semibold text-foreground">FCT Platform</span>
+              <span className="font-semibold text-foreground">InternLink</span>
             </div>
             <nav className="flex-1 space-y-1 p-4">
               {navigation.map((item) => (
@@ -87,7 +87,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-border bg-card px-6">
           <div className="flex h-16 shrink-0 items-center gap-2">
             <GraduationCap className="h-6 w-6 text-primary" />
-            <span className="font-semibold text-card-foreground">FCT Platform</span>
+            <span className="font-semibold text-card-foreground">InternLink</span>
           </div>
           <nav className="flex flex-1 flex-col">
             <ul role="list" className="flex flex-1 flex-col gap-y-7">
