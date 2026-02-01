@@ -67,13 +67,11 @@ export async function registerProfessor(data: {
   password: string;
   escolaId: string;
   escolaNome: string;
-  cursoId?: string;
-  cursoNome?: string;
   dataNascimento?: string;
   localidade?: string;
   telefone?: string;
 }) {
-  const { nome, email, password, escolaId, escolaNome, cursoId, cursoNome, dataNascimento, localidade, telefone } = data;
+  const { nome, email, password, escolaId, escolaNome, dataNascimento, localidade, telefone } = data;
 
   if (!nome || !email || !password || !escolaId || !escolaNome) {
     throw new Error("Campos obrigatórios não preenchidos.");
@@ -93,8 +91,6 @@ export async function registerProfessor(data: {
     email,
     escola: escolaNome,
     schoolId: escolaId,
-    courseId: cursoId || "",
-    curso: cursoNome || "",
     dataNascimento: dataNascimento || "",
     localidade: localidade || "",
     telefone: telefone || "",

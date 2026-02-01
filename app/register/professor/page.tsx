@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { registerProfessor } from "@/actions/register";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 
 const professorSchema = z.object({
@@ -19,7 +19,6 @@ const professorSchema = z.object({
   email: z.string().email("Email inválido."),
   password: z.string().min(6, "A password deve ter no mínimo 6 caracteres."),
   escola: z.string().min(1, "A escola é obrigatória."),
-  curso: z.string().min(1, "O curso é obrigatório."),
   dataNascimento: z.string().optional(),
   localidade: z.string().optional(),
   telefone: z.string().optional(),
@@ -32,9 +31,7 @@ export default function ProfessorRegisterPage() {
     emailDomain?: string;
     requireInstitutionalEmail?: boolean;
   }[]>([]);
-  const [courses, setCourses] = useState<{ id: string; name: string }[]>([]);
   const [loadingSchools, setLoadingSchools] = useState(true);
-  const [loadingCourses, setLoadingCourses] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
   const form = useForm<z.infer<typeof professorSchema>>({
@@ -44,7 +41,6 @@ export default function ProfessorRegisterPage() {
       email: "",
       password: "",
       escola: "",
-      curso: "",
       dataNascimento: "",
       localidade: "",
       telefone: "",
@@ -53,7 +49,6 @@ export default function ProfessorRegisterPage() {
 
   const router = useRouter();
   const selectedSchoolId = form.watch("escola");
-  const selectedCourseId = form.watch("curso");
 
   useEffect(() => {
     let active = true;
@@ -88,45 +83,12 @@ export default function ProfessorRegisterPage() {
     };
   }, []);
 
-  useEffect(() => {
-    let active = true;
-
-    const loadCourses = async () => {
-      if (!selectedSchoolId) {
-        setCourses([]);
-        return;
-      }
-      setLoadingCourses(true);
-      const db = await getDbRuntime();
-      const snapshot = await getDocs(query(collection(db, "courses"), where("schoolId", "==", selectedSchoolId)));
-      if (!active) return;
-      setCourses(
-        snapshot.docs.map((docSnap) => {
-          const data = docSnap.data() as { name?: string };
-          return { id: docSnap.id, name: data.name || "—" };
-        })
-      );
-      setLoadingCourses(false);
-    };
-
-    loadCourses();
-
-    return () => {
-      active = false;
-    };
-  }, [selectedSchoolId]);
-
   const selectedSchool = useMemo(
     () => schools.find((school) => school.id === selectedSchoolId),
     [schools, selectedSchoolId]
   );
 
   const selectedSchoolName = selectedSchool?.name || "";
-
-  const selectedCourseName = useMemo(
-    () => courses.find((course) => course.id === selectedCourseId)?.name || "",
-    [courses, selectedCourseId]
-  );
 
   async function onSubmit(values: z.infer<typeof professorSchema>) {
     try {
@@ -144,8 +106,6 @@ export default function ProfessorRegisterPage() {
         ...values,
         escolaId: values.escola,
         escolaNome: selectedSchoolName,
-        cursoId: values.curso,
-        cursoNome: selectedCourseName,
       });
       router.push(
         `/account-status?email=${encodeURIComponent(result.email ?? values.email)}&createdAt=${encodeURIComponent(
@@ -200,7 +160,6 @@ export default function ProfessorRegisterPage() {
                   <FormControl>
                     <Select value={field.value} onValueChange={(value) => {
                       field.onChange(value);
-                      form.setValue("curso", "");
                     }}>
                       <SelectTrigger>
                         <SelectValue placeholder={loadingSchools ? "A carregar escolas..." : "Selecione a escola"} />
@@ -209,34 +168,6 @@ export default function ProfessorRegisterPage() {
                         {schools.map((school) => (
                           <SelectItem key={school.id} value={school.id}>
                             {school.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="curso" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Curso</FormLabel>
-                  <FormControl>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger>
-                        <SelectValue
-                          placeholder={
-                            !selectedSchoolId
-                              ? "Escolha uma escola primeiro"
-                              : loadingCourses
-                                ? "A carregar cursos..."
-                                : "Selecione o curso"
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {courses.map((course) => (
-                          <SelectItem key={course.id} value={course.id}>
-                            {course.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

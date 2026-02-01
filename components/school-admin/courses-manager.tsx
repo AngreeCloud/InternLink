@@ -42,7 +42,17 @@ type Course = {
   maxStudents?: number | null;
   folderId?: string | null;
   enrolledCount?: number | null;
+  teacherIds?: string[];
+  internshipDurationMonths?: number | null;
+  internshipStartDate?: string | null;
+  internshipEndDate?: string | null;
   createdAt?: Date | null;
+};
+
+type Teacher = {
+  id: string;
+  name: string;
+  email: string;
 };
 
 type SchoolInfo = {
@@ -52,6 +62,35 @@ type SchoolInfo = {
 const NO_FOLDER_VALUE = "__no_folder__";
 const ALL_FOLDERS_VALUE = "__all_folders__";
 
+const padDatePart = (value: number) => String(value).padStart(2, "0");
+
+const formatDateLocal = (date: Date) => {
+  const year = date.getFullYear();
+  const month = padDatePart(date.getMonth() + 1);
+  const day = padDatePart(date.getDate());
+  return `${year}-${month}-${day}`;
+};
+
+const parseDateLocal = (value?: string | null) => {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const addMonths = (value: Date, months: number) => {
+  const result = new Date(value);
+  result.setMonth(result.getMonth() + months);
+  return result;
+};
+
+const diffMonths = (start: Date, end: Date) => {
+  let months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+  if (end.getDate() < start.getDate()) {
+    months -= 1;
+  }
+  return Math.max(0, months);
+};
+
 export function CoursesManager() {
   const { schoolId } = useSchoolAdmin();
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -59,10 +98,20 @@ export function CoursesManager() {
   const [loading, setLoading] = useState(true);
   const [newFolderName, setNewFolderName] = useState("");
   const [editFolderName, setEditFolderName] = useState<Record<string, string>>({});
-  const [newCourse, setNewCourse] = useState({ name: "", year: "", maxStudents: "", folderId: "" });
+  const [newCourse, setNewCourse] = useState({
+    name: "",
+    year: "",
+    maxStudents: "",
+    folderId: "",
+    teacherIds: [] as string[],
+    internshipDurationMonths: "",
+    internshipStartDate: "",
+    internshipEndDate: "",
+  });
   const [editCourseId, setEditCourseId] = useState<string | null>(null);
   const [editCourse, setEditCourse] = useState<Course | null>(null);
   const [schoolInfo, setSchoolInfo] = useState<SchoolInfo>({});
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [filterFolderId, setFilterFolderId] = useState<string>(ALL_FOLDERS_VALUE);
   const [sortBy, setSortBy] = useState<string>("recent");
   const [showCreateCourse, setShowCreateCourse] = useState(false);
@@ -131,6 +180,10 @@ export function CoursesManager() {
             maxStudents?: number;
             folderId?: string | null;
             enrolledCount?: number;
+            teacherIds?: string[];
+            internshipDurationMonths?: number;
+            internshipStartDate?: string | null;
+            internshipEndDate?: string | null;
             createdAt?: { toDate?: () => Date };
           };
           return {
@@ -140,6 +193,10 @@ export function CoursesManager() {
             maxStudents: data.maxStudents ?? null,
             folderId: data.folderId ?? null,
             enrolledCount: data.enrolledCount ?? 0,
+            teacherIds: Array.isArray(data.teacherIds) ? data.teacherIds : [],
+            internshipDurationMonths: data.internshipDurationMonths ?? null,
+            internshipStartDate: data.internshipStartDate ?? null,
+            internshipEndDate: data.internshipEndDate ?? null,
             createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
           };
         })
@@ -147,8 +204,28 @@ export function CoursesManager() {
       setLoading(false);
     };
 
+    const loadTeachers = async () => {
+      const db = await getDbRuntime();
+      const usersRef = collection(db, "users");
+      const snapshot = await getDocs(
+        query(usersRef, where("schoolId", "==", schoolId), where("role", "==", "professor"))
+      );
+      if (!active) return;
+      setTeachers(
+        snapshot.docs.map((docSnap) => {
+          const data = docSnap.data() as { nome?: string; email?: string };
+          return {
+            id: docSnap.id,
+            name: data.nome || "—",
+            email: data.email || "—",
+          };
+        })
+      );
+    };
+
     loadFolders();
     loadCourses();
+    loadTeachers();
 
     return () => {
       active = false;
@@ -179,6 +256,10 @@ export function CoursesManager() {
           maxStudents?: number;
           folderId?: string | null;
           enrolledCount?: number;
+          teacherIds?: string[];
+          internshipDurationMonths?: number;
+          internshipStartDate?: string | null;
+          internshipEndDate?: string | null;
           createdAt?: { toDate?: () => Date };
         };
         return {
@@ -188,6 +269,10 @@ export function CoursesManager() {
           maxStudents: data.maxStudents ?? null,
           folderId: data.folderId ?? null,
           enrolledCount: data.enrolledCount ?? 0,
+          teacherIds: Array.isArray(data.teacherIds) ? data.teacherIds : [],
+          internshipDurationMonths: data.internshipDurationMonths ?? null,
+          internshipStartDate: data.internshipStartDate ?? null,
+          internshipEndDate: data.internshipEndDate ?? null,
           createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
         };
       })
@@ -249,6 +334,28 @@ export function CoursesManager() {
 
   const handleCreateCourse = async () => {
     if (!newCourse.name.trim()) return;
+    if (!newCourse.internshipStartDate) {
+      alert("A data de início é obrigatória.");
+      return;
+    }
+
+    let durationMonths = newCourse.internshipDurationMonths
+      ? Number(newCourse.internshipDurationMonths)
+      : null;
+    let startDate = newCourse.internshipStartDate || null;
+    let endDate = newCourse.internshipEndDate || null;
+
+    const parsedStart = parseDateLocal(startDate);
+    const parsedEnd = parseDateLocal(endDate);
+
+    if (parsedStart && durationMonths && !parsedEnd) {
+      endDate = formatDateLocal(addMonths(parsedStart, durationMonths));
+    }
+
+    if (parsedStart && parsedEnd && !durationMonths) {
+      durationMonths = diffMonths(parsedStart, parsedEnd);
+    }
+
     const db = await getDbRuntime();
     await addDoc(collection(db, "courses"), {
       name: newCourse.name.trim(),
@@ -256,11 +363,24 @@ export function CoursesManager() {
       maxStudents: newCourse.maxStudents ? Number(newCourse.maxStudents) : null,
       schoolId,
       folderId: newCourse.folderId && newCourse.folderId !== NO_FOLDER_VALUE ? newCourse.folderId : null,
+      teacherIds: newCourse.teacherIds,
+      internshipDurationMonths: durationMonths,
+      internshipStartDate: startDate,
+      internshipEndDate: endDate,
       enrolledCount: 0,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    setNewCourse({ name: "", year: "", maxStudents: "", folderId: "" });
+    setNewCourse({
+      name: "",
+      year: "",
+      maxStudents: "",
+      folderId: "",
+      teacherIds: [],
+      internshipDurationMonths: "",
+      internshipStartDate: "",
+      internshipEndDate: "",
+    });
     await refreshCourses();
   };
 
@@ -276,6 +396,26 @@ export function CoursesManager() {
 
   const saveCourse = async () => {
     if (!editCourse || !editCourse.name.trim()) return;
+    if (!editCourse.internshipStartDate) {
+      alert("A data de início é obrigatória.");
+      return;
+    }
+
+    let durationMonths = editCourse.internshipDurationMonths ?? null;
+    let startDate = editCourse.internshipStartDate ?? null;
+    let endDate = editCourse.internshipEndDate ?? null;
+
+    const parsedStart = parseDateLocal(startDate);
+    const parsedEnd = parseDateLocal(endDate);
+
+    if (parsedStart && durationMonths && !parsedEnd) {
+      endDate = formatDateLocal(addMonths(parsedStart, durationMonths));
+    }
+
+    if (parsedStart && parsedEnd && !durationMonths) {
+      durationMonths = diffMonths(parsedStart, parsedEnd);
+    }
+
     const db = await getDbRuntime();
     await updateDoc(doc(db, "courses", editCourse.id), {
       name: editCourse.name.trim(),
@@ -283,6 +423,10 @@ export function CoursesManager() {
       maxStudents: editCourse.maxStudents ? Number(editCourse.maxStudents) : null,
       folderId:
         editCourse.folderId && editCourse.folderId !== NO_FOLDER_VALUE ? editCourse.folderId : null,
+      teacherIds: editCourse.teacherIds || [],
+      internshipDurationMonths: durationMonths,
+      internshipStartDate: startDate,
+      internshipEndDate: endDate,
       updatedAt: serverTimestamp(),
     });
     cancelEdit();
@@ -432,6 +576,108 @@ export function CoursesManager() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Duração do estágio (meses)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={newCourse.internshipDurationMonths}
+                  onChange={(event) =>
+                    setNewCourse((prev) => ({ ...prev, internshipDurationMonths: event.target.value }))
+                  }
+                  placeholder="6"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Data de início</Label>
+                <Input
+                  type="date"
+                  value={newCourse.internshipStartDate}
+                  onChange={(event) =>
+                    setNewCourse((prev) => {
+                      const startDate = event.target.value;
+                      const parsedStart = parseDateLocal(startDate);
+                      let endDate = prev.internshipEndDate;
+                      let duration = prev.internshipDurationMonths;
+
+                      if (parsedStart && duration && !endDate) {
+                        endDate = formatDateLocal(addMonths(parsedStart, Number(duration)));
+                      } else if (parsedStart && endDate && !duration) {
+                        const parsedEnd = parseDateLocal(endDate);
+                        if (parsedEnd) {
+                          duration = String(diffMonths(parsedStart, parsedEnd));
+                        }
+                      }
+
+                      return {
+                        ...prev,
+                        internshipStartDate: startDate,
+                        internshipEndDate: endDate,
+                        internshipDurationMonths: duration,
+                      };
+                    })
+                  }
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Data de conclusão</Label>
+                <Input
+                  type="date"
+                  value={newCourse.internshipEndDate}
+                  onChange={(event) =>
+                    setNewCourse((prev) => {
+                      const endDate = event.target.value;
+                      const parsedStart = parseDateLocal(prev.internshipStartDate);
+                      let duration = prev.internshipDurationMonths;
+
+                      if (parsedStart && endDate && !duration) {
+                        const parsedEnd = parseDateLocal(endDate);
+                        if (parsedEnd) {
+                          duration = String(diffMonths(parsedStart, parsedEnd));
+                        }
+                      }
+
+                      return {
+                        ...prev,
+                        internshipEndDate: endDate,
+                        internshipDurationMonths: duration,
+                      };
+                    })
+                  }
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Professores responsáveis</Label>
+              {teachers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Sem professores registados.</p>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {teachers.map((teacher) => (
+                    <label key={teacher.id} className="flex items-center gap-2 text-sm text-foreground">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={newCourse.teacherIds.includes(teacher.id)}
+                        onChange={(event) => {
+                          const checked = event.target.checked;
+                          setNewCourse((prev) => ({
+                            ...prev,
+                            teacherIds: checked
+                              ? [...prev.teacherIds, teacher.id]
+                              : prev.teacherIds.filter((id) => id !== teacher.id),
+                          }));
+                        }}
+                      />
+                      <span>{teacher.name}</span>
+                      <span className="text-xs text-muted-foreground">{teacher.email}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
               <Button
@@ -589,6 +835,125 @@ export function CoursesManager() {
                             </SelectContent>
                           </Select>
                         </div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label>Duração do estágio (meses)</Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={draft.internshipDurationMonths ?? ""}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setEditCourse((prev) => {
+                                  if (!prev) return prev;
+                                  const parsedStart = parseDateLocal(prev.internshipStartDate);
+                                  const duration = value ? Number(value) : null;
+                                  let endDate = prev.internshipEndDate;
+                                  if (parsedStart && duration && !endDate) {
+                                    endDate = formatDateLocal(addMonths(parsedStart, duration));
+                                  }
+                                  return {
+                                    ...prev,
+                                    internshipDurationMonths: duration,
+                                    internshipEndDate: endDate,
+                                  };
+                                });
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Data de início</Label>
+                            <Input
+                              type="date"
+                              value={draft.internshipStartDate ?? ""}
+                              onChange={(event) => {
+                                const startDate = event.target.value;
+                                setEditCourse((prev) => {
+                                  if (!prev) return prev;
+                                  const parsedStart = parseDateLocal(startDate);
+                                  let endDate = prev.internshipEndDate;
+                                  let duration = prev.internshipDurationMonths;
+
+                                  if (parsedStart && duration && !endDate) {
+                                    endDate = formatDateLocal(addMonths(parsedStart, duration));
+                                  } else if (parsedStart && endDate && !duration) {
+                                    const parsedEnd = parseDateLocal(endDate);
+                                    if (parsedEnd) {
+                                      duration = diffMonths(parsedStart, parsedEnd);
+                                    }
+                                  }
+
+                                  return {
+                                    ...prev,
+                                    internshipStartDate: startDate,
+                                    internshipEndDate: endDate,
+                                    internshipDurationMonths: duration,
+                                  };
+                                });
+                              }}
+                              required
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Data de conclusão</Label>
+                            <Input
+                              type="date"
+                              value={draft.internshipEndDate ?? ""}
+                              onChange={(event) => {
+                                const endDate = event.target.value;
+                                setEditCourse((prev) => {
+                                  if (!prev) return prev;
+                                  const parsedStart = parseDateLocal(prev.internshipStartDate);
+                                  let duration = prev.internshipDurationMonths;
+                                  if (parsedStart && endDate && !duration) {
+                                    const parsedEnd = parseDateLocal(endDate);
+                                    if (parsedEnd) {
+                                      duration = diffMonths(parsedStart, parsedEnd);
+                                    }
+                                  }
+                                  return {
+                                    ...prev,
+                                    internshipEndDate: endDate,
+                                    internshipDurationMonths: duration,
+                                  };
+                                });
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Professores responsáveis</Label>
+                          {teachers.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">Sem professores registados.</p>
+                          ) : (
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              {teachers.map((teacher) => (
+                                <label key={teacher.id} className="flex items-center gap-2 text-sm text-foreground">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4"
+                                    checked={(draft.teacherIds || []).includes(teacher.id)}
+                                    onChange={(event) => {
+                                      const checked = event.target.checked;
+                                      setEditCourse((prev) => {
+                                        if (!prev) return prev;
+                                        const ids = prev.teacherIds || [];
+                                        return {
+                                          ...prev,
+                                          teacherIds: checked
+                                            ? [...ids, teacher.id]
+                                            : ids.filter((id) => id !== teacher.id),
+                                        };
+                                      });
+                                    }}
+                                  />
+                                  <span>{teacher.name}</span>
+                                  <span className="text-xs text-muted-foreground">{teacher.email}</span>
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                         <div className="flex gap-2">
                           <Button type="button" onClick={saveCourse}>
                             Guardar
@@ -599,10 +964,17 @@ export function CoursesManager() {
                         </div>
                       </div>
                     ) : (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {requiresYear && <Badge variant="secondary">Ano: {course.year ?? "—"}</Badge>}
-                        <Badge variant="secondary">Limite: {course.maxStudents ?? "—"}</Badge>
-                        <Badge variant="outline">Inscritos: {course.enrolledCount ?? 0}</Badge>
+                      <div className="mt-4 space-y-3">
+                        <div className="flex flex-wrap gap-2">
+                          {requiresYear && <Badge variant="secondary">Ano: {course.year ?? "—"}</Badge>}
+                          <Badge variant="secondary">Limite: {course.maxStudents ?? "—"}</Badge>
+                          <Badge variant="outline">Inscritos: {course.enrolledCount ?? 0}</Badge>
+                        </div>
+                        <div className="text-sm text-muted-foreground space-y-1">
+                          <p>Duração do estágio: {course.internshipDurationMonths ?? "—"} meses</p>
+                          <p>Data de início: {course.internshipStartDate || "—"}</p>
+                          <p>Data de conclusão: {course.internshipEndDate || "—"}</p>
+                        </div>
                       </div>
                     )}
                   </div>
