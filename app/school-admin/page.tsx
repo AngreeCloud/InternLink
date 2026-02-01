@@ -1,4 +1,5 @@
 import { PendingTeachersSection } from "@/components/school-admin/pending-teachers";
+import { CoursesOverview } from "@/components/school-admin/courses-overview";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export default function SchoolAdminDashboardPage() {
@@ -21,8 +22,10 @@ export default function SchoolAdminDashboardPage() {
           </CardContent>
         </Card>
 
-        <PendingTeachersSection />
+        <PendingTeachersSection showSearch={false} limit={3} title="Pendentes recentes" description="Professores pendentes mais recentes." />
       </div>
+
+      <CoursesOverview />
     </div>
   );
 }

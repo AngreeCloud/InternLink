@@ -26,10 +26,16 @@ const studentSchema = z.object({
 });
 
 export default function StudentRegisterPage() {
-  const [schools, setSchools] = useState<{ id: string; name: string }[]>([]);
+  const [schools, setSchools] = useState<{
+    id: string;
+    name: string;
+    emailDomain?: string;
+    requireInstitutionalEmail?: boolean;
+  }[]>([]);
   const [courses, setCourses] = useState<{ id: string; name: string }[]>([]);
   const [loadingSchools, setLoadingSchools] = useState(true);
   const [loadingCourses, setLoadingCourses] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const form = useForm<z.infer<typeof studentSchema>>({
     resolver: zodResolver(studentSchema),
@@ -59,8 +65,17 @@ export default function StudentRegisterPage() {
       if (!active) return;
       setSchools(
         snapshot.docs.map((docSnap) => {
-          const data = docSnap.data() as { name?: string };
-          return { id: docSnap.id, name: data.name || "—" };
+          const data = docSnap.data() as {
+            name?: string;
+            emailDomain?: string;
+            requireInstitutionalEmail?: boolean;
+          };
+          return {
+            id: docSnap.id,
+            name: data.name || "—",
+            emailDomain: data.emailDomain || "",
+            requireInstitutionalEmail: Boolean(data.requireInstitutionalEmail),
+          };
         })
       );
       setLoadingSchools(false);
@@ -101,10 +116,12 @@ export default function StudentRegisterPage() {
     };
   }, [selectedSchoolId]);
 
-  const selectedSchoolName = useMemo(
-    () => schools.find((school) => school.id === selectedSchoolId)?.name || "",
+  const selectedSchool = useMemo(
+    () => schools.find((school) => school.id === selectedSchoolId),
     [schools, selectedSchoolId]
   );
+
+  const selectedSchoolName = selectedSchool?.name || "";
 
   const selectedCourseName = useMemo(
     () => courses.find((course) => course.id === selectedCourseId)?.name || "",
@@ -113,6 +130,16 @@ export default function StudentRegisterPage() {
 
   async function onSubmit(values: z.infer<typeof studentSchema>) {
     try {
+      setSubmitError("");
+      if (selectedSchool?.requireInstitutionalEmail && selectedSchool.emailDomain) {
+        const domain = selectedSchool.emailDomain.trim().toLowerCase();
+        const email = values.email.trim().toLowerCase();
+        if (!email.endsWith(domain)) {
+          setSubmitError("Esta escola exige email institucional. Use um email com o domínio correto.");
+          return;
+        }
+      }
+
       const result = await registerAluno({
         ...values,
         escolaId: values.escola,
@@ -141,6 +168,11 @@ export default function StudentRegisterPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              {submitError && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {submitError}
+                </div>
+              )}
               <FormField control={form.control} name="nome" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Nome Completo</FormLabel>

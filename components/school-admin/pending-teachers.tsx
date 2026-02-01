@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 import { useSchoolAdmin } from "@/components/school-admin/school-admin-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 type PendingTeacher = {
   id: string;
@@ -13,10 +14,21 @@ type PendingTeacher = {
   createdAt?: Date | null;
 };
 
-export function PendingTeachersSection() {
+export function PendingTeachersSection({
+  showSearch = true,
+  limit,
+  title = "Professores por aprovar",
+  description = "Lista de professores pendentes na sua escola.",
+}: {
+  showSearch?: boolean;
+  limit?: number;
+  title?: string;
+  description?: string;
+}) {
   const { schoolId } = useSchoolAdmin();
   const [loading, setLoading] = useState(true);
   const [teachers, setTeachers] = useState<PendingTeacher[]>([]);
+  const [queryText, setQueryText] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -55,20 +67,39 @@ export function PendingTeachersSection() {
     };
   }, [schoolId]);
 
+  const filteredTeachers = useMemo(() => {
+    const q = queryText.trim().toLowerCase();
+    const data = !q
+      ? teachers
+      : teachers.filter((teacher) =>
+          `${teacher.name} ${teacher.email}`.toLowerCase().includes(q)
+        );
+    return typeof limit === "number" ? data.slice(0, limit) : data;
+  }, [teachers, queryText, limit]);
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Professores por aprovar</CardTitle>
-        <CardDescription>Lista de professores pendentes na sua escola.</CardDescription>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
+        {showSearch && (
+          <div className="mb-4">
+            <Input
+              value={queryText}
+              onChange={(event) => setQueryText(event.target.value)}
+              placeholder="Pesquisar por nome ou email"
+            />
+          </div>
+        )}
         {loading ? (
           <p className="text-sm text-muted-foreground">A carregar professores...</p>
-        ) : teachers.length === 0 ? (
+        ) : filteredTeachers.length === 0 ? (
           <p className="text-sm text-muted-foreground">Sem professores pendentes.</p>
         ) : (
           <div className="space-y-3">
-            {teachers.map((teacher) => (
+            {filteredTeachers.map((teacher) => (
               <div key={teacher.id} className="flex items-center justify-between rounded-lg border border-border p-3">
                 <div>
                   <p className="font-medium text-foreground">{teacher.name}</p>

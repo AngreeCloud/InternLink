@@ -13,6 +13,7 @@ const SCHOOL_DATA = {
   contact: "",
   educationLevel: "Secundária/Profissional",
   emailDomain: "@esrpeixoto.edu.pt",
+  requireInstitutionalEmail: false,
 };
 
 const ADMIN_EMAIL = "angrycloud.op@gmail.com";

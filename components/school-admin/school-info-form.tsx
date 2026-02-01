@@ -24,6 +24,7 @@ type SchoolInfo = {
   contact: string;
   educationLevel: string;
   emailDomain: string;
+  requireInstitutionalEmail: boolean;
 };
 
 export function SchoolInfoForm() {
@@ -37,6 +38,7 @@ export function SchoolInfoForm() {
     contact: "",
     educationLevel: "",
     emailDomain: "",
+    requireInstitutionalEmail: false,
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -60,6 +62,7 @@ export function SchoolInfoForm() {
           contact: data.contact || "",
           educationLevel: data.educationLevel || "",
           emailDomain: data.emailDomain || "",
+          requireInstitutionalEmail: Boolean(data.requireInstitutionalEmail),
         });
       }
 
@@ -73,7 +76,7 @@ export function SchoolInfoForm() {
     };
   }, [schoolId]);
 
-  const updateField = (field: keyof SchoolInfo, value: string) => {
+  const updateField = (field: keyof SchoolInfo, value: string | boolean) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -179,6 +182,18 @@ export function SchoolInfoForm() {
                   required
                 />
               </div>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
+              <input
+                id="requireInstitutionalEmail"
+                type="checkbox"
+                checked={form.requireInstitutionalEmail}
+                onChange={(event) => updateField("requireInstitutionalEmail", event.target.checked)}
+                className="h-4 w-4 rounded border-border"
+              />
+              <Label htmlFor="requireInstitutionalEmail">
+                Exigir email institucional para associar à escola e cursos
+              </Label>
             </div>
 
             {error && <p className="text-sm text-red-600">{error}</p>}
