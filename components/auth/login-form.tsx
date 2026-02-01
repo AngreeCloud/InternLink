@@ -11,7 +11,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff, Mail, Lock } from "lucide-react"
 import Link from "next/link"
 import { signInWithEmailAndPassword } from "firebase/auth"
-import { getAuthRuntime } from "@/lib/firebase-runtime"
+import { doc, getDoc } from "firebase/firestore"
+import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime"
 import { useRouter } from "next/navigation"
 
 export function LoginForm() {
@@ -29,8 +30,16 @@ export function LoginForm() {
 
     try {
       const auth = await getAuthRuntime()
-      await signInWithEmailAndPassword(auth, email, password)
-      router.push("/dashboard")
+      const db = await getDbRuntime()
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      const userSnap = await getDoc(doc(db, "users", userCredential.user.uid))
+      const role = userSnap.exists() ? (userSnap.data() as { role?: string }).role : ""
+
+      if (role === "admin_escolar") {
+        router.push("/school-admin")
+      } else {
+        router.push("/dashboard")
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setError(message.includes("Firebase config") ? message : "Erro ao fazer login. Verifique as suas credenciais e tente novamente.")

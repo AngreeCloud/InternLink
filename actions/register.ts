@@ -8,15 +8,28 @@ export async function registerAluno(data: {
   nome: string;
   email: string;
   password: string;
-  escola: string;
-  curso: string;
+  escolaId: string;
+  escolaNome: string;
+  cursoId: string;
+  cursoNome: string;
   dataNascimento: string;
   localidade?: string;
   telefone?: string;
 }) {
-  const { nome, email, password, escola, curso, dataNascimento, localidade, telefone } = data;
+  const {
+    nome,
+    email,
+    password,
+    escolaId,
+    escolaNome,
+    cursoId,
+    cursoNome,
+    dataNascimento,
+    localidade,
+    telefone,
+  } = data;
 
-  if (!nome || !email || !password || !escola || !curso || !dataNascimento) {
+  if (!nome || !email || !password || !escolaId || !escolaNome || !cursoId || !cursoNome || !dataNascimento) {
     throw new Error("Campos obrigatórios não preenchidos.");
   }
 
@@ -32,8 +45,10 @@ export async function registerAluno(data: {
     role: "aluno",
     nome,
     email,
-    escola,
-    curso,
+    escola: escolaNome,
+    curso: cursoNome,
+    schoolId: escolaId,
+    courseId: cursoId,
     dataNascimento,
     localidade: localidade || "",
     telefone: telefone || "",
@@ -50,14 +65,17 @@ export async function registerProfessor(data: {
   nome: string;
   email: string;
   password: string;
-  escola: string;
+  escolaId: string;
+  escolaNome: string;
+  cursoId?: string;
+  cursoNome?: string;
   dataNascimento?: string;
   localidade?: string;
   telefone?: string;
 }) {
-  const { nome, email, password, escola, dataNascimento, localidade, telefone } = data;
+  const { nome, email, password, escolaId, escolaNome, cursoId, cursoNome, dataNascimento, localidade, telefone } = data;
 
-  if (!nome || !email || !password || !escola) {
+  if (!nome || !email || !password || !escolaId || !escolaNome) {
     throw new Error("Campos obrigatórios não preenchidos.");
   }
 
@@ -73,7 +91,10 @@ export async function registerProfessor(data: {
     role: "professor",
     nome,
     email,
-    escola,
+    escola: escolaNome,
+    schoolId: escolaId,
+    courseId: cursoId || "",
+    curso: cursoNome || "",
     dataNascimento: dataNascimento || "",
     localidade: localidade || "",
     telefone: telefone || "",
@@ -82,6 +103,16 @@ export async function registerProfessor(data: {
   };
 
   await setDoc(doc(db, "users", userId), userDoc);
+  await setDoc(
+    doc(db, "schools", escolaId, "pendingTeachers", userId),
+    {
+      name: nome,
+      email,
+      role: "teacher",
+      createdAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
   return { uid: userId, email: user.email, createdAt: user.metadata.creationTime };
 }
 

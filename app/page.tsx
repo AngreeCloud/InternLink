@@ -4,6 +4,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { GraduationCap, Users, Shield, Briefcase, Sparkles, ChevronRight } from "lucide-react"
+import { SeedSchoolAdmin } from "@/components/seed/seed-school-admin"
 
 const sections = [
 	{
@@ -26,6 +27,7 @@ const sections = [
 export default function HomePage() {
 	return (
 		<div className="min-h-screen bg-gradient-to-b from-background to-background/60 text-foreground">
+			<SeedSchoolAdmin />
 			<header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur">
 				<div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
 					<div className="flex items-center gap-2 font-semibold">

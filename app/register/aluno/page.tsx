@@ -6,9 +6,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { registerAluno } from "@/actions/register";
 import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { getDbRuntime } from "@/lib/firebase-runtime";
 
 const studentSchema = z.object({
   nome: z.string().min(3, "O nome é obrigatório."),
@@ -22,6 +26,11 @@ const studentSchema = z.object({
 });
 
 export default function StudentRegisterPage() {
+  const [schools, setSchools] = useState<{ id: string; name: string }[]>([]);
+  const [courses, setCourses] = useState<{ id: string; name: string }[]>([]);
+  const [loadingSchools, setLoadingSchools] = useState(true);
+  const [loadingCourses, setLoadingCourses] = useState(false);
+
   const form = useForm<z.infer<typeof studentSchema>>({
     resolver: zodResolver(studentSchema),
     defaultValues: {
@@ -37,10 +46,80 @@ export default function StudentRegisterPage() {
   });
 
   const router = useRouter();
+  const selectedSchoolId = form.watch("escola");
+  const selectedCourseId = form.watch("curso");
+
+  useEffect(() => {
+    let active = true;
+
+    const loadSchools = async () => {
+      setLoadingSchools(true);
+      const db = await getDbRuntime();
+      const snapshot = await getDocs(collection(db, "schools"));
+      if (!active) return;
+      setSchools(
+        snapshot.docs.map((docSnap) => {
+          const data = docSnap.data() as { name?: string };
+          return { id: docSnap.id, name: data.name || "—" };
+        })
+      );
+      setLoadingSchools(false);
+    };
+
+    loadSchools();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCourses = async () => {
+      if (!selectedSchoolId) {
+        setCourses([]);
+        return;
+      }
+      setLoadingCourses(true);
+      const db = await getDbRuntime();
+      const snapshot = await getDocs(query(collection(db, "courses"), where("schoolId", "==", selectedSchoolId)));
+      if (!active) return;
+      setCourses(
+        snapshot.docs.map((docSnap) => {
+          const data = docSnap.data() as { name?: string };
+          return { id: docSnap.id, name: data.name || "—" };
+        })
+      );
+      setLoadingCourses(false);
+    };
+
+    loadCourses();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedSchoolId]);
+
+  const selectedSchoolName = useMemo(
+    () => schools.find((school) => school.id === selectedSchoolId)?.name || "",
+    [schools, selectedSchoolId]
+  );
+
+  const selectedCourseName = useMemo(
+    () => courses.find((course) => course.id === selectedCourseId)?.name || "",
+    [courses, selectedCourseId]
+  );
 
   async function onSubmit(values: z.infer<typeof studentSchema>) {
     try {
-      const result = await registerAluno(values);
+      const result = await registerAluno({
+        ...values,
+        escolaId: values.escola,
+        escolaNome: selectedSchoolName,
+        cursoId: values.curso,
+        cursoNome: selectedCourseName,
+      });
       router.push(
         `/account-status?email=${encodeURIComponent(result.email ?? values.email)}&createdAt=${encodeURIComponent(
           result.createdAt ?? ""
@@ -86,14 +165,51 @@ export default function StudentRegisterPage() {
               <FormField control={form.control} name="escola" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Escola</FormLabel>
-                  <FormControl><Input placeholder="Nome da tua escola" {...field} /></FormControl>
+                  <FormControl>
+                    <Select value={field.value} onValueChange={(value) => {
+                      field.onChange(value);
+                      form.setValue("curso", "");
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={loadingSchools ? "A carregar escolas..." : "Selecione a escola"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {schools.map((school) => (
+                          <SelectItem key={school.id} value={school.id}>
+                            {school.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
               <FormField control={form.control} name="curso" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Curso</FormLabel>
-                  <FormControl><Input placeholder="Nome do teu curso" {...field} /></FormControl>
+                  <FormControl>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            !selectedSchoolId
+                              ? "Escolha uma escola primeiro"
+                              : loadingCourses
+                                ? "A carregar cursos..."
+                                : "Selecione o curso"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {courses.map((course) => (
+                          <SelectItem key={course.id} value={course.id}>
+                            {course.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
