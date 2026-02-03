@@ -17,6 +17,14 @@ import {
 import { getDbRuntime } from "@/lib/firebase-runtime";
 import { useSchoolAdmin } from "@/components/school-admin/school-admin-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -61,6 +69,7 @@ type SchoolInfo = {
 
 const NO_FOLDER_VALUE = "__no_folder__";
 const ALL_FOLDERS_VALUE = "__all_folders__";
+const CREATE_FOLDER_VALUE = "__create_folder__";
 
 const padDatePart = (value: number) => String(value).padStart(2, "0");
 
@@ -97,7 +106,6 @@ export function CoursesManager() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [newFolderName, setNewFolderName] = useState("");
-  const [editFolderName, setEditFolderName] = useState<Record<string, string>>({});
   const [newCourse, setNewCourse] = useState({
     name: "",
     year: "",
@@ -115,6 +123,7 @@ export function CoursesManager() {
   const [filterFolderId, setFilterFolderId] = useState<string>(ALL_FOLDERS_VALUE);
   const [sortBy, setSortBy] = useState<string>("recent");
   const [showCreateCourse, setShowCreateCourse] = useState(false);
+  const [showCreateFolderWizard, setShowCreateFolderWizard] = useState(false);
 
   const requiresYear = useMemo(
     () => schoolInfo.educationLevel === "Secundária/Profissional",
@@ -125,11 +134,15 @@ export function CoursesManager() {
     let active = true;
 
     const loadInfo = async () => {
-      const db = await getDbRuntime();
-      const snap = await getDoc(doc(db, "schools", schoolId));
-      if (!active) return;
-      if (snap.exists()) {
-        setSchoolInfo(snap.data() as SchoolInfo);
+      try {
+        const db = await getDbRuntime();
+        const snap = await getDoc(doc(db, "schools", schoolId));
+        if (!active) return;
+        if (snap.exists()) {
+          setSchoolInfo(snap.data() as SchoolInfo);
+        }
+      } catch (error) {
+        console.error("[CoursesManager] Erro ao carregar escola", error);
       }
     };
 
@@ -144,83 +157,89 @@ export function CoursesManager() {
     let active = true;
 
     const loadFolders = async () => {
-      const db = await getDbRuntime();
-      const foldersRef = collection(db, "schools", schoolId, "folders");
-      const snapshot = await getDocs(query(foldersRef, orderBy("name", "asc")));
-      if (!active) return;
-      const data = snapshot.docs.map((docSnap) => {
-        const payload = docSnap.data() as { name?: string };
-        return { id: docSnap.id, name: payload.name || "—" };
-      });
-      setFolders(data);
-      setEditFolderName((prev) => {
-        const next = { ...prev };
-        data.forEach((folder) => {
-          if (!next[folder.id]) {
-            next[folder.id] = folder.name;
-          }
+      try {
+        const db = await getDbRuntime();
+        const foldersRef = collection(db, "schools", schoolId, "folders");
+        const snapshot = await getDocs(query(foldersRef, orderBy("name", "asc")));
+        if (!active) return;
+        const data = snapshot.docs.map((docSnap) => {
+          const payload = docSnap.data() as { name?: string };
+          return { id: docSnap.id, name: payload.name || "—" };
         });
-        return next;
-      });
+        setFolders(data);
+      } catch (error) {
+        console.error("[CoursesManager] Erro ao carregar pastas", error);
+      }
     };
 
     const loadCourses = async () => {
       setLoading(true);
-      const db = await getDbRuntime();
-      const coursesRef = collection(db, "courses");
-      const snapshot = await getDocs(
-        query(coursesRef, where("schoolId", "==", schoolId), orderBy("createdAt", "desc"))
-      );
-      if (!active) return;
-      setCourses(
-        snapshot.docs.map((docSnap) => {
-          const data = docSnap.data() as {
-            name?: string;
-            year?: number;
-            maxStudents?: number;
-            folderId?: string | null;
-            enrolledCount?: number;
-            teacherIds?: string[];
-            internshipDurationMonths?: number;
-            internshipStartDate?: string | null;
-            internshipEndDate?: string | null;
-            createdAt?: { toDate?: () => Date };
-          };
-          return {
-            id: docSnap.id,
-            name: data.name || "—",
-            year: data.year ?? null,
-            maxStudents: data.maxStudents ?? null,
-            folderId: data.folderId ?? null,
-            enrolledCount: data.enrolledCount ?? 0,
-            teacherIds: Array.isArray(data.teacherIds) ? data.teacherIds : [],
-            internshipDurationMonths: data.internshipDurationMonths ?? null,
-            internshipStartDate: data.internshipStartDate ?? null,
-            internshipEndDate: data.internshipEndDate ?? null,
-            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
-          };
-        })
-      );
-      setLoading(false);
+      try {
+        const db = await getDbRuntime();
+        const coursesRef = collection(db, "courses");
+        const snapshot = await getDocs(
+          query(coursesRef, where("schoolId", "==", schoolId), orderBy("createdAt", "desc"))
+        );
+        if (!active) return;
+        setCourses(
+          snapshot.docs.map((docSnap) => {
+            const data = docSnap.data() as {
+              name?: string;
+              year?: number;
+              maxStudents?: number;
+              folderId?: string | null;
+              enrolledCount?: number;
+              teacherIds?: string[];
+              internshipDurationMonths?: number;
+              internshipStartDate?: string | null;
+              internshipEndDate?: string | null;
+              createdAt?: { toDate?: () => Date };
+            };
+            return {
+              id: docSnap.id,
+              name: data.name || "—",
+              year: data.year ?? null,
+              maxStudents: data.maxStudents ?? null,
+              folderId: data.folderId ?? null,
+              enrolledCount: data.enrolledCount ?? 0,
+              teacherIds: Array.isArray(data.teacherIds) ? data.teacherIds : [],
+              internshipDurationMonths: data.internshipDurationMonths ?? null,
+              internshipStartDate: data.internshipStartDate ?? null,
+              internshipEndDate: data.internshipEndDate ?? null,
+              createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
+            };
+          })
+        );
+      } catch (error) {
+        console.error("[CoursesManager] Erro ao carregar cursos", error);
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
     };
 
     const loadTeachers = async () => {
-      const db = await getDbRuntime();
-      const usersRef = collection(db, "users");
-      const snapshot = await getDocs(
-        query(usersRef, where("schoolId", "==", schoolId), where("role", "==", "professor"))
-      );
-      if (!active) return;
-      setTeachers(
-        snapshot.docs.map((docSnap) => {
-          const data = docSnap.data() as { nome?: string; email?: string };
-          return {
-            id: docSnap.id,
-            name: data.nome || "—",
-            email: data.email || "—",
-          };
-        })
-      );
+      try {
+        const db = await getDbRuntime();
+        const usersRef = collection(db, "users");
+        const snapshot = await getDocs(
+          query(usersRef, where("schoolId", "==", schoolId), where("role", "==", "professor"))
+        );
+        if (!active) return;
+        setTeachers(
+          snapshot.docs.map((docSnap) => {
+            const data = docSnap.data() as { nome?: string; email?: string };
+            return {
+              id: docSnap.id,
+              name: data.nome || "—",
+              email: data.email || "—",
+            };
+          })
+        );
+      } catch (error) {
+        console.error("[CoursesManager] Erro ao carregar professores", error);
+      }
     };
 
     loadFolders();
@@ -238,7 +257,7 @@ export function CoursesManager() {
   );
 
   const filterOptions = useMemo(
-    () => [{ id: ALL_FOLDERS_VALUE, name: "Todas as pastas" }, ...folderOptions],
+    () => [{ id: ALL_FOLDERS_VALUE, name: "Mostrar tudo" }, ...folderOptions],
     [folderOptions]
   );
 
@@ -299,37 +318,7 @@ export function CoursesManager() {
     });
     setNewFolderName("");
     await refreshFolders();
-  };
-
-  const handleRenameFolder = async (folderId: string) => {
-    const name = editFolderName[folderId]?.trim();
-    if (!name) return;
-    const db = await getDbRuntime();
-    await updateDoc(doc(db, "schools", schoolId, "folders", folderId), {
-      name,
-      updatedAt: serverTimestamp(),
-    });
-    await refreshFolders();
-  };
-
-  const handleDeleteFolder = async (folderId: string) => {
-    const folderName = folders.find((folder) => folder.id === folderId)?.name || "esta pasta";
-    if (!window.confirm(`Eliminar ${folderName}? Os cursos serão mantidos sem pasta.`)) return;
-    const db = await getDbRuntime();
-    const snapshot = await getDocs(
-      query(collection(db, "courses"), where("schoolId", "==", schoolId), where("folderId", "==", folderId))
-    );
-    await Promise.all(
-      snapshot.docs.map((docSnap) =>
-        updateDoc(doc(db, "courses", docSnap.id), {
-          folderId: null,
-          updatedAt: serverTimestamp(),
-        })
-      )
-    );
-    await deleteDoc(doc(db, "schools", schoolId, "folders", folderId));
-    await refreshFolders();
-    await refreshCourses();
+    setShowCreateFolderWizard(false);
   };
 
   const handleCreateCourse = async () => {
@@ -460,57 +449,63 @@ export function CoursesManager() {
     return sorted;
   }, [courses, filterFolderId, sortBy]);
 
+  const groupedCourses = useMemo(() => {
+    const knownFolderIds = new Set(folderOptions.map((folder) => folder.id));
+    const groups = new Map<string, Course[]>();
+
+    filteredCourses.forEach((course) => {
+      const rawFolderId = course.folderId || NO_FOLDER_VALUE;
+      const folderId = knownFolderIds.has(rawFolderId) ? rawFolderId : NO_FOLDER_VALUE;
+      if (!groups.has(folderId)) {
+        groups.set(folderId, []);
+      }
+      groups.get(folderId)?.push(course);
+    });
+
+    const orderedFolders =
+      filterFolderId === ALL_FOLDERS_VALUE
+        ? folderOptions
+        : folderOptions.filter((folder) => folder.id === filterFolderId);
+
+    return orderedFolders
+      .map((folder) => ({
+        id: folder.id,
+        name: folder.name,
+        courses: groups.get(folder.id) ?? [],
+      }))
+      .filter((group) => filterFolderId !== ALL_FOLDERS_VALUE || group.courses.length > 0);
+  }, [filterFolderId, filteredCourses, folderOptions]);
+
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Pastas (opcional)</CardTitle>
-          <CardDescription>Crie pastas apenas para organização visual.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-            <div className="space-y-2">
-              <Label>Nome da pasta</Label>
-              <Input
-                value={newFolderName}
-                onChange={(event) => setNewFolderName(event.target.value)}
-                placeholder="Ex: Informática"
-              />
-            </div>
-            <div className="flex items-end">
-              <Button type="button" onClick={handleCreateFolder}>
-                Criar pasta
-              </Button>
-            </div>
+      <Dialog open={showCreateFolderWizard} onOpenChange={setShowCreateFolderWizard}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Criar nova pasta</DialogTitle>
+            <DialogDescription>Crie uma pasta para organizar visualmente os cursos.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Nome da pasta</Label>
+            <Input
+              value={newFolderName}
+              onChange={(event) => setNewFolderName(event.target.value)}
+              placeholder="Ex: Informática"
+            />
           </div>
-
-          {folders.length > 0 && (
-            <div className="grid gap-3 md:grid-cols-2">
-              {folders.map((folder) => (
-                <div key={folder.id} className="flex items-end gap-2">
-                  <div className="flex-1 space-y-2">
-                    <Label>Renomear pasta</Label>
-                    <Input
-                      value={editFolderName[folder.id] ?? folder.name}
-                      onChange={(event) =>
-                        setEditFolderName((prev) => ({ ...prev, [folder.id]: event.target.value }))
-                      }
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button type="button" variant="outline" onClick={() => handleRenameFolder(folder.id)}>
-                      Guardar
-                    </Button>
-                    <Button type="button" variant="destructive" onClick={() => handleDeleteFolder(folder.id)}>
-                      Eliminar
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          <DialogFooter>
+            <Button
+              type="button"
+              onClick={handleCreateFolder}
+              disabled={!newFolderName.trim()}
+            >
+              Criar pasta
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setShowCreateFolderWizard(false)}>
+              Cancelar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>
@@ -560,7 +555,7 @@ export function CoursesManager() {
               </div>
             </div>
             <div className="max-w-xs space-y-2">
-              <Label>Pasta (opcional)</Label>
+              <Label>Pasta</Label>
               <Select
                 value={newCourse.folderId || NO_FOLDER_VALUE}
                 onValueChange={(value) => setNewCourse((prev) => ({ ...prev, folderId: value }))}
@@ -706,9 +701,18 @@ export function CoursesManager() {
           <div className="mb-4 grid gap-3 md:grid-cols-2">
             <div className="space-y-2">
               <Label>Filtrar por pasta</Label>
-              <Select value={filterFolderId} onValueChange={(value) => setFilterFolderId(value)}>
+              <Select
+                value={filterFolderId}
+                onValueChange={(value) => {
+                  if (value === CREATE_FOLDER_VALUE) {
+                    setShowCreateFolderWizard(true);
+                    return;
+                  }
+                  setFilterFolderId(value);
+                }}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Todas as pastas" />
+                  <SelectValue placeholder="Mostrar tudo" />
                 </SelectTrigger>
                 <SelectContent>
                   {filterOptions.map((folder) => (
@@ -716,6 +720,16 @@ export function CoursesManager() {
                       {folder.name}
                     </SelectItem>
                   ))}
+                  <div className="px-2 pb-2 pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => setShowCreateFolderWizard(true)}
+                    >
+                      Criar nova pasta
+                    </Button>
+                  </div>
                 </SelectContent>
               </Select>
             </div>
@@ -742,244 +756,265 @@ export function CoursesManager() {
           ) : filteredCourses.length === 0 ? (
             <p className="text-sm text-muted-foreground">Ainda não existem cursos.</p>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredCourses.map((course) => {
-                const isEditing = editCourseId === course.id;
-                const draft = isEditing ? editCourse : null;
-                return (
-                  <div key={course.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">{resolveFolderName(course.folderId)}</p>
-                        <h3 className="text-lg font-semibold text-foreground">{course.name}</h3>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => startEditCourse(course)}>
-                            Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => startEditCourse(course)}>
-                            Mover para pasta
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleDeleteCourse(course)}>
-                            Eliminar
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+            <div className="space-y-6">
+              {groupedCourses.map((group) => (
+                <div key={group.id} className="rounded-xl border border-border bg-muted/30 p-4">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Pasta</p>
+                      <h3 className="text-base font-semibold text-foreground">{group.name}</h3>
                     </div>
+                    <span className="text-xs text-muted-foreground">
+                      {group.courses.length} curso{group.courses.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  {group.courses.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Sem cursos nesta pasta.</p>
+                  ) : (
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {group.courses.map((course) => {
+                        const isEditing = editCourseId === course.id;
+                        const draft = isEditing ? editCourse : null;
+                        return (
+                          <div key={course.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+                            <div className="flex items-start justify-between">
+                              <h3 className="text-lg font-semibold text-foreground">{course.name}</h3>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => startEditCourse(course)}>
+                                    Editar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => startEditCourse(course)}>
+                                    Mover para pasta
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleDeleteCourse(course)}>
+                                    Eliminar
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
 
-                    {isEditing && draft ? (
-                      <div className="mt-4 space-y-3">
-                        <div className="space-y-2">
-                          <Label>Nome</Label>
-                          <Input
-                            value={draft.name}
-                            onChange={(event) =>
-                              setEditCourse((prev) => (prev ? { ...prev, name: event.target.value } : prev))
-                            }
-                          />
-                        </div>
-                        {requiresYear && (
-                          <div className="space-y-2">
-                            <Label>Ano</Label>
-                            <Input
-                              type="number"
-                              min={1}
-                              max={12}
-                              value={draft.year ?? ""}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                setEditCourse((prev) =>
-                                  prev ? { ...prev, year: value ? Number(value) : null } : prev
-                                );
-                              }}
-                            />
-                          </div>
-                        )}
-                        <div className="space-y-2">
-                          <Label>Limite de alunos</Label>
-                          <Input
-                            type="number"
-                            min={1}
-                            value={draft.maxStudents ?? ""}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setEditCourse((prev) =>
-                                prev ? { ...prev, maxStudents: value ? Number(value) : null } : prev
-                              );
-                            }}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Mover para pasta</Label>
-                          <Select
-                            value={draft.folderId || NO_FOLDER_VALUE}
-                            onValueChange={(value) =>
-                              setEditCourse((prev) => (prev ? { ...prev, folderId: value } : prev))
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Sem pasta" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {folderOptions.map((folder) => (
-                                <SelectItem key={folder.id} value={folder.id}>
-                                  {folder.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="grid gap-3 md:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label>Duração do estágio (meses)</Label>
-                            <Input
-                              type="number"
-                              min={1}
-                              value={draft.internshipDurationMonths ?? ""}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                setEditCourse((prev) => {
-                                  if (!prev) return prev;
-                                  const parsedStart = parseDateLocal(prev.internshipStartDate);
-                                  const duration = value ? Number(value) : null;
-                                  let endDate = prev.internshipEndDate;
-                                  if (parsedStart && duration && !endDate) {
-                                    endDate = formatDateLocal(addMonths(parsedStart, duration));
-                                  }
-                                  return {
-                                    ...prev,
-                                    internshipDurationMonths: duration,
-                                    internshipEndDate: endDate,
-                                  };
-                                });
-                              }}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Data de início</Label>
-                            <Input
-                              type="date"
-                              value={draft.internshipStartDate ?? ""}
-                              onChange={(event) => {
-                                const startDate = event.target.value;
-                                setEditCourse((prev) => {
-                                  if (!prev) return prev;
-                                  const parsedStart = parseDateLocal(startDate);
-                                  let endDate = prev.internshipEndDate;
-                                  let duration = prev.internshipDurationMonths;
-
-                                  if (parsedStart && duration && !endDate) {
-                                    endDate = formatDateLocal(addMonths(parsedStart, duration));
-                                  } else if (parsedStart && endDate && !duration) {
-                                    const parsedEnd = parseDateLocal(endDate);
-                                    if (parsedEnd) {
-                                      duration = diffMonths(parsedStart, parsedEnd);
+                            {isEditing && draft ? (
+                              <div className="mt-4 space-y-3">
+                                <div className="space-y-2">
+                                  <Label>Nome</Label>
+                                  <Input
+                                    value={draft.name}
+                                    onChange={(event) =>
+                                      setEditCourse((prev) =>
+                                        prev ? { ...prev, name: event.target.value } : prev
+                                      )
                                     }
-                                  }
-
-                                  return {
-                                    ...prev,
-                                    internshipStartDate: startDate,
-                                    internshipEndDate: endDate,
-                                    internshipDurationMonths: duration,
-                                  };
-                                });
-                              }}
-                              required
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Data de conclusão</Label>
-                            <Input
-                              type="date"
-                              value={draft.internshipEndDate ?? ""}
-                              onChange={(event) => {
-                                const endDate = event.target.value;
-                                setEditCourse((prev) => {
-                                  if (!prev) return prev;
-                                  const parsedStart = parseDateLocal(prev.internshipStartDate);
-                                  let duration = prev.internshipDurationMonths;
-                                  if (parsedStart && endDate && !duration) {
-                                    const parsedEnd = parseDateLocal(endDate);
-                                    if (parsedEnd) {
-                                      duration = diffMonths(parsedStart, parsedEnd);
-                                    }
-                                  }
-                                  return {
-                                    ...prev,
-                                    internshipEndDate: endDate,
-                                    internshipDurationMonths: duration,
-                                  };
-                                });
-                              }}
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Professores responsáveis</Label>
-                          {teachers.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">Sem professores registados.</p>
-                          ) : (
-                            <div className="grid gap-2 sm:grid-cols-2">
-                              {teachers.map((teacher) => (
-                                <label key={teacher.id} className="flex items-center gap-2 text-sm text-foreground">
-                                  <input
-                                    type="checkbox"
-                                    className="h-4 w-4"
-                                    checked={(draft.teacherIds || []).includes(teacher.id)}
+                                  />
+                                </div>
+                                {requiresYear && (
+                                  <div className="space-y-2">
+                                    <Label>Ano</Label>
+                                    <Input
+                                      type="number"
+                                      min={1}
+                                      max={12}
+                                      value={draft.year ?? ""}
+                                      onChange={(event) => {
+                                        const value = event.target.value;
+                                        setEditCourse((prev) =>
+                                          prev ? { ...prev, year: value ? Number(value) : null } : prev
+                                        );
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                                <div className="space-y-2">
+                                  <Label>Limite de alunos</Label>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    value={draft.maxStudents ?? ""}
                                     onChange={(event) => {
-                                      const checked = event.target.checked;
-                                      setEditCourse((prev) => {
-                                        if (!prev) return prev;
-                                        const ids = prev.teacherIds || [];
-                                        return {
-                                          ...prev,
-                                          teacherIds: checked
-                                            ? [...ids, teacher.id]
-                                            : ids.filter((id) => id !== teacher.id),
-                                        };
-                                      });
+                                      const value = event.target.value;
+                                      setEditCourse((prev) =>
+                                        prev ? { ...prev, maxStudents: value ? Number(value) : null } : prev
+                                      );
                                     }}
                                   />
-                                  <span>{teacher.name}</span>
-                                  <span className="text-xs text-muted-foreground">{teacher.email}</span>
-                                </label>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex gap-2">
-                          <Button type="button" onClick={saveCourse}>
-                            Guardar
-                          </Button>
-                          <Button type="button" variant="outline" onClick={cancelEdit}>
-                            Cancelar
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="mt-4 space-y-3">
-                        <div className="flex flex-wrap gap-2">
-                          {requiresYear && <Badge variant="secondary">Ano: {course.year ?? "—"}</Badge>}
-                          <Badge variant="secondary">Limite: {course.maxStudents ?? "—"}</Badge>
-                          <Badge variant="outline">Inscritos: {course.enrolledCount ?? 0}</Badge>
-                        </div>
-                        <div className="text-sm text-muted-foreground space-y-1">
-                          <p>Duração do estágio: {course.internshipDurationMonths ?? "—"} meses</p>
-                          <p>Data de início: {course.internshipStartDate || "—"}</p>
-                          <p>Data de conclusão: {course.internshipEndDate || "—"}</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                                </div>
+                                <div className="space-y-2">
+                                  <Label>Mover para pasta</Label>
+                                  <Select
+                                    value={draft.folderId || NO_FOLDER_VALUE}
+                                    onValueChange={(value) =>
+                                      setEditCourse((prev) => (prev ? { ...prev, folderId: value } : prev))
+                                    }
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Sem pasta" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {folderOptions.map((folder) => (
+                                        <SelectItem key={folder.id} value={folder.id}>
+                                          {folder.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="grid gap-3 md:grid-cols-2">
+                                  <div className="space-y-2">
+                                    <Label>Duração do estágio (meses)</Label>
+                                    <Input
+                                      type="number"
+                                      min={1}
+                                      value={draft.internshipDurationMonths ?? ""}
+                                      onChange={(event) => {
+                                        const value = event.target.value;
+                                        setEditCourse((prev) => {
+                                          if (!prev) return prev;
+                                          const parsedStart = parseDateLocal(prev.internshipStartDate);
+                                          const duration = value ? Number(value) : null;
+                                          let endDate = prev.internshipEndDate;
+                                          if (parsedStart && duration && !endDate) {
+                                            endDate = formatDateLocal(addMonths(parsedStart, duration));
+                                          }
+                                          return {
+                                            ...prev,
+                                            internshipDurationMonths: duration,
+                                            internshipEndDate: endDate,
+                                          };
+                                        });
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Data de início</Label>
+                                    <Input
+                                      type="date"
+                                      value={draft.internshipStartDate ?? ""}
+                                      onChange={(event) => {
+                                        const startDate = event.target.value;
+                                        setEditCourse((prev) => {
+                                          if (!prev) return prev;
+                                          const parsedStart = parseDateLocal(startDate);
+                                          let endDate = prev.internshipEndDate;
+                                          let duration = prev.internshipDurationMonths;
+
+                                          if (parsedStart && duration && !endDate) {
+                                            endDate = formatDateLocal(addMonths(parsedStart, duration));
+                                          } else if (parsedStart && endDate && !duration) {
+                                            const parsedEnd = parseDateLocal(endDate);
+                                            if (parsedEnd) {
+                                              duration = diffMonths(parsedStart, parsedEnd);
+                                            }
+                                          }
+
+                                          return {
+                                            ...prev,
+                                            internshipStartDate: startDate,
+                                            internshipEndDate: endDate,
+                                            internshipDurationMonths: duration,
+                                          };
+                                        });
+                                      }}
+                                      required
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Data de conclusão</Label>
+                                    <Input
+                                      type="date"
+                                      value={draft.internshipEndDate ?? ""}
+                                      onChange={(event) => {
+                                        const endDate = event.target.value;
+                                        setEditCourse((prev) => {
+                                          if (!prev) return prev;
+                                          const parsedStart = parseDateLocal(prev.internshipStartDate);
+                                          let duration = prev.internshipDurationMonths;
+                                          if (parsedStart && endDate && !duration) {
+                                            const parsedEnd = parseDateLocal(endDate);
+                                            if (parsedEnd) {
+                                              duration = diffMonths(parsedStart, parsedEnd);
+                                            }
+                                          }
+                                          return {
+                                            ...prev,
+                                            internshipEndDate: endDate,
+                                            internshipDurationMonths: duration,
+                                          };
+                                        });
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                                <div className="space-y-2">
+                                  <Label>Professores responsáveis</Label>
+                                  {teachers.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground">Sem professores registados.</p>
+                                  ) : (
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                      {teachers.map((teacher) => (
+                                        <label
+                                          key={teacher.id}
+                                          className="flex items-center gap-2 text-sm text-foreground"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            className="h-4 w-4"
+                                            checked={(draft.teacherIds || []).includes(teacher.id)}
+                                            onChange={(event) => {
+                                              const checked = event.target.checked;
+                                              setEditCourse((prev) => {
+                                                if (!prev) return prev;
+                                                const ids = prev.teacherIds || [];
+                                                return {
+                                                  ...prev,
+                                                  teacherIds: checked
+                                                    ? [...ids, teacher.id]
+                                                    : ids.filter((id) => id !== teacher.id),
+                                                };
+                                              });
+                                            }}
+                                          />
+                                          <span>{teacher.name}</span>
+                                          <span className="text-xs text-muted-foreground">{teacher.email}</span>
+                                        </label>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button type="button" onClick={saveCourse}>
+                                    Guardar
+                                  </Button>
+                                  <Button type="button" variant="outline" onClick={cancelEdit}>
+                                    Cancelar
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="mt-4 space-y-3">
+                                <div className="flex flex-wrap gap-2">
+                                  {requiresYear && <Badge variant="secondary">Ano: {course.year ?? "—"}</Badge>}
+                                  <Badge variant="secondary">Limite: {course.maxStudents ?? "—"}</Badge>
+                                  <Badge variant="outline">Inscritos: {course.enrolledCount ?? 0}</Badge>
+                                </div>
+                                <div className="text-sm text-muted-foreground space-y-1">
+                                  <p>Duração do estágio: {course.internshipDurationMonths ?? "—"} meses</p>
+                                  <p>Data de início: {course.internshipStartDate || "—"}</p>
+                                  <p>Data de conclusão: {course.internshipEndDate || "—"}</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
