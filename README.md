@@ -100,3 +100,7 @@ Para garantir **velocidade de desenvolvimento**, **simplicidade de deploy** e **
    \`\`\`bash
    git clone https://github.com/AngreeCloud/InternLink.git
    cd InternLink
+
+
+Licensed under CC BY-NC 4.0  
+© 2024 Miguel Pedrosa
