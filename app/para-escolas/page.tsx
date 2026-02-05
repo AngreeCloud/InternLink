@@ -36,6 +36,9 @@ export default function ParaEscolasPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-background/60 text-foreground">
       <div className="mx-auto max-w-5xl px-4 py-16 space-y-12">
+        <Button asChild variant="ghost" className="w-fit">
+          <Link href="/">Voltar</Link>
+        </Button>
         <section className="space-y-4">
           <p className="text-sm uppercase tracking-wide text-primary">Para Escolas</p>
           <h1 className="text-4xl font-bold">Acesso simples e gestão autónoma</h1>

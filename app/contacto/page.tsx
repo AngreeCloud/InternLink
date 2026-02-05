@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -19,7 +20,10 @@ export default function ContactoPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-background/60 text-foreground">
-      <div className="mx-auto max-w-3xl px-4 py-16">
+      <div className="mx-auto max-w-3xl px-4 py-16 space-y-4">
+        <Button asChild variant="ghost" className="w-fit">
+          <Link href="/">Voltar</Link>
+        </Button>
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle>Contacto</CardTitle>

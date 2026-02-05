@@ -1,4 +1,6 @@
+import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 
 const highlights = [
   {
@@ -25,6 +27,9 @@ export default function SobrePage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-background/60 text-foreground">
       <div className="mx-auto max-w-4xl px-4 py-16 space-y-10">
+        <Button asChild variant="ghost" className="w-fit">
+          <Link href="/">Voltar</Link>
+        </Button>
         <section className="space-y-3">
           <p className="text-sm uppercase tracking-wide text-primary">Sobre</p>
           <h1 className="text-4xl font-bold">Porque nasceu a InternLink</h1>
