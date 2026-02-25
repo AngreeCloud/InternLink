@@ -31,7 +31,7 @@ Para garantir **velocidade de desenvolvimento**, **simplicidade de deploy** e **
 - **Framework principal:** [Next.js](https://nextjs.org/) (React + SSR/CSR/SSG + API Routes)  
 - **Estilização:** Tailwind CSS  
 - **Backend-as-a-Service:** Firebase  
-- **Base de Dados:** Firebase Realtime Database  
+- **Base de Dados:** Firebase Firestore  
 - **Storage de Ficheiros:** Firebase Cloud Storage  
 - **Autenticação:** Firebase Authentication (email/senha + Google)  
 - **Chat em tempo real:** Firebase Realtime Database  
@@ -54,7 +54,7 @@ Para garantir **velocidade de desenvolvimento**, **simplicidade de deploy** e **
 - Registo com nome, email, password, tipo de utilizador, escola, empresa e descrição do estágio.  
 - Conta fica **pendente** até aprovação do administrador.  
 - Autenticação via **Firebase Authentication** (email/senha + Google).  
-- Papéis e estado de aprovação guardados na **Realtime Database**.
+- Papéis e estado de aprovação guardados no **Firestore**.
 
 ---
 
