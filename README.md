@@ -1,5 +1,19 @@
 # InternLink
 
+## Índice
+
+- [🧠 Objetivo do Projeto](#-objetivo-do-projeto)
+- [🧱 Stack Tecnológica](#-stack-tecnológica)
+- [👥 Perfis de Utilizador](#-perfis-de-utilizador)
+- [🔐 Registo e Autenticação](#-registo-e-autenticação)
+- [📁 Gestão de Documentos](#-gestão-de-documentos)
+- [💬 Comunicação (Chat)](#-comunicação-chat)
+- [🧭 Navegação e Filtros](#-navegação-e-filtros)
+- [🛠️ Painel Administrativo](#️-painel-administrativo)
+- [🔒 Segurança e Validações](#-segurança-e-validações)
+- [📣 Extras](#-extras)
+- [🚀 Instalação e Execução](#-instalação-e-execução)
+
 ## 🧠 Objetivo do Projeto
 
 Esta aplicação web tem como objetivo **facilitar e organizar a gestão dos estágios curriculares (FCT)** entre alunos, escolas e empresas.  
