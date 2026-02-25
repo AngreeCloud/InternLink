@@ -1,0 +1,137 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function userPath(userId) {
+      return /databases/$(database)/documents/users/$(userId);
+    }
+
+    function currentUserDoc() {
+      return get(userPath(request.auth.uid));
+    }
+
+    function currentUserExists() {
+      return isSignedIn() && exists(userPath(request.auth.uid));
+    }
+
+    function currentUserData() {
+      return currentUserDoc().data;
+    }
+
+    function isSchoolAdmin() {
+      return currentUserExists()
+        && currentUserData().role == "admin_escolar";
+    }
+
+    function isSchoolAdminFor(schoolId) {
+      return isSchoolAdmin()
+        && currentUserData().schoolId == schoolId;
+    }
+
+    function isProfessorPendingFor(schoolId, userId) {
+      return isSelf(userId)
+        && currentUserExists()
+        && currentUserData().role == "professor"
+        && currentUserData().schoolId == schoolId
+        && currentUserData().estado == "pendente";
+    }
+
+    function isSelfUserDocImmutable() {
+      return request.resource.data.role == resource.data.role
+        && request.resource.data.estado == resource.data.estado
+        && request.resource.data.schoolId == resource.data.schoolId
+        && request.resource.data.courseId == resource.data.courseId;
+    }
+
+    // USERS
+    match /users/{userId} {
+      allow read: if isSelf(userId)
+        || (isSchoolAdmin() && resource.data.schoolId == currentUserData().schoolId);
+
+      allow create: if isSelf(userId)
+        && request.resource.data.role in ["aluno", "professor", "tutor"]
+        && request.resource.data.estado in ["pendente", "inativo"];
+
+      // Permite ao próprio editar apenas campos de perfil, sem escalar permissões/estado.
+      allow update: if isSelf(userId) && isSelfUserDocImmutable();
+
+      // Admin escolar gere utilizadores da própria escola.
+      allow update, delete: if isSchoolAdmin()
+        && resource.data.schoolId == currentUserData().schoolId;
+    }
+
+    // SCHOOLS + FOLDERS + PENDING TEACHERS
+    match /schools/{schoolId} {
+      allow read: if true;
+      allow write: if isSchoolAdminFor(schoolId);
+
+      match /folders/{folderId} {
+        allow read, write: if isSchoolAdminFor(schoolId);
+      }
+
+      match /pendingTeachers/{docId} {
+        // Registo inicial do professor pendente (self-service)
+        allow create: if isProfessorPendingFor(schoolId, docId)
+          && request.resource.data.role == "teacher";
+
+        // Gestão por admin escolar
+        allow read, update, delete: if isSchoolAdminFor(schoolId);
+      }
+    }
+
+    // GLOBAL COURSES COLLECTION
+    match /courses/{courseId} {
+      allow read: if true;
+
+      allow create: if isSchoolAdmin()
+        && request.resource.data.schoolId == currentUserData().schoolId;
+
+      allow update: if isSchoolAdmin()
+        && resource.data.schoolId == currentUserData().schoolId
+        && request.resource.data.schoolId == resource.data.schoolId;
+
+      allow delete: if isSchoolAdmin()
+        && resource.data.schoolId == currentUserData().schoolId;
+    }
+
+    // INTERNSHIP STRUCTURE (usada no dashboard do aluno)
+    match /internships/{internshipId} {
+      allow read: if isSignedIn()
+        && (
+          resource.data.studentId == request.auth.uid
+          || (resource.data.schoolId != null && isSchoolAdminFor(resource.data.schoolId))
+        );
+
+      // TODO: abrir permissões a professor/tutor quando a gestão de estágio for implementada.
+      allow create, update, delete: if isSchoolAdmin()
+        && request.resource.data.schoolId == currentUserData().schoolId;
+    }
+
+    // INTERNSHIP REPORTS
+    match /internshipReports/{reportId} {
+      allow read: if isSignedIn()
+        && (
+          resource.data.studentId == request.auth.uid
+          || (resource.data.schoolId != null && isSchoolAdminFor(resource.data.schoolId))
+        );
+
+      allow create: if isSignedIn()
+        && request.resource.data.studentId == request.auth.uid;
+
+      allow update, delete: if isSignedIn()
+        && (
+          resource.data.studentId == request.auth.uid
+          || (resource.data.schoolId != null && isSchoolAdminFor(resource.data.schoolId))
+        );
+    }
+  }
+}
