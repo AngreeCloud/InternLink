@@ -33,12 +33,20 @@ export function LoginForm() {
       const db = await getDbRuntime()
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
       const userSnap = await getDoc(doc(db, "users", userCredential.user.uid))
-      const role = userSnap.exists() ? (userSnap.data() as { role?: string }).role : ""
+      const userData = userSnap.exists()
+        ? (userSnap.data() as { role?: string; estado?: string })
+        : { role: "", estado: "" }
+      const role = userData.role || ""
+      const estado = userData.estado || ""
 
       if (role === "admin_escolar") {
         router.push("/school-admin")
-      } else {
+      } else if (role === "aluno" && estado !== "ativo") {
+        router.push("/waiting")
+      } else if (role === "aluno") {
         router.push("/dashboard")
+      } else {
+        router.push("/account-status")
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)

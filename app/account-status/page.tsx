@@ -18,7 +18,6 @@ export default function AccountStatusPage() {
     email: "",
     createdAt: "",
     status: "pendente",
-    verified: false,
   })
 
   const qpEmail = searchParams.get("email")
@@ -45,7 +44,6 @@ export default function AccountStatusPage() {
         }
 
         const email = user.email || qpEmail || ""
-        const verified = user.emailVerified
         let createdAt = user.metadata.creationTime || qpCreatedAt || ""
         let status = "pendente"
 
@@ -58,21 +56,22 @@ export default function AccountStatusPage() {
           }
         }
 
-        setState({ loading: false, email, createdAt, status, verified })
+        setState({ loading: false, email, createdAt, status })
       })
     })()
 
     return () => unsub()
   }, [qpEmail, qpCreatedAt, router])
 
-  const statusLabel = state.verified ? "ativo" : state.status || "pendente"
+  const statusLabel = state.status || "pendente"
+  const canAccessDashboard = statusLabel === "ativo"
 
   return (
     <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
       <Card className="w-full max-w-xl shadow-lg">
         <CardHeader>
           <CardTitle>Estado da Conta</CardTitle>
-          <CardDescription>Verifique o estado do seu registo e a confirmação de email.</CardDescription>
+          <CardDescription>Verifique o estado do seu registo.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {state.loading ? (
@@ -81,7 +80,7 @@ export default function AccountStatusPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Estado</span>
-                <Badge variant={state.verified ? "default" : "secondary"}>{statusLabel}</Badge>
+                <Badge variant={canAccessDashboard ? "default" : "secondary"}>{statusLabel}</Badge>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Email</span>
@@ -93,18 +92,20 @@ export default function AccountStatusPage() {
                   {createdDate ? createdDate.toLocaleString() : "—"}
                 </span>
               </div>
-              {!state.verified && (
+              {!canAccessDashboard && (
                 <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                  A sua conta está pendente. Verifique o email para ativar.
+                  A sua conta está pendente de aprovação manual pelo professor responsável.
                 </div>
               )}
               <div className="flex gap-2 pt-2">
                 <Button asChild variant="outline" size="sm">
                   <Link href="/login">Voltar ao login</Link>
                 </Button>
-                <Button asChild size="sm">
-                  <Link href="/dashboard">Ir para dashboard</Link>
-                </Button>
+                {canAccessDashboard ? (
+                  <Button asChild size="sm">
+                    <Link href="/dashboard">Ir para dashboard</Link>
+                  </Button>
+                ) : null}
               </div>
             </div>
           )}

@@ -9,20 +9,13 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { registerProfessor } from "@/actions/register";
+import { professorRegisterFormSchema } from "@/lib/validators/register";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 
-const professorSchema = z.object({
-  nome: z.string().min(3, "O nome é obrigatório."),
-  email: z.string().email("Email inválido."),
-  password: z.string().min(6, "A password deve ter no mínimo 6 caracteres."),
-  escola: z.string().min(1, "A escola é obrigatória."),
-  dataNascimento: z.string().optional(),
-  localidade: z.string().optional(),
-  telefone: z.string().optional(),
-});
+const professorSchema = professorRegisterFormSchema;
 
 export default function ProfessorRegisterPage() {
   const [schools, setSchools] = useState<{
@@ -33,6 +26,7 @@ export default function ProfessorRegisterPage() {
   }[]>([]);
   const [loadingSchools, setLoadingSchools] = useState(true);
   const [submitError, setSubmitError] = useState("");
+  const submitLockRef = useRef(false);
 
   const form = useForm<z.infer<typeof professorSchema>>({
     resolver: zodResolver(professorSchema),
@@ -91,6 +85,11 @@ export default function ProfessorRegisterPage() {
   const selectedSchoolName = selectedSchool?.name || "";
 
   async function onSubmit(values: z.infer<typeof professorSchema>) {
+    if (submitLockRef.current) {
+      return;
+    }
+
+    submitLockRef.current = true;
     try {
       setSubmitError("");
       if (selectedSchool?.requireInstitutionalEmail && selectedSchool.emailDomain) {
@@ -115,6 +114,8 @@ export default function ProfessorRegisterPage() {
     } catch (error) {
       console.error("Erro ao criar conta de professor:", error);
       alert("Erro ao criar conta. Tente novamente.");
+    } finally {
+      submitLockRef.current = false;
     }
   }
 
@@ -197,7 +198,9 @@ export default function ProfessorRegisterPage() {
                   <FormMessage />
                 </FormItem>
               )} />
-              <Button type="submit" className="w-full mt-1">Criar Conta</Button>
+              <Button type="submit" className="w-full mt-1" disabled={form.formState.isSubmitting || submitLockRef.current}>
+                {form.formState.isSubmitting || submitLockRef.current ? "A registar..." : "Criar Conta"}
+              </Button>
             </form>
           </Form>
         </CardContent>

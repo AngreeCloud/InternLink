@@ -3,19 +3,15 @@
 import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
+import { z } from "zod";
+import {
+  alunoRegisterActionSchema,
+  professorRegisterActionSchema,
+  tutorRegisterActionSchema,
+} from "@/lib/validators/register";
 
-export async function registerAluno(data: {
-  nome: string;
-  email: string;
-  password: string;
-  escolaId: string;
-  escolaNome: string;
-  cursoId: string;
-  cursoNome: string;
-  dataNascimento: string;
-  localidade?: string;
-  telefone?: string;
-}) {
+export async function registerAluno(data: z.input<typeof alunoRegisterActionSchema>) {
+  const parsed = alunoRegisterActionSchema.parse(data);
   const {
     nome,
     email,
@@ -27,11 +23,7 @@ export async function registerAluno(data: {
     dataNascimento,
     localidade,
     telefone,
-  } = data;
-
-  if (!nome || !email || !password || !escolaId || !escolaNome || !cursoId || !cursoNome || !dataNascimento) {
-    throw new Error("Campos obrigatórios não preenchidos.");
-  }
+  } = parsed;
 
   const auth = await getAuthRuntime();
   const db = await getDbRuntime();
@@ -61,21 +53,9 @@ export async function registerAluno(data: {
   return { uid: userId, email: user.email, createdAt: user.metadata.creationTime };
 }
 
-export async function registerProfessor(data: {
-  nome: string;
-  email: string;
-  password: string;
-  escolaId: string;
-  escolaNome: string;
-  dataNascimento?: string;
-  localidade?: string;
-  telefone?: string;
-}) {
-  const { nome, email, password, escolaId, escolaNome, dataNascimento, localidade, telefone } = data;
-
-  if (!nome || !email || !password || !escolaId || !escolaNome) {
-    throw new Error("Campos obrigatórios não preenchidos.");
-  }
+export async function registerProfessor(data: z.input<typeof professorRegisterActionSchema>) {
+  const parsed = professorRegisterActionSchema.parse(data);
+  const { nome, email, password, escolaId, escolaNome, dataNascimento, localidade, telefone } = parsed;
 
   const auth = await getAuthRuntime();
   const db = await getDbRuntime();
@@ -112,20 +92,9 @@ export async function registerProfessor(data: {
   return { uid: userId, email: user.email, createdAt: user.metadata.creationTime };
 }
 
-export async function registerTutor(data: {
-  nome: string;
-  email: string;
-  password: string;
-  empresa: string;
-  dataNascimento?: string;
-  localidade?: string;
-  telefone?: string;
-}) {
-  const { nome, email, password, empresa, dataNascimento, localidade, telefone } = data;
-
-  if (!nome || !email || !password || !empresa) {
-    throw new Error("Campos obrigatórios não preenchidos.");
-  }
+export async function registerTutor(data: z.input<typeof tutorRegisterActionSchema>) {
+  const parsed = tutorRegisterActionSchema.parse(data);
+  const { nome, email, password, empresa, dataNascimento, localidade, telefone } = parsed;
 
   const auth = await getAuthRuntime();
   const db = await getDbRuntime();

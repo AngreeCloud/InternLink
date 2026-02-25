@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -14,49 +14,127 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ChatNotifications } from "@/components/chat/chat-notification"
 import {
   GraduationCap,
   FileText,
   MessageSquare,
-  Users,
-  Settings,
   LogOut,
   Menu,
   Home,
   Upload,
-  Shield,
 } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { onAuthStateChanged, signOut } from "firebase/auth"
+import { doc, getDoc } from "firebase/firestore"
+import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
   { name: "Protocolos", href: "/dashboard/protocols", icon: FileText },
   { name: "Relatórios", href: "/dashboard/reports", icon: Upload },
   { name: "Chat", href: "/dashboard/chat", icon: MessageSquare },
-  { name: "Utilizadores", href: "/dashboard/users", icon: Users },
-  { name: "Admin", href: "/admin", icon: Shield }, // Added admin navigation item
 ]
 
 interface DashboardLayoutProps {
   children: React.ReactNode
 }
 
+type AuthState = {
+  loading: boolean
+  userId: string
+  name: string
+  email: string
+}
+
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [state, setState] = useState<AuthState>({
+    loading: true,
+    userId: "",
+    name: "",
+    email: "",
+  })
+  const router = useRouter()
 
-  // Mock user data - in real app this would come from auth context
+  useEffect(() => {
+    let unsubscribe = () => {}
+
+    ;(async () => {
+      const auth = await getAuthRuntime()
+      const db = await getDbRuntime()
+
+      unsubscribe = onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+          setState((prev) => ({ ...prev, loading: false }))
+          router.replace("/login")
+          return
+        }
+
+        const userSnap = await getDoc(doc(db, "users", user.uid))
+        if (!userSnap.exists()) {
+          setState((prev) => ({ ...prev, loading: false }))
+          router.replace("/login")
+          return
+        }
+
+        const data = userSnap.data() as {
+          role?: string
+          estado?: string
+          nome?: string
+          email?: string
+        }
+
+        if (data.role === "admin_escolar") {
+          setState((prev) => ({ ...prev, loading: false }))
+          router.replace("/school-admin")
+          return
+        }
+
+        if (data.role !== "aluno") {
+          setState((prev) => ({ ...prev, loading: false }))
+          router.replace("/account-status")
+          return
+        }
+
+        if (data.estado !== "ativo") {
+          setState((prev) => ({ ...prev, loading: false }))
+          router.replace("/waiting")
+          return
+        }
+
+        setState({
+          loading: false,
+          userId: user.uid,
+          name: data.nome || user.displayName || "Aluno",
+          email: data.email || user.email || "",
+        })
+      })
+    })()
+
+    return () => unsubscribe()
+  }, [router])
+
+  if (state.loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        <p>A validar acesso...</p>
+      </div>
+    )
+  }
+
+  if (!state.userId) {
+    return null
+  }
+
   const user = {
-    name: "João Silva",
-    email: "joao@escola.pt",
-    role: "school",
+    name: state.name,
+    email: state.email,
     avatar: "",
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <ChatNotifications />
-
       {/* Mobile sidebar */}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <SheetContent side="left" className="w-64 p-0">
@@ -139,12 +217,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>
-                    <Settings className="mr-2 h-4 w-4" />
-                    <span>Configurações</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      const auth = await getAuthRuntime()
+                      await signOut(auth)
+                      router.replace("/login")
+                    }}
+                  >
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Sair</span>
                   </DropdownMenuItem>

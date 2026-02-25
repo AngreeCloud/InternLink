@@ -9,21 +9,13 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { registerAluno } from "@/actions/register";
+import { alunoRegisterFormSchema } from "@/lib/validators/register";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 
-const studentSchema = z.object({
-  nome: z.string().min(3, "O nome é obrigatório."),
-  email: z.string().email("Email inválido."),
-  password: z.string().min(6, "A password deve ter no mínimo 6 caracteres."),
-  escola: z.string().min(1, "A escola é obrigatória."),
-  curso: z.string().min(1, "O curso é obrigatório."),
-  dataNascimento: z.string().min(1, "A data de nascimento é obrigatória."),
-  localidade: z.string().optional(),
-  telefone: z.string().optional(),
-});
+const studentSchema = alunoRegisterFormSchema;
 
 export default function StudentRegisterPage() {
   const [schools, setSchools] = useState<{
@@ -36,6 +28,7 @@ export default function StudentRegisterPage() {
   const [loadingSchools, setLoadingSchools] = useState(true);
   const [loadingCourses, setLoadingCourses] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const submitLockRef = useRef(false);
 
   const form = useForm<z.infer<typeof studentSchema>>({
     resolver: zodResolver(studentSchema),
@@ -129,6 +122,11 @@ export default function StudentRegisterPage() {
   );
 
   async function onSubmit(values: z.infer<typeof studentSchema>) {
+    if (submitLockRef.current) {
+      return;
+    }
+
+    submitLockRef.current = true;
     try {
       setSubmitError("");
       if (selectedSchool?.requireInstitutionalEmail && selectedSchool.emailDomain) {
@@ -155,6 +153,8 @@ export default function StudentRegisterPage() {
     } catch (error) {
       console.error("Erro ao criar conta de aluno:", error);
       alert("Erro ao criar conta. Tente novamente.");
+    } finally {
+      submitLockRef.current = false;
     }
   }
 
@@ -266,7 +266,9 @@ export default function StudentRegisterPage() {
                   <FormMessage />
                 </FormItem>
               )} />
-              <Button type="submit" className="w-full mt-1">Criar Conta</Button>
+              <Button type="submit" className="w-full mt-1" disabled={form.formState.isSubmitting || submitLockRef.current}>
+                {form.formState.isSubmitting || submitLockRef.current ? "A registar..." : "Criar Conta"}
+              </Button>
             </form>
           </Form>
         </CardContent>

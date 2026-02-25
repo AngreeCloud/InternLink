@@ -54,6 +54,8 @@ type Course = {
   internshipDurationMonths?: number | null;
   internshipStartDate?: string | null;
   internshipEndDate?: string | null;
+  reportMinHours?: number | null;
+  reportWaitDays?: number | null;
   createdAt?: Date | null;
 };
 
@@ -115,6 +117,8 @@ export function CoursesManager() {
     internshipDurationMonths: "",
     internshipStartDate: "",
     internshipEndDate: "",
+    reportMinHours: "80",
+    reportWaitDays: "0",
   });
   const [editCourseId, setEditCourseId] = useState<string | null>(null);
   const [editCourse, setEditCourse] = useState<Course | null>(null);
@@ -193,6 +197,8 @@ export function CoursesManager() {
               internshipDurationMonths?: number;
               internshipStartDate?: string | null;
               internshipEndDate?: string | null;
+              reportMinHours?: number;
+              reportWaitDays?: number;
               createdAt?: { toDate?: () => Date };
             };
             return {
@@ -206,6 +212,8 @@ export function CoursesManager() {
               internshipDurationMonths: data.internshipDurationMonths ?? null,
               internshipStartDate: data.internshipStartDate ?? null,
               internshipEndDate: data.internshipEndDate ?? null,
+              reportMinHours: data.reportMinHours ?? 80,
+              reportWaitDays: data.reportWaitDays ?? 0,
               createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
             };
           })
@@ -279,6 +287,8 @@ export function CoursesManager() {
           internshipDurationMonths?: number;
           internshipStartDate?: string | null;
           internshipEndDate?: string | null;
+          reportMinHours?: number;
+          reportWaitDays?: number;
           createdAt?: { toDate?: () => Date };
         };
         return {
@@ -292,6 +302,8 @@ export function CoursesManager() {
           internshipDurationMonths: data.internshipDurationMonths ?? null,
           internshipStartDate: data.internshipStartDate ?? null,
           internshipEndDate: data.internshipEndDate ?? null,
+          reportMinHours: data.reportMinHours ?? 80,
+          reportWaitDays: data.reportWaitDays ?? 0,
           createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
         };
       })
@@ -356,6 +368,8 @@ export function CoursesManager() {
       internshipDurationMonths: durationMonths,
       internshipStartDate: startDate,
       internshipEndDate: endDate,
+      reportMinHours: newCourse.reportMinHours ? Number(newCourse.reportMinHours) : 80,
+      reportWaitDays: newCourse.reportWaitDays ? Number(newCourse.reportWaitDays) : 0,
       enrolledCount: 0,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -369,6 +383,8 @@ export function CoursesManager() {
       internshipDurationMonths: "",
       internshipStartDate: "",
       internshipEndDate: "",
+      reportMinHours: "80",
+      reportWaitDays: "0",
     });
     await refreshCourses();
   };
@@ -416,6 +432,8 @@ export function CoursesManager() {
       internshipDurationMonths: durationMonths,
       internshipStartDate: startDate,
       internshipEndDate: endDate,
+      reportMinHours: editCourse.reportMinHours ?? 80,
+      reportWaitDays: editCourse.reportWaitDays ?? 0,
       updatedAt: serverTimestamp(),
     });
     cancelEdit();
@@ -642,6 +660,32 @@ export function CoursesManager() {
                       };
                     })
                   }
+                />
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Horas mínimas para relatório</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={newCourse.reportMinHours}
+                  onChange={(event) =>
+                    setNewCourse((prev) => ({ ...prev, reportMinHours: event.target.value }))
+                  }
+                  placeholder="80"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Período de espera para relatório (dias)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={newCourse.reportWaitDays}
+                  onChange={(event) =>
+                    setNewCourse((prev) => ({ ...prev, reportWaitDays: event.target.value }))
+                  }
+                  placeholder="0"
                 />
               </div>
             </div>
@@ -949,6 +993,36 @@ export function CoursesManager() {
                                     />
                                   </div>
                                 </div>
+                                <div className="grid gap-3 md:grid-cols-2">
+                                  <div className="space-y-2">
+                                    <Label>Horas mínimas para relatório</Label>
+                                    <Input
+                                      type="number"
+                                      min={1}
+                                      value={draft.reportMinHours ?? 80}
+                                      onChange={(event) => {
+                                        const value = event.target.value;
+                                        setEditCourse((prev) =>
+                                          prev ? { ...prev, reportMinHours: value ? Number(value) : 80 } : prev
+                                        );
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Período de espera para relatório (dias)</Label>
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      value={draft.reportWaitDays ?? 0}
+                                      onChange={(event) => {
+                                        const value = event.target.value;
+                                        setEditCourse((prev) =>
+                                          prev ? { ...prev, reportWaitDays: value ? Number(value) : 0 } : prev
+                                        );
+                                      }}
+                                    />
+                                  </div>
+                                </div>
                                 <div className="space-y-2">
                                   <Label>Professores responsáveis</Label>
                                   {teachers.length === 0 ? (
@@ -1005,6 +1079,8 @@ export function CoursesManager() {
                                   <p>Duração do estágio: {course.internshipDurationMonths ?? "—"} meses</p>
                                   <p>Data de início: {course.internshipStartDate || "—"}</p>
                                   <p>Data de conclusão: {course.internshipEndDate || "—"}</p>
+                                  <p>Horas mínimas para relatório: {course.reportMinHours ?? 80}h</p>
+                                  <p>Espera para relatório: {course.reportWaitDays ?? 0} dia(s)</p>
                                 </div>
                               </div>
                             )}

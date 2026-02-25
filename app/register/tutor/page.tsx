@@ -8,19 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { registerTutor } from "@/actions/register";
+import { tutorRegisterFormSchema } from "@/lib/validators/register";
 import { useRouter } from "next/navigation";
+import { useRef } from "react";
 
-const tutorSchema = z.object({
-  nome: z.string().min(3, "O nome é obrigatório."),
-  email: z.string().email("Email inválido."),
-  password: z.string().min(6, "A password deve ter no mínimo 6 caracteres."),
-  empresa: z.string().min(1, "A empresa é obrigatória."),
-  dataNascimento: z.string().optional(),
-  localidade: z.string().optional(),
-  telefone: z.string().optional(),
-});
+const tutorSchema = tutorRegisterFormSchema;
 
 export default function TutorRegisterPage() {
+  const submitLockRef = useRef(false);
   const form = useForm<z.infer<typeof tutorSchema>>({
     resolver: zodResolver(tutorSchema),
     defaultValues: {
@@ -37,6 +32,11 @@ export default function TutorRegisterPage() {
   const router = useRouter();
 
   async function onSubmit(values: z.infer<typeof tutorSchema>) {
+    if (submitLockRef.current) {
+      return;
+    }
+
+    submitLockRef.current = true;
     try {
       const result = await registerTutor(values);
       router.push(
@@ -47,6 +47,8 @@ export default function TutorRegisterPage() {
     } catch (error) {
       console.error("Erro ao criar conta de tutor:", error);
       alert("Erro ao criar conta. Tente novamente.");
+    } finally {
+      submitLockRef.current = false;
     }
   }
 
@@ -109,7 +111,9 @@ export default function TutorRegisterPage() {
                   <FormMessage />
                 </FormItem>
               )} />
-              <Button type="submit" className="w-full mt-1">Criar Conta</Button>
+              <Button type="submit" className="w-full mt-1" disabled={form.formState.isSubmitting || submitLockRef.current}>
+                {form.formState.isSubmitting || submitLockRef.current ? "A registar..." : "Criar Conta"}
+              </Button>
             </form>
           </Form>
         </CardContent>
