@@ -260,7 +260,11 @@ O ficheiro `firestore.rules` foi atualizado com:
 ### Deploy das regras:
 ```bash
 firebase deploy --only firestore:rules
+firebase deploy --only firestore:indexes
 ```
+
+### Índices compostos necessários:
+As queries do professor (listar alunos pendentes por escola) requerem um índice composto na coleção `users` nos campos `schoolId`, `role` e `estado`. O ficheiro `firestore.indexes.json` já contém esta configuração e será deployado automaticamente com o comando acima.
 
 ---
 
@@ -297,9 +301,10 @@ cp .env.example .env.local
 # Preencher com as credenciais Firebase e reCAPTCHA
 ```
 
-### 3. Deploy das regras Firestore
+### 3. Deploy das regras e índices Firestore
 ```bash
 firebase deploy --only firestore:rules
+firebase deploy --only firestore:indexes
 ```
 
 ### 4. Executar em modo desenvolvimento
@@ -377,4 +382,8 @@ InternLink/
 - `app/register/professor/page.tsx` — adicionado CAPTCHA
 - `app/register/tutor/page.tsx` — adicionado CAPTCHA
 - `firestore.rules` — novas coleções e permissões
+- `firebase.json` — adicionada referência ao ficheiro de índices
 - `.env.example` — nova variável `NEXT_PUBLIC_RECAPTCHA_SITE_KEY`
+
+### Ficheiros de configuração adicionados:
+- `firestore.indexes.json` — índices compostos para queries do professor

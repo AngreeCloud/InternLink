@@ -1,0 +1,14 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "schoolId", "order": "ASCENDING" },
+        { "fieldPath": "role", "order": "ASCENDING" },
+        { "fieldPath": "estado", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
