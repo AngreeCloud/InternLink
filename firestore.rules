@@ -37,6 +37,17 @@ service cloud.firestore {
         && currentUserData().schoolId == schoolId;
     }
 
+    function isProfessor() {
+      return currentUserExists()
+        && currentUserData().role == "professor"
+        && currentUserData().estado == "ativo";
+    }
+
+    function isProfessorFor(schoolId) {
+      return isProfessor()
+        && currentUserData().schoolId == schoolId;
+    }
+
     function isProfessorPendingFor(schoolId, userId) {
       return isSelf(userId)
         && currentUserExists()
@@ -55,7 +66,8 @@ service cloud.firestore {
     // USERS
     match /users/{userId} {
       allow read: if isSelf(userId)
-        || (isSchoolAdmin() && resource.data.schoolId == currentUserData().schoolId);
+        || (isSchoolAdmin() && resource.data.schoolId == currentUserData().schoolId)
+        || (isProfessor() && resource.data.schoolId == currentUserData().schoolId);
 
       allow create: if isSelf(userId)
         && request.resource.data.role in ["aluno", "professor", "tutor"]
@@ -67,6 +79,11 @@ service cloud.firestore {
       // Admin escolar gere utilizadores da própria escola.
       allow update, delete: if isSchoolAdmin()
         && resource.data.schoolId == currentUserData().schoolId;
+
+      // Professor pode aprovar/rejeitar alunos da sua escola.
+      allow update: if isProfessor()
+        && resource.data.schoolId == currentUserData().schoolId
+        && resource.data.role == "aluno";
     }
 
     // SCHOOLS + FOLDERS + PENDING TEACHERS
@@ -132,6 +149,48 @@ service cloud.firestore {
           resource.data.studentId == request.auth.uid
           || (resource.data.schoolId != null && isSchoolAdminFor(resource.data.schoolId))
         );
+    }
+
+    // ESTÁGIOS (geridos pelo professor)
+    match /estagios/{estagioId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && currentUserExists()
+        && currentUserData().role == "professor";
+
+      allow update, delete: if isSignedIn()
+        && currentUserExists()
+        && currentUserData().role == "professor"
+        && resource.data.professorId == request.auth.uid;
+    }
+
+    // DOCUMENTOS (geridos pelo professor, lidos por participantes)
+    match /documentos/{documentoId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && currentUserExists()
+        && currentUserData().role == "professor";
+
+      allow update, delete: if isSignedIn()
+        && currentUserExists()
+        && currentUserData().role == "professor"
+        && resource.data.professorId == request.auth.uid;
+    }
+
+    // CONVITES DE TUTOR
+    match /tutorInvites/{inviteId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && currentUserExists()
+        && currentUserData().role == "professor";
+
+      allow update, delete: if isSignedIn()
+        && currentUserExists()
+        && currentUserData().role == "professor"
+        && resource.data.professorId == request.auth.uid;
     }
   }
 }

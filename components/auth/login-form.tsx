@@ -45,6 +45,10 @@ export function LoginForm() {
         router.push("/waiting")
       } else if (role === "aluno") {
         router.push("/dashboard")
+      } else if (role === "professor" && estado === "ativo") {
+        router.push("/professor")
+      } else if (role === "tutor" && estado === "ativo") {
+        router.push("/tutor")
       } else {
         router.push("/account-status")
       }
@@ -88,7 +92,12 @@ export function LoginForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Palavra-passe</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Palavra-passe</Label>
+              <Link href="/forgot-password" className="text-xs text-primary hover:underline">
+                Esqueceu-se da password?
+              </Link>
+            </div>
             <div className="relative">
               <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
