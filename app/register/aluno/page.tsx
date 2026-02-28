@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
+import { CaptchaWidget } from "@/components/auth/captcha-widget";
 
 const studentSchema = alunoRegisterFormSchema;
 
@@ -29,6 +30,8 @@ export default function StudentRegisterPage() {
   const [loadingCourses, setLoadingCourses] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const submitLockRef = useRef(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "";
 
   const form = useForm<z.infer<typeof studentSchema>>({
     resolver: zodResolver(studentSchema),
@@ -129,6 +132,12 @@ export default function StudentRegisterPage() {
     submitLockRef.current = true;
     try {
       setSubmitError("");
+
+      if (recaptchaSiteKey && !captchaToken) {
+        setSubmitError("Por favor complete o CAPTCHA.");
+        return;
+      }
+
       if (selectedSchool?.requireInstitutionalEmail && selectedSchool.emailDomain) {
         const domain = selectedSchool.emailDomain.trim().toLowerCase();
         const email = values.email.trim().toLowerCase();
@@ -266,6 +275,13 @@ export default function StudentRegisterPage() {
                   <FormMessage />
                 </FormItem>
               )} />
+              {recaptchaSiteKey && (
+                <CaptchaWidget
+                  siteKey={recaptchaSiteKey}
+                  onVerify={(token) => setCaptchaToken(token)}
+                  onExpire={() => setCaptchaToken("")}
+                />
+              )}
               <Button type="submit" className="w-full mt-1" disabled={form.formState.isSubmitting || submitLockRef.current}>
                 {form.formState.isSubmitting || submitLockRef.current ? "A registar..." : "Criar Conta"}
               </Button>

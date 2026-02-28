@@ -10,12 +10,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { registerTutor } from "@/actions/register";
 import { tutorRegisterFormSchema } from "@/lib/validators/register";
 import { useRouter } from "next/navigation";
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { CaptchaWidget } from "@/components/auth/captcha-widget";
 
 const tutorSchema = tutorRegisterFormSchema;
 
 export default function TutorRegisterPage() {
   const submitLockRef = useRef(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "";
   const form = useForm<z.infer<typeof tutorSchema>>({
     resolver: zodResolver(tutorSchema),
     defaultValues: {
@@ -38,6 +41,11 @@ export default function TutorRegisterPage() {
 
     submitLockRef.current = true;
     try {
+      if (recaptchaSiteKey && !captchaToken) {
+        alert("Por favor complete o CAPTCHA.");
+        return;
+      }
+
       const result = await registerTutor(values);
       router.push(
         `/account-status?email=${encodeURIComponent(result.email ?? values.email)}&createdAt=${encodeURIComponent(
@@ -111,6 +119,13 @@ export default function TutorRegisterPage() {
                   <FormMessage />
                 </FormItem>
               )} />
+              {recaptchaSiteKey && (
+                <CaptchaWidget
+                  siteKey={recaptchaSiteKey}
+                  onVerify={(token) => setCaptchaToken(token)}
+                  onExpire={() => setCaptchaToken("")}
+                />
+              )}
               <Button type="submit" className="w-full mt-1" disabled={form.formState.isSubmitting || submitLockRef.current}>
                 {form.formState.isSubmitting || submitLockRef.current ? "A registar..." : "Criar Conta"}
               </Button>
