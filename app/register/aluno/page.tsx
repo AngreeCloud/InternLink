@@ -14,6 +14,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
+import { getRecaptchaV3Token } from "@/lib/recaptcha-v3";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 const studentSchema = alunoRegisterFormSchema;
 
@@ -29,6 +32,7 @@ export default function StudentRegisterPage() {
   const [loadingCourses, setLoadingCourses] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const submitLockRef = useRef(false);
+  const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "";
 
   const form = useForm<z.infer<typeof studentSchema>>({
     resolver: zodResolver(studentSchema),
@@ -121,6 +125,32 @@ export default function StudentRegisterPage() {
     [courses, selectedCourseId]
   );
 
+  useEffect(() => {
+    if (!recaptchaSiteKey) return;
+    void getRecaptchaV3Token(recaptchaSiteKey, "register_aluno_pageview").catch(() => {});
+  }, [recaptchaSiteKey]);
+
+  const resolveRegisterErrorMessage = (error: unknown) => {
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? String((error as { code?: string }).code)
+        : "";
+
+    if (code === "auth/email-already-in-use") {
+      return "Este email já está registado. Utilize outro email ou recupere a palavra-passe.";
+    }
+
+    if (code === "auth/missing-recaptcha-token") {
+      return "Falha na verificação CAPTCHA. Atualize a página e tente novamente.";
+    }
+
+    if (code === "auth/invalid-recaptcha-token" || code === "auth/recaptcha-check-failed") {
+      return "Não foi possível validar o reCAPTCHA. Tente novamente.";
+    }
+
+    return "Erro ao criar conta. Tente novamente.";
+  };
+
   async function onSubmit(values: z.infer<typeof studentSchema>) {
     if (submitLockRef.current) {
       return;
@@ -129,6 +159,12 @@ export default function StudentRegisterPage() {
     submitLockRef.current = true;
     try {
       setSubmitError("");
+
+      let recaptchaToken = "";
+      if (recaptchaSiteKey) {
+        recaptchaToken = await getRecaptchaV3Token(recaptchaSiteKey, "register_aluno");
+      }
+
       if (selectedSchool?.requireInstitutionalEmail && selectedSchool.emailDomain) {
         const domain = selectedSchool.emailDomain.trim().toLowerCase();
         const email = values.email.trim().toLowerCase();
@@ -144,6 +180,7 @@ export default function StudentRegisterPage() {
         escolaNome: selectedSchoolName,
         cursoId: values.curso,
         cursoNome: selectedCourseName,
+        recaptchaToken,
       });
       router.push(
         `/account-status?email=${encodeURIComponent(result.email ?? values.email)}&createdAt=${encodeURIComponent(
@@ -152,15 +189,23 @@ export default function StudentRegisterPage() {
       );
     } catch (error) {
       console.error("Erro ao criar conta de aluno:", error);
-      alert("Erro ao criar conta. Tente novamente.");
+      setSubmitError(resolveRegisterErrorMessage(error));
     } finally {
       submitLockRef.current = false;
     }
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen">
-      <Card className="w-full max-w-lg">
+    <div className="min-h-dvh bg-background flex items-start justify-center px-4 py-8 md:py-12">
+      <div className="w-full max-w-lg space-y-4">
+        <Button asChild variant="ghost" className="w-fit">
+          <Link href="/register">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Voltar
+          </Link>
+        </Button>
+
+      <Card className="w-full">
         <CardHeader>
           <CardTitle>Registo de Aluno</CardTitle>
           <CardDescription>Preenche os teus dados para criar a conta.</CardDescription>
@@ -266,6 +311,9 @@ export default function StudentRegisterPage() {
                   <FormMessage />
                 </FormItem>
               )} />
+              {recaptchaSiteKey && (
+                <p className="text-xs text-muted-foreground">Este formulário usa reCAPTCHA para proteção automática.</p>
+              )}
               <Button type="submit" className="w-full mt-1" disabled={form.formState.isSubmitting || submitLockRef.current}>
                 {form.formState.isSubmitting || submitLockRef.current ? "A registar..." : "Criar Conta"}
               </Button>
@@ -273,6 +321,7 @@ export default function StudentRegisterPage() {
           </Form>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

@@ -10,12 +10,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { registerTutor } from "@/actions/register";
 import { tutorRegisterFormSchema } from "@/lib/validators/register";
 import { useRouter } from "next/navigation";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { getRecaptchaV3Token } from "@/lib/recaptcha-v3";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 const tutorSchema = tutorRegisterFormSchema;
 
 export default function TutorRegisterPage() {
   const submitLockRef = useRef(false);
+  const [submitError, setSubmitError] = useState("");
+  const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "";
   const form = useForm<z.infer<typeof tutorSchema>>({
     resolver: zodResolver(tutorSchema),
     defaultValues: {
@@ -31,6 +36,32 @@ export default function TutorRegisterPage() {
 
   const router = useRouter();
 
+  useEffect(() => {
+    if (!recaptchaSiteKey) return;
+    void getRecaptchaV3Token(recaptchaSiteKey, "register_tutor_pageview").catch(() => {});
+  }, [recaptchaSiteKey]);
+
+  const resolveRegisterErrorMessage = (error: unknown): string => {
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? String((error as { code?: string }).code)
+        : "";
+
+    if (code === "auth/email-already-in-use") {
+      return "Este email já está registado. Utilize outro email ou recupere a palavra-passe.";
+    }
+
+    if (code === "auth/missing-recaptcha-token") {
+      return "Falha na verificação CAPTCHA. Atualize a página e tente novamente.";
+    }
+
+    if (code === "auth/invalid-recaptcha-token" || code === "auth/recaptcha-check-failed") {
+      return "Não foi possível validar o reCAPTCHA. Tente novamente.";
+    }
+
+    return "Erro ao criar conta. Tente novamente.";
+  };
+
   async function onSubmit(values: z.infer<typeof tutorSchema>) {
     if (submitLockRef.current) {
       return;
@@ -38,7 +69,17 @@ export default function TutorRegisterPage() {
 
     submitLockRef.current = true;
     try {
-      const result = await registerTutor(values);
+      setSubmitError("");
+
+      let recaptchaToken = "";
+      if (recaptchaSiteKey) {
+        recaptchaToken = await getRecaptchaV3Token(recaptchaSiteKey, "register_tutor");
+      }
+
+      const result = await registerTutor({
+        ...values,
+        recaptchaToken,
+      });
       router.push(
         `/account-status?email=${encodeURIComponent(result.email ?? values.email)}&createdAt=${encodeURIComponent(
           result.createdAt ?? ""
@@ -46,14 +87,22 @@ export default function TutorRegisterPage() {
       );
     } catch (error) {
       console.error("Erro ao criar conta de tutor:", error);
-      alert("Erro ao criar conta. Tente novamente.");
+      setSubmitError(resolveRegisterErrorMessage(error));
     } finally {
       submitLockRef.current = false;
     }
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen">
+    <div className="min-h-dvh bg-background flex items-start justify-center px-4 py-8 md:py-12">
+      <div className="w-full max-w-lg space-y-4">
+        <Button asChild variant="ghost" className="w-fit">
+          <Link href="/register">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Voltar
+          </Link>
+        </Button>
+
       <Card className="w-full max-w-lg">
         <CardHeader>
           <CardTitle>Registo de Tutor</CardTitle>
@@ -62,6 +111,11 @@ export default function TutorRegisterPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              {submitError && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {submitError}
+                </div>
+              )}
               <FormField control={form.control} name="nome" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Nome Completo</FormLabel>
@@ -111,6 +165,9 @@ export default function TutorRegisterPage() {
                   <FormMessage />
                 </FormItem>
               )} />
+              {recaptchaSiteKey && (
+                <p className="text-xs text-muted-foreground">Este formulário usa reCAPTCHA para proteção automática.</p>
+              )}
               <Button type="submit" className="w-full mt-1" disabled={form.formState.isSubmitting || submitLockRef.current}>
                 {form.formState.isSubmitting || submitLockRef.current ? "A registar..." : "Criar Conta"}
               </Button>
@@ -118,6 +175,7 @@ export default function TutorRegisterPage() {
           </Form>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

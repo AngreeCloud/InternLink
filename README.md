@@ -110,14 +110,24 @@ Para garantir **velocidade de desenvolvimento**, **simplicidade de deploy** e **
 
 ## 🚀 Instalação e Execução
 
-Para configuração pessoal/local do projeto (com `.env.local`), consulte:
-
-- `docs/setup-local.md`
-
 1. Clonar o repositório:
    \`\`\`bash
    git clone https://github.com/AngreeCloud/InternLink.git
    cd InternLink
+
+2. Instalar dependências:
+   \`\`\`bash
+   pnpm install
+   \`\`\`
+
+3. Configurar ambiente local:
+   - copiar `.env.example` para `.env.local`
+   - preencher as variáveis `NEXT_PUBLIC_FIREBASE_*`
+
+4. Correr o projeto:
+   \`\`\`bash
+   pnpm dev
+   \`\`\`
 
 
 Licensed under CC BY-NC 4.0  

@@ -125,3 +125,15 @@
     @apply bg-background text-foreground;
   }
 }
+
+.grecaptcha-badge {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.recaptcha-badge-visible .grecaptcha-badge {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}

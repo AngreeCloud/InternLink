@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import { getAccountStatusApprovalMessage } from "@/lib/approval-messages"
 
 export default function AccountStatusPage() {
   const searchParams = useSearchParams()
@@ -18,6 +19,7 @@ export default function AccountStatusPage() {
     email: "",
     createdAt: "",
     status: "pendente",
+    role: "",
   })
 
   const qpEmail = searchParams.get("email")
@@ -46,17 +48,19 @@ export default function AccountStatusPage() {
         const email = user.email || qpEmail || ""
         let createdAt = user.metadata.creationTime || qpCreatedAt || ""
         let status = "pendente"
+        let role = ""
 
         const snapshot = await getDoc(doc(db, "users", user.uid))
         if (snapshot.exists()) {
-          const data = snapshot.data() as { estado?: string; createdAt?: { toDate: () => Date } }
+          const data = snapshot.data() as { role?: string; estado?: string; createdAt?: { toDate: () => Date } }
+          role = data?.role || ""
           status = data?.estado || status
           if (data?.createdAt && typeof data.createdAt === "object" && "toDate" in data.createdAt) {
             createdAt = data.createdAt.toDate().toISOString()
           }
         }
 
-        setState({ loading: false, email, createdAt, status })
+        setState({ loading: false, email, createdAt, status, role })
       })
     })()
 
@@ -65,6 +69,8 @@ export default function AccountStatusPage() {
 
   const statusLabel = state.status || "pendente"
   const canAccessDashboard = statusLabel === "ativo"
+  const dashboardHref = state.role === "professor" ? "/professor" : state.role === "tutor" ? "/tutor" : "/dashboard"
+  const approvalMessage = getAccountStatusApprovalMessage(state.role)
 
   return (
     <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
@@ -94,7 +100,7 @@ export default function AccountStatusPage() {
               </div>
               {!canAccessDashboard && (
                 <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                  A sua conta está pendente de aprovação manual pelo professor responsável.
+                  {approvalMessage}
                 </div>
               )}
               <div className="flex gap-2 pt-2">
@@ -103,7 +109,7 @@ export default function AccountStatusPage() {
                 </Button>
                 {canAccessDashboard ? (
                   <Button asChild size="sm">
-                    <Link href="/dashboard">Ir para dashboard</Link>
+                    <Link href={dashboardHref}>Ir para dashboard</Link>
                   </Button>
                 ) : null}
               </div>

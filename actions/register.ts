@@ -10,6 +10,31 @@ import {
   tutorRegisterActionSchema,
 } from "@/lib/validators/register";
 
+function createErrorWithCode(message: string, code: string) {
+  const error = new Error(message) as Error & { code: string };
+  error.code = code;
+  return error;
+}
+
+async function verifyRecaptchaToken(token: string, action: "register_aluno" | "register_professor" | "register_tutor") {
+  const response = await fetch("/api/recaptcha/verify", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ token, action }),
+  });
+
+  if (!response.ok) {
+    throw createErrorWithCode("Falha ao validar CAPTCHA.", "auth/recaptcha-check-failed");
+  }
+
+  const payload = (await response.json()) as { success?: boolean };
+  if (!payload.success) {
+    throw createErrorWithCode("Token CAPTCHA inválido.", "auth/invalid-recaptcha-token");
+  }
+}
+
 export async function registerAluno(data: z.input<typeof alunoRegisterActionSchema>) {
   const parsed = alunoRegisterActionSchema.parse(data);
   const {
@@ -20,10 +45,18 @@ export async function registerAluno(data: z.input<typeof alunoRegisterActionSche
     escolaNome,
     cursoId,
     cursoNome,
+    recaptchaToken,
     dataNascimento,
     localidade,
     telefone,
   } = parsed;
+
+  if (process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
+    if (!recaptchaToken) {
+      throw createErrorWithCode("Token CAPTCHA em falta.", "auth/missing-recaptcha-token");
+    }
+    await verifyRecaptchaToken(recaptchaToken, "register_aluno");
+  }
 
   const auth = await getAuthRuntime();
   const db = await getDbRuntime();
@@ -55,7 +88,14 @@ export async function registerAluno(data: z.input<typeof alunoRegisterActionSche
 
 export async function registerProfessor(data: z.input<typeof professorRegisterActionSchema>) {
   const parsed = professorRegisterActionSchema.parse(data);
-  const { nome, email, password, escolaId, escolaNome, dataNascimento, localidade, telefone } = parsed;
+  const { nome, email, password, escolaId, escolaNome, recaptchaToken, dataNascimento, localidade, telefone } = parsed;
+
+  if (process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
+    if (!recaptchaToken) {
+      throw createErrorWithCode("Token CAPTCHA em falta.", "auth/missing-recaptcha-token");
+    }
+    await verifyRecaptchaToken(recaptchaToken, "register_professor");
+  }
 
   const auth = await getAuthRuntime();
   const db = await getDbRuntime();
@@ -94,7 +134,14 @@ export async function registerProfessor(data: z.input<typeof professorRegisterAc
 
 export async function registerTutor(data: z.input<typeof tutorRegisterActionSchema>) {
   const parsed = tutorRegisterActionSchema.parse(data);
-  const { nome, email, password, empresa, dataNascimento, localidade, telefone } = parsed;
+  const { nome, email, password, empresa, recaptchaToken, dataNascimento, localidade, telefone } = parsed;
+
+  if (process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
+    if (!recaptchaToken) {
+      throw createErrorWithCode("Token CAPTCHA em falta.", "auth/missing-recaptcha-token");
+    }
+    await verifyRecaptchaToken(recaptchaToken, "register_tutor");
+  }
 
   const auth = await getAuthRuntime();
   const db = await getDbRuntime();

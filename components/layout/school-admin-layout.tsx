@@ -9,13 +9,14 @@ import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { SchoolAdminProvider } from "@/components/school-admin/school-admin-context";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { CheckSquare, Folder, GraduationCap, Home, Info, LogOut, Menu } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { CheckSquare, Folder, GraduationCap, History, Home, Info, LogOut, Menu } from "lucide-react";
 
 const navigation = [
   { name: "Dashboard", href: "/school-admin", icon: Home },
   { name: "Informações da Escola", href: "/school-admin/informacoes", icon: Info },
   { name: "Aprovações", href: "/school-admin/aprovacoes", icon: CheckSquare },
+  { name: "Histórico", href: "/school-admin/historico", icon: History },
   { name: "Cursos", href: "/school-admin/cursos", icon: Folder },
 ];
 
@@ -25,6 +26,7 @@ type AuthState = {
   schoolId: string;
   name: string;
   email: string;
+  photoURL: string;
 };
 
 export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
@@ -35,6 +37,7 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
     schoolId: "",
     name: "",
     email: "",
+    photoURL: "",
   });
   const router = useRouter();
 
@@ -64,6 +67,7 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
           schoolId?: string;
           nome?: string;
           email?: string;
+          photoURL?: string;
         };
 
         if (data.role !== "admin_escolar" || !data.schoolId) {
@@ -78,6 +82,7 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
           schoolId: data.schoolId,
           name: data.nome || user.displayName || "Administrador Escolar",
           email: data.email || user.email || "",
+          photoURL: data.photoURL || "",
         });
       });
     })();
@@ -173,6 +178,7 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
             <div className="flex flex-1 items-center justify-end gap-3">
               <div className="flex items-center gap-3 rounded-full border border-border bg-card px-3 py-1">
                 <Avatar className="h-7 w-7">
+                  <AvatarImage src={state.photoURL || "/placeholder.svg"} alt={state.name} />
                   <AvatarFallback>{state.name.charAt(0)}</AvatarFallback>
                 </Avatar>
                 <div className="leading-tight">

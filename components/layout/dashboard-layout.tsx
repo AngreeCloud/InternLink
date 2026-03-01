@@ -22,6 +22,7 @@ import {
   Menu,
   Home,
   Upload,
+  User,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -45,6 +46,7 @@ type AuthState = {
   userId: string
   name: string
   email: string
+  photoURL: string
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -54,6 +56,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     userId: "",
     name: "",
     email: "",
+    photoURL: "",
   })
   const router = useRouter()
 
@@ -83,6 +86,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           estado?: string
           nome?: string
           email?: string
+          photoURL?: string
         }
 
         if (data.role === "admin_escolar") {
@@ -108,6 +112,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           userId: user.uid,
           name: data.nome || user.displayName || "Aluno",
           email: data.email || user.email || "",
+          photoURL: data.photoURL || "",
         })
       })
     })()
@@ -130,7 +135,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const user = {
     name: state.name,
     email: state.email,
-    avatar: "",
+    avatar: state.photoURL,
   }
 
   return (
@@ -216,6 +221,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
                     </div>
                   </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/profile">
+                      <User className="mr-2 h-4 w-4" />
+                      <span>Perfil</span>
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={async () => {
