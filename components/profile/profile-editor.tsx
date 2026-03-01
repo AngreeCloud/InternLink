@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
+import { deleteObject, getDownloadURL, ref, uploadString } from "firebase/storage";
+import { getAuthRuntime, getDbRuntime, getStorageRuntime } from "@/lib/firebase-runtime";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +43,7 @@ export function ProfileEditor() {
   const [cropX, setCropX] = useState(50);
   const [cropY, setCropY] = useState(50);
   const [processingCrop, setProcessingCrop] = useState(false);
+  const [pendingPhotoDataUrl, setPendingPhotoDataUrl] = useState("");
   const router = useRouter();
 
   const applyCropToImage = async (source: string, zoom: number, offsetX: number, offsetY: number) => {
@@ -155,7 +157,7 @@ export function ProfileEditor() {
     try {
       const croppedImage = await applyCropToImage(cropSource, cropZoom, cropX, cropY);
       setPhotoPreview(croppedImage);
-      setProfile((prev) => ({ ...prev, photoURL: croppedImage }));
+      setPendingPhotoDataUrl(croppedImage);
       setCropSource("");
     } catch (error) {
       console.error("Erro ao aplicar recorte da imagem:", error);
@@ -171,16 +173,41 @@ export function ProfileEditor() {
     try {
       const auth = await getAuthRuntime();
       const db = await getDbRuntime();
+      const storage = await getStorageRuntime();
       const user = auth.currentUser;
       if (!user) return;
+
+      let nextPhotoURL = profile.photoURL;
+      const shouldUploadPhoto =
+        Boolean(pendingPhotoDataUrl) ||
+        (typeof profile.photoURL === "string" && profile.photoURL.startsWith("data:image/"));
+
+      if (shouldUploadPhoto) {
+        const dataUrlToUpload = pendingPhotoDataUrl || profile.photoURL;
+        const fileRef = ref(storage, `profile-photos/${user.uid}/avatar-${Date.now()}.jpg`);
+        await uploadString(fileRef, dataUrlToUpload, "data_url");
+        nextPhotoURL = await getDownloadURL(fileRef);
+
+        if (profile.photoURL && !profile.photoURL.startsWith("data:image/")) {
+          try {
+            await deleteObject(ref(storage, profile.photoURL));
+          } catch {
+            // Ignorar falha ao remover ficheiro antigo para não bloquear o guardado do perfil.
+          }
+        }
+      }
 
       await updateDoc(doc(db, "users", user.uid), {
         nome: profile.nome,
         telefone: profile.telefone,
         localidade: profile.localidade,
         dataNascimento: profile.dataNascimento,
-        photoURL: profile.photoURL,
+        photoURL: nextPhotoURL,
       });
+
+      setProfile((prev) => ({ ...prev, photoURL: nextPhotoURL }));
+      setPhotoPreview(nextPhotoURL);
+      setPendingPhotoDataUrl("");
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
