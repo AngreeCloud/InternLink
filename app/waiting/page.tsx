@@ -6,21 +6,14 @@ import { useRouter } from "next/navigation"
 import { onAuthStateChanged } from "firebase/auth"
 import { doc, getDoc } from "firebase/firestore"
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime"
+import { getWaitingApprovalMessage } from "@/lib/approval-messages"
 
 export default function WaitingPage() {
   const router = useRouter()
   const [role, setRole] = useState("")
 
   const approvalMessage = useMemo(() => {
-    if (role === "professor") {
-      return "O seu registo foi submetido. A conta será ativada manualmente pelo administrador escolar da sua escola."
-    }
-
-    if (role === "tutor") {
-      return "O seu registo foi submetido. A conta será ativada manualmente pela equipa responsável da escola."
-    }
-
-    return "O seu registo foi submetido. A conta será ativada manualmente pelo professor responsável."
+    return getWaitingApprovalMessage(role)
   }, [role])
 
   useEffect(() => {

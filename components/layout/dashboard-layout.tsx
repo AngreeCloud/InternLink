@@ -46,6 +46,7 @@ type AuthState = {
   userId: string
   name: string
   email: string
+  photoURL: string
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -55,6 +56,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     userId: "",
     name: "",
     email: "",
+    photoURL: "",
   })
   const router = useRouter()
 
@@ -84,6 +86,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           estado?: string
           nome?: string
           email?: string
+          photoURL?: string
         }
 
         if (data.role === "admin_escolar") {
@@ -109,6 +112,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           userId: user.uid,
           name: data.nome || user.displayName || "Aluno",
           email: data.email || user.email || "",
+          photoURL: data.photoURL || "",
         })
       })
     })()
@@ -131,7 +135,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const user = {
     name: state.name,
     email: state.email,
-    avatar: "",
+    avatar: state.photoURL,
   }
 
   return (

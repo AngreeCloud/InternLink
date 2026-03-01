@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import { getAccountStatusApprovalMessage } from "@/lib/approval-messages"
 
 export default function AccountStatusPage() {
   const searchParams = useSearchParams()
@@ -69,12 +70,7 @@ export default function AccountStatusPage() {
   const statusLabel = state.status || "pendente"
   const canAccessDashboard = statusLabel === "ativo"
   const dashboardHref = state.role === "professor" ? "/professor" : state.role === "tutor" ? "/tutor" : "/dashboard"
-  const approvalMessage =
-    state.role === "professor"
-      ? "A sua conta está pendente de aprovação manual pelo administrador escolar da sua escola."
-      : state.role === "tutor"
-        ? "A sua conta está pendente de aprovação manual pela equipa responsável da escola."
-        : "A sua conta está pendente de aprovação manual pelo professor responsável."
+  const approvalMessage = getAccountStatusApprovalMessage(state.role)
 
   return (
     <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">

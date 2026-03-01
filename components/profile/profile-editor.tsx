@@ -37,7 +37,43 @@ export function ProfileEditor() {
     role: "",
   });
   const [photoPreview, setPhotoPreview] = useState("");
+  const [cropSource, setCropSource] = useState("");
+  const [cropZoom, setCropZoom] = useState(1);
+  const [cropX, setCropX] = useState(50);
+  const [cropY, setCropY] = useState(50);
+  const [processingCrop, setProcessingCrop] = useState(false);
   const router = useRouter();
+
+  const applyCropToImage = async (source: string, zoom: number, offsetX: number, offsetY: number) => {
+    const image = new Image();
+    image.src = source;
+
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Falha ao carregar imagem para recorte."));
+    });
+
+    const outputSize = 512;
+    const baseScale = Math.max(outputSize / image.width, outputSize / image.height);
+    const drawWidth = image.width * baseScale * zoom;
+    const drawHeight = image.height * baseScale * zoom;
+
+    const maxOffsetX = Math.max(0, drawWidth - outputSize);
+    const maxOffsetY = Math.max(0, drawHeight - outputSize);
+    const drawX = -(offsetX / 100) * maxOffsetX;
+    const drawY = -(offsetY / 100) * maxOffsetY;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = outputSize;
+    canvas.height = outputSize;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("Não foi possível preparar o recorte da imagem.");
+    }
+
+    context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+    return canvas.toDataURL("image/jpeg", 0.9);
+  };
 
   useEffect(() => {
     let unsubscribe = () => {};
@@ -104,10 +140,29 @@ export function ProfileEditor() {
     const reader = new FileReader();
     reader.onloadend = () => {
       const result = reader.result as string;
-      setPhotoPreview(result);
-      setProfile((prev) => ({ ...prev, photoURL: result }));
+      setCropSource(result);
+      setCropZoom(1);
+      setCropX(50);
+      setCropY(50);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleApplyCrop = async () => {
+    if (!cropSource) return;
+
+    setProcessingCrop(true);
+    try {
+      const croppedImage = await applyCropToImage(cropSource, cropZoom, cropX, cropY);
+      setPhotoPreview(croppedImage);
+      setProfile((prev) => ({ ...prev, photoURL: croppedImage }));
+      setCropSource("");
+    } catch (error) {
+      console.error("Erro ao aplicar recorte da imagem:", error);
+      alert("Não foi possível aplicar o recorte da imagem.");
+    } finally {
+      setProcessingCrop(false);
+    }
   };
 
   const handleSave = async () => {
@@ -208,8 +263,80 @@ export function ProfileEditor() {
             <div>
               <p className="text-sm font-medium">{profile.nome || "Utilizador"}</p>
               <p className="text-xs text-muted-foreground">{getRoleLabel(profile.role)}</p>
+              <p className="text-xs text-muted-foreground mt-1">Depois de escolher uma foto, ajuste o recorte manualmente.</p>
             </div>
           </div>
+
+          {cropSource ? (
+            <div className="space-y-4 rounded-lg border border-border p-4">
+              <p className="text-sm font-medium">Ajustar recorte da imagem</p>
+              <div className="flex justify-center">
+                <div className="relative h-48 w-48 overflow-hidden rounded-full border border-border bg-muted">
+                  <img
+                    src={cropSource}
+                    alt="Pré-visualização do recorte"
+                    className="h-full w-full object-cover"
+                    style={{
+                      transform: `scale(${cropZoom}) translate(${(cropX - 50) * 0.6}px, ${(cropY - 50) * 0.6}px)`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="cropZoom">Zoom</Label>
+                  <Input
+                    id="cropZoom"
+                    type="range"
+                    min="1"
+                    max="3"
+                    step="0.05"
+                    value={cropZoom}
+                    onChange={(event) => setCropZoom(Number(event.target.value))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="cropX">Posição Horizontal</Label>
+                  <Input
+                    id="cropX"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={cropX}
+                    onChange={(event) => setCropX(Number(event.target.value))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="cropY">Posição Vertical</Label>
+                  <Input
+                    id="cropY"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={cropY}
+                    onChange={(event) => setCropY(Number(event.target.value))}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button type="button" onClick={handleApplyCrop} disabled={processingCrop}>
+                  {processingCrop ? "A processar..." : "Aplicar recorte"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCropSource("")}
+                  disabled={processingCrop}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          ) : null}
 
           {/* Email (read-only) */}
           <div className="space-y-2">
