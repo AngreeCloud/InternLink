@@ -18,6 +18,7 @@ const tutorSchema = tutorRegisterFormSchema;
 export default function TutorRegisterPage() {
   const submitLockRef = useRef(false);
   const [captchaToken, setCaptchaToken] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "";
   const form = useForm<z.infer<typeof tutorSchema>>({
     resolver: zodResolver(tutorSchema),
@@ -34,6 +35,19 @@ export default function TutorRegisterPage() {
 
   const router = useRouter();
 
+  const resolveRegisterErrorMessage = (error: unknown) => {
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? String((error as { code?: string }).code)
+        : "";
+
+    if (code === "auth/email-already-in-use") {
+      return "Este email já está registado. Utilize outro email ou recupere a palavra-passe.";
+    }
+
+    return "Erro ao criar conta. Tente novamente.";
+  };
+
   async function onSubmit(values: z.infer<typeof tutorSchema>) {
     if (submitLockRef.current) {
       return;
@@ -41,8 +55,10 @@ export default function TutorRegisterPage() {
 
     submitLockRef.current = true;
     try {
+      setSubmitError("");
+
       if (recaptchaSiteKey && !captchaToken) {
-        alert("Por favor complete o CAPTCHA.");
+        setSubmitError("Por favor complete o CAPTCHA.");
         return;
       }
 
@@ -54,7 +70,7 @@ export default function TutorRegisterPage() {
       );
     } catch (error) {
       console.error("Erro ao criar conta de tutor:", error);
-      alert("Erro ao criar conta. Tente novamente.");
+      setSubmitError(resolveRegisterErrorMessage(error));
     } finally {
       submitLockRef.current = false;
     }
@@ -70,6 +86,11 @@ export default function TutorRegisterPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              {submitError && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {submitError}
+                </div>
+              )}
               <FormField control={form.control} name="nome" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Nome Completo</FormLabel>

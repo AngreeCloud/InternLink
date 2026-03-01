@@ -103,6 +103,10 @@ service cloud.firestore {
         // Gestão por admin escolar
         allow read, update, delete: if isSchoolAdminFor(schoolId);
       }
+
+      match /approvalHistory/{docId} {
+        allow read, create: if isSchoolAdminFor(schoolId);
+      }
     }
 
     // GLOBAL COURSES COLLECTION

@@ -87,6 +87,19 @@ export default function ProfessorRegisterPage() {
 
   const selectedSchoolName = selectedSchool?.name || "";
 
+  const resolveRegisterErrorMessage = (error: unknown) => {
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? String((error as { code?: string }).code)
+        : "";
+
+    if (code === "auth/email-already-in-use") {
+      return "Este email já está registado. Utilize outro email ou recupere a palavra-passe.";
+    }
+
+    return "Erro ao criar conta. Tente novamente.";
+  };
+
   async function onSubmit(values: z.infer<typeof professorSchema>) {
     if (submitLockRef.current) {
       return;
@@ -122,7 +135,7 @@ export default function ProfessorRegisterPage() {
       );
     } catch (error) {
       console.error("Erro ao criar conta de professor:", error);
-      alert("Erro ao criar conta. Tente novamente.");
+      setSubmitError(resolveRegisterErrorMessage(error));
     } finally {
       submitLockRef.current = false;
     }
