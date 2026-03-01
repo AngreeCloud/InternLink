@@ -15,6 +15,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 import { getRecaptchaV3Token } from "@/lib/recaptcha-v3";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 const professorSchema = professorRegisterFormSchema;
 
@@ -155,7 +157,15 @@ export default function ProfessorRegisterPage() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen">
+    <div className="min-h-dvh bg-background flex items-start justify-center px-4 py-8 md:py-12">
+      <div className="w-full max-w-lg space-y-4">
+        <Button asChild variant="ghost" className="w-fit">
+          <Link href="/register">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Voltar
+          </Link>
+        </Button>
+
       <Card className="w-full max-w-lg">
         <CardHeader>
           <CardTitle>Registo de Professor</CardTitle>
@@ -243,6 +253,7 @@ export default function ProfessorRegisterPage() {
           </Form>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

@@ -33,6 +33,7 @@ export default function ForgotPasswordPage() {
 
     try {
       const auth = await getAuthRuntime();
+      auth.languageCode = "pt";
       await sendPasswordResetEmail(auth, email);
       setSuccess(true);
     } catch (err) {
