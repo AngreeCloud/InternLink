@@ -57,10 +57,10 @@ service cloud.firestore {
     }
 
     function isSelfUserDocImmutable() {
-      return request.resource.data.role == resource.data.role
-        && request.resource.data.estado == resource.data.estado
-        && request.resource.data.schoolId == resource.data.schoolId
-        && request.resource.data.courseId == resource.data.courseId;
+      return !request.resource.data
+        .diff(resource.data)
+        .affectedKeys()
+        .hasAny(["role", "estado", "schoolId", "courseId"]);
     }
 
     // USERS

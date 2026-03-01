@@ -25,7 +25,7 @@
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
-    "test:rules": "node --test tests/firestore/school-isolation.rules.test.mjs"
+    "test:rules": "node tests/firestore/run-rules-tests.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

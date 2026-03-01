@@ -16,17 +16,34 @@ import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 
 let testEnv;
 
+function getFirestoreEmulatorConfig() {
+  const hostFromEnv = process.env.FIRESTORE_EMULATOR_HOST;
+
+  if (hostFromEnv && hostFromEnv.includes(":")) {
+    const [host, port] = hostFromEnv.split(":");
+    return { host, port: Number(port) };
+  }
+
+  return { host: "127.0.0.1", port: 8080 };
+}
+
 test.before(async () => {
+  const emulator = getFirestoreEmulatorConfig();
+
   testEnv = await initializeTestEnvironment({
     projectId: "internlink-rules-test",
     firestore: {
+      host: emulator.host,
+      port: emulator.port,
       rules: readFileSync("firestore.rules", "utf8"),
     },
   });
 });
 
 test.after(async () => {
-  await testEnv.cleanup();
+  if (testEnv) {
+    await testEnv.cleanup();
+  }
 });
 
 test.beforeEach(async () => {
