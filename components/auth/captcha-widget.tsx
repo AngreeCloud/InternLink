@@ -2,24 +2,20 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 
-declare global {
-  interface Window {
-    grecaptcha?: {
-      render: (
-        container: HTMLElement,
-        params: {
-          sitekey: string;
-          callback: (token: string) => void;
-          "expired-callback"?: () => void;
-          theme?: string;
-          size?: string;
-        }
-      ) => number;
-      reset: (widgetId: number) => void;
-    };
-    onRecaptchaLoad?: () => void;
-  }
-}
+type RecaptchaV2Api = {
+  ready?: (cb: () => void) => void;
+  render: (
+    container: HTMLElement,
+    params: {
+      sitekey: string;
+      callback: (token: string) => void;
+      "expired-callback"?: () => void;
+      theme?: string;
+      size?: string;
+    }
+  ) => number;
+  reset: (widgetId: number) => void;
+};
 
 interface CaptchaWidgetProps {
   siteKey: string;
@@ -30,25 +26,42 @@ interface CaptchaWidgetProps {
 
 const RECAPTCHA_SCRIPT_ID = "recaptcha-script";
 
+function isRecaptchaRenderable() {
+  const grecaptcha = (window as Window & { grecaptcha?: RecaptchaV2Api }).grecaptcha;
+
+  return Boolean(
+    typeof window !== "undefined" &&
+      grecaptcha &&
+      typeof grecaptcha.render === "function"
+  );
+}
+
 export function CaptchaWidget({ siteKey, onVerify, onExpire, theme = "dark" }: CaptchaWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<number | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   const renderCaptcha = useCallback(() => {
-    if (!containerRef.current || !window.grecaptcha || widgetIdRef.current !== null) return;
+    if (!containerRef.current || !isRecaptchaRenderable() || widgetIdRef.current !== null) return;
+    const grecaptcha = (window as Window & { grecaptcha?: RecaptchaV2Api }).grecaptcha;
 
-    widgetIdRef.current = window.grecaptcha.render(containerRef.current, {
-      sitekey: siteKey,
-      callback: onVerify,
-      "expired-callback": onExpire,
-      theme,
-    });
+    if (!grecaptcha) return;
+
+    try {
+      widgetIdRef.current = grecaptcha.render(containerRef.current, {
+        sitekey: siteKey,
+        callback: onVerify,
+        "expired-callback": onExpire,
+        theme,
+      });
+    } catch (error) {
+      console.error("Erro ao renderizar reCAPTCHA:", error);
+    }
   }, [siteKey, onVerify, onExpire, theme]);
 
   useEffect(() => {
     // Check if already loaded
-    if (window.grecaptcha) {
+    if (isRecaptchaRenderable()) {
       setLoaded(true);
       return;
     }
@@ -56,7 +69,7 @@ export function CaptchaWidget({ siteKey, onVerify, onExpire, theme = "dark" }: C
     // Check if script already exists
     if (document.getElementById(RECAPTCHA_SCRIPT_ID)) {
       const checkInterval = setInterval(() => {
-        if (window.grecaptcha) {
+        if (isRecaptchaRenderable()) {
           setLoaded(true);
           clearInterval(checkInterval);
         }
@@ -65,8 +78,18 @@ export function CaptchaWidget({ siteKey, onVerify, onExpire, theme = "dark" }: C
     }
 
     // Load reCAPTCHA script
-    window.onRecaptchaLoad = () => {
-      setLoaded(true);
+    (window as Window & { onRecaptchaLoad?: () => void }).onRecaptchaLoad = () => {
+      if (isRecaptchaRenderable()) {
+        setLoaded(true);
+        return;
+      }
+
+      const checkInterval = setInterval(() => {
+        if (isRecaptchaRenderable()) {
+          setLoaded(true);
+          clearInterval(checkInterval);
+        }
+      }, 100);
     };
 
     const script = document.createElement("script");
@@ -77,7 +100,7 @@ export function CaptchaWidget({ siteKey, onVerify, onExpire, theme = "dark" }: C
     document.head.appendChild(script);
 
     return () => {
-      delete window.onRecaptchaLoad;
+      delete (window as Window & { onRecaptchaLoad?: () => void }).onRecaptchaLoad;
     };
   }, []);
 

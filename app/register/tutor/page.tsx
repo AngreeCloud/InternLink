@@ -10,14 +10,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { registerTutor } from "@/actions/register";
 import { tutorRegisterFormSchema } from "@/lib/validators/register";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
-import { CaptchaWidget } from "@/components/auth/captcha-widget";
+import { useEffect, useRef, useState } from "react";
+import { getRecaptchaV3Token } from "@/lib/recaptcha-v3";
 
 const tutorSchema = tutorRegisterFormSchema;
 
 export default function TutorRegisterPage() {
   const submitLockRef = useRef(false);
-  const [captchaToken, setCaptchaToken] = useState("");
   const [submitError, setSubmitError] = useState("");
   const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "";
   const form = useForm<z.infer<typeof tutorSchema>>({
@@ -35,7 +34,12 @@ export default function TutorRegisterPage() {
 
   const router = useRouter();
 
-  const resolveRegisterErrorMessage = (error: unknown) => {
+  useEffect(() => {
+    if (!recaptchaSiteKey) return;
+    void getRecaptchaV3Token(recaptchaSiteKey, "register_tutor_pageview").catch(() => {});
+  }, [recaptchaSiteKey]);
+
+  const resolveRegisterErrorMessage = (error: unknown): string => {
     const code =
       typeof error === "object" && error !== null && "code" in error
         ? String((error as { code?: string }).code)
@@ -43,6 +47,14 @@ export default function TutorRegisterPage() {
 
     if (code === "auth/email-already-in-use") {
       return "Este email já está registado. Utilize outro email ou recupere a palavra-passe.";
+    }
+
+    if (code === "auth/missing-recaptcha-token") {
+      return "Falha na verificação CAPTCHA. Atualize a página e tente novamente.";
+    }
+
+    if (code === "auth/invalid-recaptcha-token" || code === "auth/recaptcha-check-failed") {
+      return "Não foi possível validar o reCAPTCHA. Tente novamente.";
     }
 
     return "Erro ao criar conta. Tente novamente.";
@@ -57,12 +69,15 @@ export default function TutorRegisterPage() {
     try {
       setSubmitError("");
 
-      if (recaptchaSiteKey && !captchaToken) {
-        setSubmitError("Por favor complete o CAPTCHA.");
-        return;
+      let recaptchaToken = "";
+      if (recaptchaSiteKey) {
+        recaptchaToken = await getRecaptchaV3Token(recaptchaSiteKey, "register_tutor");
       }
 
-      const result = await registerTutor(values);
+      const result = await registerTutor({
+        ...values,
+        recaptchaToken,
+      });
       router.push(
         `/account-status?email=${encodeURIComponent(result.email ?? values.email)}&createdAt=${encodeURIComponent(
           result.createdAt ?? ""
@@ -141,11 +156,7 @@ export default function TutorRegisterPage() {
                 </FormItem>
               )} />
               {recaptchaSiteKey && (
-                <CaptchaWidget
-                  siteKey={recaptchaSiteKey}
-                  onVerify={(token) => setCaptchaToken(token)}
-                  onExpire={() => setCaptchaToken("")}
-                />
+                <p className="text-xs text-muted-foreground">Este formulário usa reCAPTCHA para proteção automática.</p>
               )}
               <Button type="submit" className="w-full mt-1" disabled={form.formState.isSubmitting || submitLockRef.current}>
                 {form.formState.isSubmitting || submitLockRef.current ? "A registar..." : "Criar Conta"}

@@ -14,7 +14,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
-import { CaptchaWidget } from "@/components/auth/captcha-widget";
+import { getRecaptchaV3Token } from "@/lib/recaptcha-v3";
 
 const professorSchema = professorRegisterFormSchema;
 
@@ -28,7 +28,6 @@ export default function ProfessorRegisterPage() {
   const [loadingSchools, setLoadingSchools] = useState(true);
   const [submitError, setSubmitError] = useState("");
   const submitLockRef = useRef(false);
-  const [captchaToken, setCaptchaToken] = useState("");
   const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "";
 
   const form = useForm<z.infer<typeof professorSchema>>({
@@ -87,6 +86,11 @@ export default function ProfessorRegisterPage() {
 
   const selectedSchoolName = selectedSchool?.name || "";
 
+  useEffect(() => {
+    if (!recaptchaSiteKey) return;
+    void getRecaptchaV3Token(recaptchaSiteKey, "register_professor_pageview").catch(() => {});
+  }, [recaptchaSiteKey]);
+
   const resolveRegisterErrorMessage = (error: unknown) => {
     const code =
       typeof error === "object" && error !== null && "code" in error
@@ -95,6 +99,14 @@ export default function ProfessorRegisterPage() {
 
     if (code === "auth/email-already-in-use") {
       return "Este email já está registado. Utilize outro email ou recupere a palavra-passe.";
+    }
+
+    if (code === "auth/missing-recaptcha-token") {
+      return "Falha na verificação CAPTCHA. Atualize a página e tente novamente.";
+    }
+
+    if (code === "auth/invalid-recaptcha-token" || code === "auth/recaptcha-check-failed") {
+      return "Não foi possível validar o reCAPTCHA. Tente novamente.";
     }
 
     return "Erro ao criar conta. Tente novamente.";
@@ -109,9 +121,9 @@ export default function ProfessorRegisterPage() {
     try {
       setSubmitError("");
 
-      if (recaptchaSiteKey && !captchaToken) {
-        setSubmitError("Por favor complete o CAPTCHA.");
-        return;
+      let recaptchaToken = "";
+      if (recaptchaSiteKey) {
+        recaptchaToken = await getRecaptchaV3Token(recaptchaSiteKey, "register_professor");
       }
 
       if (selectedSchool?.requireInstitutionalEmail && selectedSchool.emailDomain) {
@@ -127,6 +139,7 @@ export default function ProfessorRegisterPage() {
         ...values,
         escolaId: values.escola,
         escolaNome: selectedSchoolName,
+        recaptchaToken,
       });
       router.push(
         `/account-status?email=${encodeURIComponent(result.email ?? values.email)}&createdAt=${encodeURIComponent(
@@ -221,11 +234,7 @@ export default function ProfessorRegisterPage() {
                 </FormItem>
               )} />
               {recaptchaSiteKey && (
-                <CaptchaWidget
-                  siteKey={recaptchaSiteKey}
-                  onVerify={(token) => setCaptchaToken(token)}
-                  onExpire={() => setCaptchaToken("")}
-                />
+                <p className="text-xs text-muted-foreground">Este formulário usa reCAPTCHA para proteção automática.</p>
               )}
               <Button type="submit" className="w-full mt-1" disabled={form.formState.isSubmitting || submitLockRef.current}>
                 {form.formState.isSubmitting || submitLockRef.current ? "A registar..." : "Criar Conta"}
