@@ -58,6 +58,9 @@ export function TutorDocumentViewer() {
               const docsSnap = await getDocs(
                 query(collection(db, "documentos"), where("estagioId", "==", estagioDoc.id))
               );
+              // NOTE: Firestore rules for documentos currently allow only professor (owner) and school admin reads.
+              // Tutors can fetch documents via client-side queries if they know the estagioId, but rules should
+              // enforce access control at the database layer. For now, we defensively filter by visibilidade.
               for (const docSnap of docsSnap.docs) {
                 const data = docSnap.data() as {
                   nome?: string;
@@ -68,16 +71,20 @@ export function TutorDocumentViewer() {
                   tipo?: string;
                   createdAt?: { toDate: () => Date };
                 };
-                allDocs.push({
-                  id: docSnap.id,
-                  nome: data.nome || "—",
-                  estagioTitulo: data.estagioTitulo || "—",
-                  visibilidade: data.visibilidade || "todos",
-                  requerAssinatura: data.requerAssinatura || false,
-                  assinantes: data.assinantes || [],
-                  tipo: data.tipo || "outro",
-                  createdAt: data.createdAt?.toDate?.()?.toLocaleDateString("pt-PT") || "—",
-                });
+                // Only show documents meant for tutors (visibilidade: "tutores" or "todos")
+                const visibilidade = data.visibilidade || "todos";
+                if (visibilidade === "tutores" || visibilidade === "todos") {
+                  allDocs.push({
+                    id: docSnap.id,
+                    nome: data.nome || "—",
+                    estagioTitulo: data.estagioTitulo || "—",
+                    visibilidade: visibilidade,
+                    requerAssinatura: data.requerAssinatura || false,
+                    assinantes: data.assinantes || [],
+                    tipo: data.tipo || "outro",
+                    createdAt: data.createdAt?.toDate?.()?.toLocaleDateString("pt-PT") || "—",
+                  });
+                }
               }
             } catch { /* ignore */ }
           }

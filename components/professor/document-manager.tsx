@@ -186,7 +186,8 @@ export function DocumentManager() {
       const estagio = estagios.find((e) => e.id === selectedEstagio);
 
       // Store document metadata in Firestore
-      // File upload to Cloud Storage would be implemented here
+      // TODO: Fetch and store tutor email/ID from the selected estágio to enforce tutor access in Firestore rules.
+      // TODO: File upload to Cloud Storage would be implemented here
       await addDoc(collection(db, "documentos"), {
         nome: docNome.trim(),
         estagioId: selectedEstagio,

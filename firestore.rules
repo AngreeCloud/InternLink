@@ -48,6 +48,11 @@ service cloud.firestore {
         && currentUserData().schoolId == schoolId;
     }
 
+    function isTutor() {
+      return currentUserExists()
+        && currentUserData().role == "tutor";
+    }
+
     function isProfessorPendingFor(schoolId, userId) {
       return isSelf(userId)
         && currentUserExists()
@@ -184,10 +189,14 @@ service cloud.firestore {
 
     // DOCUMENTOS (geridos pelo professor, lidos por professorId e school admins)
     match /documentos/{documentoId} {
+      // TODO: Add tutorEmail field to documents to enforce tutor access at the database layer.
+      // Currently, tutors can read via client-side queries (estagioId), trusting the application layer.
+      // Should restrict to: resource.data.tutorEmail == currentUserData().email && visibilidade allows.
       allow read: if isSignedIn()
         && (
           resource.data.professorId == request.auth.uid
           || (resource.data.schoolId != null && isSchoolAdminFor(resource.data.schoolId))
+          || (isTutor() && (resource.data.visibilidade == "tutores" || resource.data.visibilidade == "todos"))
         );
 
       allow create: if isSignedIn()
