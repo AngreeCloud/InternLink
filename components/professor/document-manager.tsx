@@ -232,6 +232,12 @@ export function DocumentManager() {
 
   return (
     <div className="space-y-6">
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+        <p className="text-sm text-amber-900">
+          ℹ️ <strong>Em desenvolvimento:</strong> O carregamento de ficheiros e assinaturas digitais estão a ser implementados. Esta funcionalidade estará disponível em breve.
+        </p>
+      </div>
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Gestão de Documentos</h1>
@@ -241,7 +247,7 @@ export function DocumentManager() {
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button disabled>
               <Upload className="mr-2 h-4 w-4" />
               Carregar Documento
             </Button>
@@ -287,12 +293,11 @@ export function DocumentManager() {
                   type="file"
                   accept=".pdf,.docx"
                   onChange={handleFileChange}
+                  disabled
                 />
-                {selectedFile && (
-                  <p className="text-xs text-muted-foreground">
-                    Selecionado: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
-                  </p>
-                )}
+                <p className="text-xs text-amber-700">
+                  🔄 Carregamento de ficheiros disponível em breve.
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -315,21 +320,24 @@ export function DocumentManager() {
                 </Select>
               </div>
 
-              <div className="space-y-3 rounded-lg border border-border p-4">
+              <div className="space-y-3 rounded-lg border border-border p-4 opacity-50">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <PenTool className="h-4 w-4 text-primary" />
-                    <Label className="cursor-pointer">Requer Assinatura Digital</Label>
+                    <PenTool className="h-4 w-4 text-muted-foreground" />
+                    <Label className="cursor-not-allowed text-muted-foreground">
+                      Requer Assinatura Digital
+                    </Label>
                   </div>
                   <button
                     type="button"
+                    disabled
                     role="switch"
                     aria-checked={requerAssinatura}
                     onClick={() => {
                       setRequerAssinatura(!requerAssinatura);
                       if (requerAssinatura) setAssinantes([]);
                     }}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-not-allowed ${
                       requerAssinatura ? "bg-primary" : "bg-muted"
                     }`}
                   >
@@ -341,37 +349,13 @@ export function DocumentManager() {
                   </button>
                 </div>
 
-                {requerAssinatura && (
-                  <div className="space-y-2 pt-2">
-                    <p className="text-xs text-muted-foreground">
-                      Selecione quem deve assinar este documento:
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {["professor", "aluno", "tutor"].map((role) => (
-                        <Button
-                          key={role}
-                          type="button"
-                          variant={assinantes.includes(role) ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => toggleAssinante(role)}
-                        >
-                          {role === "professor" && "Professor"}
-                          {role === "aluno" && "Aluno"}
-                          {role === "tutor" && "Tutor"}
-                        </Button>
-                      ))}
-                    </div>
-                    {assinantes.length > 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        Assinantes selecionados: {assinantes.join(", ")}
-                      </p>
-                    )}
-                  </div>
-                )}
+                <p className="text-xs text-muted-foreground">
+                  🔄 Assinaturas digitais disponíveis em breve.
+                </p>
               </div>
 
-              <Button onClick={handleUpload} disabled={submitting} className="w-full">
-                {submitting ? "A carregar..." : "Carregar Documento"}
+              <Button onClick={handleUpload} disabled={true} className="w-full">
+                🔄 Recurso disponível em breve
               </Button>
             </div>
           </DialogContent>
