@@ -185,7 +185,11 @@ service cloud.firestore {
 
     // CONVITES DE TUTOR
     match /tutorInvites/{inviteId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn()
+        && (
+          resource.data.professorId == request.auth.uid
+          || (resource.data.schoolId != null && isSchoolAdminFor(resource.data.schoolId))
+        );
 
       allow create: if isSignedIn()
         && currentUserExists()
