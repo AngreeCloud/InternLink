@@ -90,6 +90,12 @@ test("professor de outra escola não consegue visualizar pedido de aluno pendent
   await assertFails(getDoc(doc(dbProfessorOutraEscola, "users", "studentA")));
 });
 
+test("professor da mesma escola consegue visualizar aluno pendente da sua escola", async () => {
+  const dbProfessorMesmaEscola = testEnv.authenticatedContext("profA").firestore();
+
+  await assertSucceeds(getDoc(doc(dbProfessorMesmaEscola, "users", "studentA")));
+});
+
 test("professor de outra escola não consegue aprovar aluno pendente", async () => {
   const dbProfessorOutraEscola = testEnv.authenticatedContext("profB").firestore();
 

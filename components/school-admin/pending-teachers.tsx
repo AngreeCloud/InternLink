@@ -18,7 +18,7 @@ type PendingTeacher = {
 export function PendingTeachersSection({
   showSearch = true,
   limit,
-  showActions = true,
+  showActions = false,
   title = "Professores por aprovar",
   description = "Lista de professores pendentes na sua escola.",
 }: {
@@ -50,6 +50,9 @@ export function PendingTeachersSection({
       const pendingTeacherRef = doc(db, "schools", schoolId, "pendingTeachers", teacher.id);
       const historyRef = doc(collection(db, "schools", schoolId, "approvalHistory"));
 
+      // NOTE: The approvalHistory collection requires isSchoolAdminFor(schoolId) permission.
+      // This component should only be rendered with showActions=true in school-admin contexts.
+      // Firestore will deny the batch if the user lacks write permission on approvalHistory.
       batch.update(userRef, {
         estado: decision === "aprovado" ? "ativo" : "recusado",
         reviewedAt: serverTimestamp(),

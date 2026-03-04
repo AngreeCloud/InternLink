@@ -48,6 +48,11 @@ service cloud.firestore {
         && currentUserData().schoolId == schoolId;
     }
 
+    function isTutor() {
+      return currentUserExists()
+        && currentUserData().role == "tutor";
+    }
+
     function isProfessorPendingFor(schoolId, userId) {
       return isSelf(userId)
         && currentUserExists()
@@ -61,6 +66,13 @@ service cloud.firestore {
         .diff(resource.data)
         .affectedKeys()
         .hasAny(["role", "estado", "schoolId", "courseId"]);
+    }
+
+    function professorCanUpdateStudentFields() {
+      return !request.resource.data
+        .diff(resource.data)
+        .affectedKeys()
+        .hasAny(["role", "schoolId", "courseId"]);
     }
 
     // USERS
@@ -80,10 +92,11 @@ service cloud.firestore {
       allow update, delete: if isSchoolAdmin()
         && resource.data.schoolId == currentUserData().schoolId;
 
-      // Professor pode aprovar/rejeitar alunos da sua escola.
+      // Professor pode aprovar/rejeitar alunos da sua escola (apenas estado).
       allow update: if isProfessor()
         && resource.data.schoolId == currentUserData().schoolId
-        && resource.data.role == "aluno";
+        && resource.data.role == "aluno"
+        && professorCanUpdateStudentFields();
     }
 
     // SCHOOLS + FOLDERS + PENDING TEACHERS
@@ -157,7 +170,12 @@ service cloud.firestore {
 
     // ESTÁGIOS (geridos pelo professor)
     match /estagios/{estagioId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn()
+        && (
+          resource.data.alunoId == request.auth.uid
+          || resource.data.professorId == request.auth.uid
+          || (resource.data.schoolId != null && isSchoolAdminFor(resource.data.schoolId))
+        );
 
       allow create: if isSignedIn()
         && currentUserExists()
@@ -169,9 +187,17 @@ service cloud.firestore {
         && resource.data.professorId == request.auth.uid;
     }
 
-    // DOCUMENTOS (geridos pelo professor, lidos por participantes)
+    // DOCUMENTOS (geridos pelo professor, lidos por professorId e school admins)
     match /documentos/{documentoId} {
-      allow read: if isSignedIn();
+      // TODO: Add tutorEmail field to documents to enforce tutor access at the database layer.
+      // Currently, tutors can read via client-side queries (estagioId), trusting the application layer.
+      // Should restrict to: resource.data.tutorEmail == currentUserData().email && visibilidade allows.
+      allow read: if isSignedIn()
+        && (
+          resource.data.professorId == request.auth.uid
+          || (resource.data.schoolId != null && isSchoolAdminFor(resource.data.schoolId))
+          || (isTutor() && (resource.data.visibilidade == "tutores" || resource.data.visibilidade == "todos"))
+        );
 
       allow create: if isSignedIn()
         && currentUserExists()
@@ -185,7 +211,11 @@ service cloud.firestore {
 
     // CONVITES DE TUTOR
     match /tutorInvites/{inviteId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn()
+        && (
+          resource.data.professorId == request.auth.uid
+          || (resource.data.schoolId != null && isSchoolAdminFor(resource.data.schoolId))
+        );
 
       allow create: if isSignedIn()
         && currentUserExists()

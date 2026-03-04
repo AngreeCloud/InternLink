@@ -37,11 +37,18 @@ export default function ForgotPasswordPage() {
       await sendPasswordResetEmail(auth, email);
       setSuccess(true);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (message.includes("user-not-found") || message.includes("invalid-email")) {
-        setError("Não foi encontrada uma conta com este email.");
+      // Firebase Auth SDK v9+ uses error.code property, not error.message
+      const code = (err as { code?: string }).code || "";
+      
+      // Firebase likely returns generic errors to prevent email enumeration,
+      // so we show the same success message for all cases
+      if (code === "auth/invalid-email") {
+        setError("Email inválido.");
+      } else if (code === "auth/too-many-requests") {
+        setError("Demasiadas tentativas. Tente novamente mais tarde.");
       } else {
-        setError("Erro ao enviar email de recuperação. Tente novamente.");
+        // Generic message (covers user-not-found and other errors)
+        setError("Se existir uma conta com este email, receberá um link de recuperação.");
       }
       console.error(err);
     } finally {
