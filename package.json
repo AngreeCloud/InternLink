@@ -26,7 +26,7 @@
     "lint": "next lint",
     "start": "next start",
     "test:rules": "node tests/firestore/run-rules-tests.mjs",
-    "test:unit": "vitest --run tests/actions/**/*.test.ts",
+    "test:unit": "vitest run tests/actions",
     "test": "npm run test:unit && npm run test:rules"
   },
   "dependencies": {
