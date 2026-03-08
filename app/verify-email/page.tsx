@@ -44,6 +44,8 @@ export default function EmailVerificationPage() {
 
         // Check if email is already verified
         if (user.emailVerified) {
+          await user.getIdToken(true);
+
           // Check if user document exists
           const userDocSnap = await getDoc(doc(db, "users", user.uid));
 
@@ -86,6 +88,7 @@ export default function EmailVerificationPage() {
       await user.reload();
 
       if (user.emailVerified) {
+        await user.getIdToken(true);
         setState((s) => ({ ...s, verified: true }));
 
         // Clear interval
@@ -102,6 +105,11 @@ export default function EmailVerificationPage() {
 
   const createUserDocumentFromPending = async (userId: string, db: any) => {
     try {
+      const auth = await getAuthRuntime();
+      if (auth.currentUser) {
+        await auth.currentUser.getIdToken(true);
+      }
+
       // Get pending registration data
       const pendingSnap = await getDoc(doc(db, "pendingRegistrations", userId));
 

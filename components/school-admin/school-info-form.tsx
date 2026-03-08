@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 import { useSchoolAdmin } from "@/components/school-admin/school-admin-context";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const EDUCATION_LEVELS = [
-  "Secundária/Profissional",
+  "Secundaria/Profissional",
   "Licenciatura",
   "Mestrado",
   "Doutoramento",
@@ -33,6 +33,8 @@ export function SchoolInfoForm() {
   const { schoolId } = useSchoolAdmin();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [form, setForm] = useState<SchoolInfo>({
     name: "",
     shortName: "",
@@ -44,8 +46,6 @@ export function SchoolInfoForm() {
     allowGoogleLogin: false,
     requiresPhone: false,
   });
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -65,10 +65,10 @@ export function SchoolInfoForm() {
           address: data.address || "",
           contact: data.contact || "",
           educationLevel: data.educationLevel || "",
-          allowGoogleLogin: Boolean(data.allowGoogleLogin),
-          requiresPhone: Boolean(data.requiresPhone),
           emailDomain: data.emailDomain || "",
           requireInstitutionalEmail: Boolean(data.requireInstitutionalEmail),
+          allowGoogleLogin: Boolean(data.allowGoogleLogin),
+          requiresPhone: Boolean(data.requiresPhone),
         });
       }
 
@@ -92,40 +92,42 @@ export function SchoolInfoForm() {
     setSuccess("");
 
     if (!form.name.trim()) {
-      setError("O nome completo da escola é obrigatório.");
+      setError("O nome completo da escola e obrigatorio.");
       return;
     }
 
     if (!form.emailDomain.trim()) {
-      setError("O domínio de email institucional é obrigatório.");
+      setError("O dominio de email institucional e obrigatorio.");
       return;
     }
 
     setSaving(true);
-    const db = await getDbRuntime();
+    try {
+      const db = await getDbRuntime();
+      await setDoc(
+        doc(db, "schools", schoolId),
+        {
+          ...form,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
 
-    await setDoc(
-      doc(db, "schools", schoolId),
-      {
-        ...form,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
-
-    setSaving(false);
-    setSuccess("Informações atualizadas com sucesso.");
+      setSuccess("Informacoes atualizadas com sucesso.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Informações da Escola</CardTitle>
+        <CardTitle>Informacoes da Escola</CardTitle>
         <CardDescription>Atualize os dados da sua escola.</CardDescription>
       </CardHeader>
       <CardContent>
         {loading ? (
-          <p className="text-sm text-muted-foreground">A carregar informações...</p>
+          <p className="text-sm text-muted-foreground">A carregar informacoes...</p>
         ) : (
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div className="space-y-2">
@@ -137,6 +139,7 @@ export function SchoolInfoForm() {
                 required
               />
             </div>
+
             <div className="space-y-2">
               <Label>Abreviatura</Label>
               <Input
@@ -145,13 +148,14 @@ export function SchoolInfoForm() {
                 placeholder="Sigla (opcional)"
               />
             </div>
+
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>Endereço</Label>
+                <Label>Endereco</Label>
                 <Input
                   value={form.address}
                   onChange={(event) => updateField("address", event.target.value)}
-                  placeholder="Endereço da escola"
+                  placeholder="Endereco da escola"
                 />
               </div>
               <div className="space-y-2">
@@ -159,16 +163,17 @@ export function SchoolInfoForm() {
                 <Input
                   value={form.contact}
                   onChange={(event) => updateField("contact", event.target.value)}
-                  placeholder="Contacto telefónico"
+                  placeholder="Contacto telefonico"
                 />
               </div>
             </div>
+
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>Nível de ensino</Label>
+                <Label>Nivel de ensino</Label>
                 <Select value={form.educationLevel} onValueChange={(value) => updateField("educationLevel", value)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione o nível" />
+                    <SelectValue placeholder="Selecione o nivel" />
                   </SelectTrigger>
                   <SelectContent>
                     {EDUCATION_LEVELS.map((level) => (
@@ -180,14 +185,17 @@ export function SchoolInfoForm() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Domínio de email institucional</Label>
+                <Label>Dominio de email institucional</Label>
                 <Input
                   value={form.emailDomain}
                   onChange={(event) => updateField("emailDomain", event.target.value)}
                   placeholder="@escola.pt"
                   required
                 />
-              </div>space-y-3">
+              </div>
+            </div>
+
+            <div className="space-y-3">
               <div className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
                 <input
                   id="requireInstitutionalEmail"
@@ -211,12 +219,15 @@ export function SchoolInfoForm() {
                   disabled={form.requireInstitutionalEmail}
                 />
                 <div className="flex-1">
-                  <Label htmlFor="allowGoogleLogin" className={form.requireInstitutionalEmail ? "cursor-not-allowed opacity-50" : "cursor-pointer"}>
+                  <Label
+                    htmlFor="allowGoogleLogin"
+                    className={form.requireInstitutionalEmail ? "cursor-not-allowed opacity-50" : "cursor-pointer"}
+                  >
                     Permitir login com Google
                   </Label>
                   {form.requireInstitutionalEmail && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Desativado automaticamente quando email institucional é obrigatório
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Desativado automaticamente quando email institucional e obrigatorio
                     </p>
                   )}
                 </div>
@@ -232,22 +243,20 @@ export function SchoolInfoForm() {
                 />
                 <div className="flex-1">
                   <Label htmlFor="requiresPhone" className="cursor-pointer">
-                    Exigir verificação de número de telemóvel (SMS)
+                    Exigir verificacao de numero de telemovel (SMS)
                   </Label>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Após verificação de email, os utilizadores devem verificar o número de telemóvel via SMS
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Apos verificacao de email, os utilizadores devem verificar o numero de telemovel via SMS
                   </p>
                 </div>
-              </divhtmlFor="requireInstitutionalEmail">
-                Exigir email institucional para associar à escola e cursos
-              </Label>
+              </div>
             </div>
 
             {error && <p className="text-sm text-red-600">{error}</p>}
             {success && <p className="text-sm text-emerald-600">{success}</p>}
 
             <Button type="submit" disabled={saving}>
-              {saving ? "A guardar..." : "Guardar alterações"}
+              {saving ? "A guardar..." : "Guardar alteracoes"}
             </Button>
           </form>
         )}

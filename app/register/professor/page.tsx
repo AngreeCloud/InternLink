@@ -16,7 +16,7 @@ import { collection, getDocs, doc, getDoc } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 import { getRecaptchaV3Token } from "@/lib/recaptcha-v3";
 import Link from "next/link";
-import { ArrowLeft, AlertCircle, Info } from "lucide-react";
+import { ArrowLeft, AlertCircle, Eye, EyeOff, Info } from "lucide-react";
 import { SchoolSelector } from "@/components/auth/school-selector";
 import type { School, SchoolConfig } from "@/lib/types/school";
 
@@ -31,6 +31,8 @@ export default function ProfessorRegisterPage() {
   const [loadingSchools, setLoadingSchools] = useState(true);
   const [loadingConfig, setLoadingConfig] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const submitLockRef = useRef(false);
   const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "";
 
@@ -51,6 +53,28 @@ export default function ProfessorRegisterPage() {
   const router = useRouter();
   const selectedSchoolId = form.watch("escola");
   const emailValue = form.watch("email");
+  const passwordValue = form.watch("password") ?? "";
+  const confirmPasswordValue = form.watch("confirmPassword") ?? "";
+
+  const passwordStrength = useMemo(() => {
+    const password = passwordValue;
+    if (!password) {
+      return { score: 0, label: "Ainda sem avaliação", textClass: "text-muted-foreground" };
+    }
+
+    let score = 0;
+    if (password.length >= 8) score += 1;
+    if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score += 1;
+    if (/\d/.test(password)) score += 1;
+    if (/[^A-Za-z0-9]/.test(password)) score += 1;
+
+    if (score <= 1) return { score, label: "Fraca", textClass: "text-red-500" };
+    if (score === 2) return { score, label: "Média", textClass: "text-amber-500" };
+    if (score === 3) return { score, label: "Boa", textClass: "text-lime-600" };
+    return { score, label: "Forte", textClass: "text-emerald-600" };
+  }, [passwordValue]);
+
+  const passwordsMatch = confirmPasswordValue.length > 0 && passwordValue === confirmPasswordValue;
 
   // Load schools on mount
   useEffect(() => {
@@ -355,8 +379,44 @@ export default function ProfessorRegisterPage() {
                       <FormItem>
                         <FormLabel>Password</FormLabel>
                         <FormControl>
-                          <Input type="password" placeholder="Mínimo 6 caracteres" {...field} />
+                          <div className="relative">
+                            <Input
+                              type={showPassword ? "text" : "password"}
+                              placeholder="Mínimo 6 caracteres"
+                              className="pr-12"
+                              {...field}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
+                              onClick={() => setShowPassword((prev) => !prev)}
+                              aria-label={showPassword ? "Esconder password" : "Mostrar password"}
+                            >
+                              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </Button>
+                          </div>
                         </FormControl>
+                        <div className="space-y-1">
+                          <div className="h-2 w-full overflow-hidden rounded bg-muted">
+                            <div
+                              className={`h-full transition-all ${
+                                passwordStrength.score <= 1
+                                  ? "bg-red-500"
+                                  : passwordStrength.score === 2
+                                    ? "bg-amber-500"
+                                    : passwordStrength.score === 3
+                                      ? "bg-lime-500"
+                                      : "bg-emerald-500"
+                              }`}
+                              style={{ width: `${passwordStrength.score * 25}%` }}
+                            />
+                          </div>
+                          <p className={`text-xs ${passwordStrength.textClass}`}>
+                            Segurança da password: {passwordStrength.label}
+                          </p>
+                        </div>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -369,8 +429,30 @@ export default function ProfessorRegisterPage() {
                       <FormItem>
                         <FormLabel>Confirmar Password</FormLabel>
                         <FormControl>
-                          <Input type="password" placeholder="Repita a password" {...field} />
+                          <div className="relative">
+                            <Input
+                              type={showConfirmPassword ? "text" : "password"}
+                              placeholder="Repita a password"
+                              className="pr-12"
+                              {...field}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
+                              onClick={() => setShowConfirmPassword((prev) => !prev)}
+                              aria-label={showConfirmPassword ? "Esconder confirmação da password" : "Mostrar confirmação da password"}
+                            >
+                              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </Button>
+                          </div>
                         </FormControl>
+                        {confirmPasswordValue.length > 0 && (
+                          <p className={`text-xs ${passwordsMatch ? "text-emerald-600" : "text-red-500"}`}>
+                            {passwordsMatch ? "Passwords correspondem." : "Passwords diferentes."}
+                          </p>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}
