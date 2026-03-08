@@ -16,12 +16,25 @@ export type School = {
   /**
    * Se true, exige validação de número de telemóvel via SMS após verificação de email.
    */
+  /**
+   * Backwards-compatible flag. Original field used `requiresPhone`.
+   * New fields split responsibilities:
+   * - `requirePhone`: se true, o número de telemóvel é obrigatório no registo
+   * - `requirePhoneVerification`: se true, a verificação por SMS é exigida após verificação de email
+   */
   requiresPhone?: boolean;
+  requirePhone?: boolean;
+  requirePhoneVerification?: boolean;
   createdAt?: Date | { toDate: () => Date };
   updatedAt?: Date | { toDate: () => Date };
 };
 
 export type SchoolConfig = Pick<
   School,
-  "requireInstitutionalEmail" | "emailDomain" | "allowGoogleLogin" | "requiresPhone"
+  | "requireInstitutionalEmail"
+  | "emailDomain"
+  | "allowGoogleLogin"
+  | "requiresPhone"
+  | "requirePhone"
+  | "requirePhoneVerification"
 >;

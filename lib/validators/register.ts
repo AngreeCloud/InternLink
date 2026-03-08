@@ -16,6 +16,21 @@ function isNotFutureDate(value: string) {
   return inputDate.getTime() <= todayUtc.getTime();
 }
 
+function isAtLeastAge(value: string, minAge: number) {
+  const birth = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(birth.getTime())) return false;
+  const today = new Date();
+  const yearNow = today.getUTCFullYear();
+  const monthNow = today.getUTCMonth();
+  const dayNow = today.getUTCDate();
+
+  let age = yearNow - birth.getUTCFullYear();
+  if (monthNow < birth.getUTCMonth() || (monthNow === birth.getUTCMonth() && dayNow < birth.getUTCDate())) {
+    age -= 1;
+  }
+  return age >= minAge;
+}
+
 const nomeSchema = z
   .string()
   .trim()
@@ -38,13 +53,17 @@ const requiredBirthDateSchema = z
   .trim()
   .min(1, "A data de nascimento é obrigatória.")
   .refine(isValidDateString, "Data de nascimento inválida.")
-  .refine(isNotFutureDate, "A data de nascimento não pode ser futura.");
+  .refine(isNotFutureDate, "A data de nascimento não pode ser futura.")
+  .refine((value) => isAtLeastAge(value, 13), "Deve ter pelo menos 13 anos.");
+
+
 
 const optionalBirthDateSchema = z
   .string()
   .trim()
   .refine((value) => value === "" || isValidDateString(value), "Data de nascimento inválida.")
-  .refine((value) => value === "" || isNotFutureDate(value), "A data de nascimento não pode ser futura.");
+  .refine((value) => value === "" || isNotFutureDate(value), "A data de nascimento não pode ser futura.")
+  .refine((value) => value === "" || isAtLeastAge(value, 13), "Deve ter pelo menos 13 anos.");
 
 const telefoneSchema = z
   .string()

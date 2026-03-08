@@ -27,6 +27,8 @@ type SchoolInfo = {
   requireInstitutionalEmail: boolean;
   allowGoogleLogin: boolean;
   requiresPhone: boolean;
+  requirePhone: boolean;
+  requirePhoneVerification: boolean;
 };
 
 export function SchoolInfoForm() {
@@ -45,6 +47,8 @@ export function SchoolInfoForm() {
     requireInstitutionalEmail: false,
     allowGoogleLogin: false,
     requiresPhone: false,
+    requirePhone: false,
+    requirePhoneVerification: false,
   });
 
   useEffect(() => {
@@ -68,7 +72,13 @@ export function SchoolInfoForm() {
           emailDomain: data.emailDomain || "",
           requireInstitutionalEmail: Boolean(data.requireInstitutionalEmail),
           allowGoogleLogin: Boolean(data.allowGoogleLogin),
+          // Backwards compatibility: prefer new flags if present
           requiresPhone: Boolean(data.requiresPhone),
+          requirePhone: data.requirePhone !== undefined ? Boolean(data.requirePhone) : Boolean(data.requiresPhone),
+          requirePhoneVerification:
+            data.requirePhoneVerification !== undefined
+              ? Boolean(data.requirePhoneVerification)
+              : Boolean(data.requiresPhone),
         });
       }
 
@@ -235,18 +245,33 @@ export function SchoolInfoForm() {
 
               <div className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
                 <input
-                  id="requiresPhone"
+                  id="requirePhone"
                   type="checkbox"
-                  checked={form.requiresPhone}
-                  onChange={(event) => updateField("requiresPhone", event.target.checked)}
+                  checked={form.requirePhone}
+                  onChange={(event) => updateField("requirePhone", event.target.checked)}
                   className="h-4 w-4 rounded border-border"
                 />
                 <div className="flex-1">
-                  <Label htmlFor="requiresPhone" className="cursor-pointer">
-                    Exigir verificacao de numero de telemovel (SMS)
+                  <Label htmlFor="requirePhone" className="cursor-pointer">
+                    Tornar o número de telemóvel obrigatório no registo
+                  </Label>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
+                <input
+                  id="requirePhoneVerification"
+                  type="checkbox"
+                  checked={form.requirePhoneVerification}
+                  onChange={(event) => updateField("requirePhoneVerification", event.target.checked)}
+                  className="h-4 w-4 rounded border-border"
+                />
+                <div className="flex-1">
+                  <Label htmlFor="requirePhoneVerification" className="cursor-pointer">
+                    Exigir verificação por SMS após verificação de email
                   </Label>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Apos verificacao de email, os utilizadores devem verificar o numero de telemovel via SMS
+                    Quando ativo, os utilizadores terão de confirmar o número via SMS depois do email.
                   </p>
                 </div>
               </div>

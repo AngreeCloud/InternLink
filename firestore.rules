@@ -122,7 +122,7 @@ service cloud.firestore {
         && request.resource.data.role in ["aluno", "professor", "tutor"]
         && request.resource.data.estado in ["pendente", "inativo"]
         && request.resource.data.email == request.auth.token.email
-        && request.resource.data.emailVerified == false;
+        && request.resource.data.emailVerified == request.auth.token.email_verified;
 
       allow read, delete: if isSelf(userId);
 
