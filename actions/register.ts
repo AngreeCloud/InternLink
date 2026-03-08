@@ -1,5 +1,5 @@
-import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { createUserWithEmailAndPassword, deleteUser, sendEmailVerification, type User } from "firebase/auth";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { z } from "zod";
 import {
@@ -12,6 +12,50 @@ function createErrorWithCode(message: string, code: string) {
   const error = new Error(message) as Error & { code: string };
   error.code = code;
   return error;
+}
+
+function normalizeDomain(domain: string) {
+  const trimmed = domain.trim().toLowerCase();
+  if (!trimmed) return "";
+  return trimmed.startsWith("@") ? trimmed.slice(1) : trimmed;
+}
+
+function emailMatchesDomain(email: string, domain: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedDomain = normalizeDomain(domain);
+  if (!normalizedDomain) return false;
+  const atIndex = normalizedEmail.lastIndexOf("@");
+  if (atIndex < 0) return false;
+  return normalizedEmail.slice(atIndex + 1) === normalizedDomain;
+}
+
+async function ensureSchoolEmailDomainAllowed(db: unknown, escolaId: string, email: string) {
+  const schoolSnapshot = await getDoc(doc(db as never, "schools", escolaId));
+
+  if (!schoolSnapshot.exists()) {
+    return;
+  }
+
+  const school = schoolSnapshot.data() as Partial<{ requireInstitutionalEmail: boolean; emailDomain: string }>;
+  if (!school.requireInstitutionalEmail) {
+    return;
+  }
+
+  if (!emailMatchesDomain(email, school.emailDomain ?? "")) {
+    throw createErrorWithCode(
+      "Esta escola exige email institucional. Use um email com o domínio correto.",
+      "auth/invalid-school-email-domain"
+    );
+  }
+}
+
+async function rollbackAuthUser(user: User) {
+  try {
+    await deleteUser(user);
+  } catch (error) {
+    // Keep the original registration error and just log rollback failures.
+    console.error("Falha ao remover utilizador Auth após erro de registo:", error);
+  }
 }
 
 async function verifyRecaptchaToken(token: string, action: "register_aluno" | "register_professor" | "register_tutor") {
@@ -59,6 +103,8 @@ export async function registerAluno(data: z.input<typeof alunoRegisterActionSche
   const auth = await getAuthRuntime();
   const db = await getDbRuntime();
 
+  await ensureSchoolEmailDomainAllowed(db, escolaId, email);
+
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
   const user = userCredential.user;
   await sendEmailVerification(user);
@@ -80,7 +126,13 @@ export async function registerAluno(data: z.input<typeof alunoRegisterActionSche
     createdAt: serverTimestamp(),
   };
 
-  await setDoc(doc(db, "users", userId), userDoc);
+  try {
+    await setDoc(doc(db, "users", userId), userDoc);
+  } catch (error) {
+    await rollbackAuthUser(user);
+    throw error;
+  }
+
   return { uid: userId, email: user.email, createdAt: user.metadata.creationTime };
 }
 
@@ -97,6 +149,8 @@ export async function registerProfessor(data: z.input<typeof professorRegisterAc
 
   const auth = await getAuthRuntime();
   const db = await getDbRuntime();
+
+  await ensureSchoolEmailDomainAllowed(db, escolaId, email);
 
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
   const user = userCredential.user;
@@ -116,17 +170,23 @@ export async function registerProfessor(data: z.input<typeof professorRegisterAc
     createdAt: serverTimestamp(),
   };
 
-  await setDoc(doc(db, "users", userId), userDoc);
-  await setDoc(
-    doc(db, "schools", escolaId, "pendingTeachers", userId),
-    {
-      name: nome,
-      email,
-      role: "teacher",
-      createdAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
+  try {
+    await setDoc(doc(db, "users", userId), userDoc);
+    await setDoc(
+      doc(db, "schools", escolaId, "pendingTeachers", userId),
+      {
+        name: nome,
+        email,
+        role: "teacher",
+        createdAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    await rollbackAuthUser(user);
+    throw error;
+  }
+
   return { uid: userId, email: user.email, createdAt: user.metadata.creationTime };
 }
 
@@ -161,6 +221,12 @@ export async function registerTutor(data: z.input<typeof tutorRegisterActionSche
     createdAt: serverTimestamp(),
   };
 
-  await setDoc(doc(db, "users", userId), userDoc);
+  try {
+    await setDoc(doc(db, "users", userId), userDoc);
+  } catch (error) {
+    await rollbackAuthUser(user);
+    throw error;
+  }
+
   return { uid: userId, email: user.email, createdAt: user.metadata.creationTime };
 }
