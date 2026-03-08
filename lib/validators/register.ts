@@ -53,36 +53,54 @@ const telefoneSchema = z
 
 const localidadeSchema = z.string().trim().max(120, "A localidade é demasiado longa.").optional();
 
-export const alunoRegisterFormSchema = z.object({
-  nome: nomeSchema,
-  email: emailSchema,
-  password: passwordSchema,
-  escola: z.string().min(1, "A escola é obrigatória."),
-  curso: z.string().min(1, "O curso é obrigatório."),
-  dataNascimento: requiredBirthDateSchema,
-  localidade: localidadeSchema,
-  telefone: telefoneSchema.optional(),
-});
+export const alunoRegisterFormSchema = z
+  .object({
+    nome: nomeSchema,
+    email: emailSchema,
+    password: passwordSchema,
+    confirmPassword: passwordSchema,
+    escola: z.string().min(1, "A escola é obrigatória."),
+    curso: z.string().min(1, "O curso é obrigatório."),
+    dataNascimento: requiredBirthDateSchema,
+    localidade: localidadeSchema,
+    telefone: telefoneSchema.optional(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "As passwords não coincidem.",
+    path: ["confirmPassword"],
+  });
 
-export const professorRegisterFormSchema = z.object({
-  nome: nomeSchema,
-  email: emailSchema,
-  password: passwordSchema,
-  escola: z.string().min(1, "A escola é obrigatória."),
-  dataNascimento: optionalBirthDateSchema.optional(),
-  localidade: localidadeSchema,
-  telefone: telefoneSchema.optional(),
-});
+export const professorRegisterFormSchema = z
+  .object({
+    nome: nomeSchema,
+    email: emailSchema,
+    password: passwordSchema,
+    confirmPassword: passwordSchema,
+    escola: z.string().min(1, "A escola é obrigatória."),
+    dataNascimento: optionalBirthDateSchema.optional(),
+    localidade: localidadeSchema,
+    telefone: telefoneSchema.optional(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "As passwords não coincidem.",
+    path: ["confirmPassword"],
+  });
 
-export const tutorRegisterFormSchema = z.object({
-  nome: nomeSchema,
-  email: emailSchema,
-  password: passwordSchema,
-  empresa: z.string().trim().min(1, "A empresa é obrigatória.").max(160, "A empresa é demasiado longa."),
-  dataNascimento: optionalBirthDateSchema.optional(),
-  localidade: localidadeSchema,
-  telefone: telefoneSchema.optional(),
-});
+export const tutorRegisterFormSchema = z
+  .object({
+    nome: nomeSchema,
+    email: emailSchema,
+    password: passwordSchema,
+    confirmPassword: passwordSchema,
+    empresa: z.string().trim().min(1, "A empresa é obrigatória.").max(160, "A empresa é demasiado longa."),
+    dataNascimento: optionalBirthDateSchema.optional(),
+    localidade: localidadeSchema,
+    telefone: telefoneSchema.optional(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "As passwords não coincidem.",
+    path: ["confirmPassword"],
+  });
 
 export const alunoRegisterActionSchema = z
   .object({

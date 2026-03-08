@@ -100,7 +100,7 @@ beforeEach(() => {
 
 // --- test cases -------------------------------------------
 describe("registerAluno action", () => {
-  it("creates auth account and firestore document on success", async () => {
+  it("creates auth account and stores pending registration on success", async () => {
     // arrange: make createUser return a fake user credential
     mockCreateUser.mockResolvedValue({
       user: { uid: "uid-1", email: "test@example.com", metadata: { creationTime: "now" } },
@@ -109,15 +109,18 @@ describe("registerAluno action", () => {
       makeSchoolSnapshot({ requireInstitutionalEmail: true, emailDomain: "@example.com" }, true)
     );
     mockSetDoc.mockResolvedValue(undefined);
+    mockSendEmailVerification.mockResolvedValue(undefined);
 
     const result = await registerAluno(makeAlunoPayload());
 
     expect(mockCreateUser).toHaveBeenCalled();
+    // Should create pendingRegistrations document, not users document
     expect(mockSetDoc).toHaveBeenCalled();
+    expect(mockSendEmailVerification).toHaveBeenCalled();
     expect(result.uid).toBe("uid-1");
   });
 
-  it("propagates error when firestore write fails after auth creation", async () => {
+  it("propagates error when pending registration write fails after auth creation", async () => {
     // arrange: make createUser return a fake user credential so the action
     // proceeds to the Firestore write before failing
     mockCreateUser.mockResolvedValue({
@@ -127,7 +130,7 @@ describe("registerAluno action", () => {
     mockGetDoc.mockResolvedValue(
       makeSchoolSnapshot({ requireInstitutionalEmail: true, emailDomain: "example.com" }, true)
     );
-    // simulate failure when writing the user document to Firestore
+    // simulate failure when writing the pending registration to Firestore
     mockSetDoc.mockRejectedValue(new Error("firestore error"));
     // we expect the action to reject with the Firestore error, and we also
     // verify that the auth account creation was attempted (which currently
@@ -151,5 +154,47 @@ describe("registerAluno action", () => {
     await expect(registerAluno(payload)).rejects.toThrow("Esta escola exige email institucional");
     expect(mockCreateUser).not.toHaveBeenCalled();
     expect(mockSetDoc).not.toHaveBeenCalled();
+  });
+
+  it("accepts school email when institutional domain is required", async () => {
+    mockGetDoc.mockResolvedValue(
+      makeSchoolSnapshot({ requireInstitutionalEmail: true, emailDomain: "@school.pt" }, true)
+    );
+    mockCreateUser.mockResolvedValue({
+      user: { uid: "uid-3", email: "student@school.pt", metadata: { creationTime: "now" } },
+    });
+    mockSetDoc.mockResolvedValue(undefined);
+    mockSendEmailVerification.mockResolvedValue(undefined);
+
+    const payload = {
+      ...makeAlunoPayload(),
+      email: "student@school.pt",
+    };
+
+    const result = await registerAluno(payload);
+    expect(mockCreateUser).toHaveBeenCalled();
+    expect(mockSetDoc).toHaveBeenCalled();
+    expect(result.uid).toBe("uid-3");
+  });
+
+  it("does not require email domain validation when not configured", async () => {
+    mockGetDoc.mockResolvedValue(
+      makeSchoolSnapshot({ requireInstitutionalEmail: false }, true)
+    );
+    mockCreateUser.mockResolvedValue({
+      user: { uid: "uid-4", email: "student@gmail.com", metadata: { creationTime: "now" } },
+    });
+    mockSetDoc.mockResolvedValue(undefined);
+    mockSendEmailVerification.mockResolvedValue(undefined);
+
+    const payload = {
+      ...makeAlunoPayload(),
+      email: "student@gmail.com",
+    };
+
+    const result = await registerAluno(payload);
+    expect(mockCreateUser).toHaveBeenCalled();
+    expect(mockSetDoc).toHaveBeenCalled();
+    expect(result.uid).toBe("uid-4");
   });
 });

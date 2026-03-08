@@ -6,29 +6,39 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { registerTutor } from "@/actions/register";
-import { tutorRegisterFormSchema } from "@/lib/validators/register";
+import { registerProfessor } from "@/actions/register";
+import { professorRegisterFormSchema } from "@/lib/validators/register";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { collection, getDocs } from "firebase/firestore";
+import { getDbRuntime } from "@/lib/firebase-runtime";
 import { getRecaptchaV3Token } from "@/lib/recaptcha-v3";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
-const tutorSchema = tutorRegisterFormSchema;
+const professorSchema = professorRegisterFormSchema;
 
-export default function TutorRegisterPage() {
-  const submitLockRef = useRef(false);
+export default function ProfessorRegisterPage() {
+  const [schools, setSchools] = useState<{
+    id: string;
+    name: string;
+    emailDomain?: string;
+    requireInstitutionalEmail?: boolean;
+  }[]>([]);
+  const [loadingSchools, setLoadingSchools] = useState(true);
   const [submitError, setSubmitError] = useState("");
+  const submitLockRef = useRef(false);
   const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "";
-  const form = useForm<z.infer<typeof tutorSchema>>({
-    resolver: zodResolver(tutorSchema),
+
+  const form = useForm<z.infer<typeof professorSchema>>({
+    resolver: zodResolver(professorSchema),
     defaultValues: {
       nome: "",
       email: "",
       password: "",
-      confirmPassword: "",
-      empresa: "",
+      escola: "",
       dataNascimento: "",
       localidade: "",
       telefone: "",
@@ -36,13 +46,54 @@ export default function TutorRegisterPage() {
   });
 
   const router = useRouter();
+  const selectedSchoolId = form.watch("escola");
+
+  useEffect(() => {
+    let active = true;
+
+    const loadSchools = async () => {
+      setLoadingSchools(true);
+      const db = await getDbRuntime();
+      const snapshot = await getDocs(collection(db, "schools"));
+      if (!active) return;
+      setSchools(
+        snapshot.docs.map((docSnap) => {
+          const data = docSnap.data() as {
+            name?: string;
+            emailDomain?: string;
+            requireInstitutionalEmail?: boolean;
+          };
+          return {
+            id: docSnap.id,
+            name: data.name || "—",
+            emailDomain: data.emailDomain || "",
+            requireInstitutionalEmail: Boolean(data.requireInstitutionalEmail),
+          };
+        })
+      );
+      setLoadingSchools(false);
+    };
+
+    loadSchools();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const selectedSchool = useMemo(
+    () => schools.find((school) => school.id === selectedSchoolId),
+    [schools, selectedSchoolId]
+  );
+
+  const selectedSchoolName = selectedSchool?.name || "";
 
   useEffect(() => {
     if (!recaptchaSiteKey) return;
-    void getRecaptchaV3Token(recaptchaSiteKey, "register_tutor_pageview").catch(() => {});
+    void getRecaptchaV3Token(recaptchaSiteKey, "register_professor_pageview").catch(() => {});
   }, [recaptchaSiteKey]);
 
-  const resolveRegisterErrorMessage = (error: unknown): string => {
+  const resolveRegisterErrorMessage = (error: unknown) => {
     const code =
       typeof error === "object" && error !== null && "code" in error
         ? String((error as { code?: string }).code)
@@ -63,7 +114,7 @@ export default function TutorRegisterPage() {
     return "Erro ao criar conta. Tente novamente.";
   };
 
-  async function onSubmit(values: z.infer<typeof tutorSchema>) {
+  async function onSubmit(values: z.infer<typeof professorSchema>) {
     if (submitLockRef.current) {
       return;
     }
@@ -74,24 +125,31 @@ export default function TutorRegisterPage() {
 
       let recaptchaToken = "";
       if (recaptchaSiteKey) {
-        recaptchaToken = await getRecaptchaV3Token(recaptchaSiteKey, "register_tutor");
+        recaptchaToken = await getRecaptchaV3Token(recaptchaSiteKey, "register_professor");
       }
 
-      const result = await registerTutor({
-        nome: values.nome,
-        email: values.email,
-        password: values.password,
-        empresa: values.empresa,
-        dataNascimento: values.dataNascimento,
-        localidade: values.localidade,
-        telefone: values.telefone,
+      if (selectedSchool?.requireInstitutionalEmail && selectedSchool.emailDomain) {
+        const domain = selectedSchool.emailDomain.trim().toLowerCase();
+        const email = values.email.trim().toLowerCase();
+        if (!email.endsWith(domain)) {
+          setSubmitError("Esta escola exige email institucional. Use um email com o domínio correto.");
+          return;
+        }
+      }
+
+      const result = await registerProfessor({
+        ...values,
+        escolaId: values.escola,
+        escolaNome: selectedSchoolName,
         recaptchaToken,
       });
       router.push(
-        `/verify-email?email=${encodeURIComponent(result.email ?? values.email)}`
+        `/account-status?email=${encodeURIComponent(result.email ?? values.email)}&createdAt=${encodeURIComponent(
+          result.createdAt ?? ""
+        )}`
       );
     } catch (error) {
-      console.error("Erro ao criar conta de tutor:", error);
+      console.error("Erro ao criar conta de professor:", error);
       setSubmitError(resolveRegisterErrorMessage(error));
     } finally {
       submitLockRef.current = false;
@@ -110,8 +168,8 @@ export default function TutorRegisterPage() {
 
       <Card className="w-full max-w-lg">
         <CardHeader>
-          <CardTitle>Registo de Tutor</CardTitle>
-          <CardDescription>Preencha os seus dados para criar a conta de tutor.</CardDescription>
+          <CardTitle>Registo de Professor</CardTitle>
+          <CardDescription>Preencha os seus dados para criar a conta.</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -128,7 +186,7 @@ export default function TutorRegisterPage() {
                   <FormMessage />
                 </FormItem>
               )} />
-              <FormField control={form.control} name="email" render={({ field }) => (
+               <FormField control={form.control} name="email" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl><Input type="email" placeholder="teu@email.com" {...field} /></FormControl>
@@ -138,25 +196,33 @@ export default function TutorRegisterPage() {
               <FormField control={form.control} name="password" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Password</FormLabel>
-                  <FormControl><Input type="password" placeholder="Mínimo 6 caracteres" {...field} /></FormControl>
+                  <FormControl><Input type="password" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
-              <FormField control={form.control} name="confirmPassword" render={({ field }) => (
+              <FormField control={form.control} name="escola" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Confirmar Password</FormLabel>
-                  <FormControl><Input type="password" placeholder="Repita a password" {...field} /></FormControl>
+                  <FormLabel>Escola</FormLabel>
+                  <FormControl>
+                    <Select value={field.value} onValueChange={(value) => {
+                      field.onChange(value);
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={loadingSchools ? "A carregar escolas..." : "Selecione a escola"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {schools.map((school) => (
+                          <SelectItem key={school.id} value={school.id}>
+                            {school.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
-              <FormField control={form.control} name="empresa" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Empresa</FormLabel>
-                  <FormControl><Input placeholder="Nome da sua empresa" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="dataNascimento" render={({ field }) => (
+               <FormField control={form.control} name="dataNascimento" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Data de Nascimento (Opcional)</FormLabel>
                   <FormControl><Input type="date" {...field} /></FormControl>
@@ -177,10 +243,6 @@ export default function TutorRegisterPage() {
                   <FormMessage />
                 </FormItem>
               )} />
-              <p className="text-xs text-muted-foreground text-center">
-                Após criar a conta, receberá um email de verificação. Só poderá aceder à
-                plataforma após verificar o seu email.
-              </p>
               {recaptchaSiteKey && (
                 <p className="text-xs text-muted-foreground">Este formulário usa reCAPTCHA para proteção automática.</p>
               )}

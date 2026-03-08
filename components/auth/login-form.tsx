@@ -32,10 +32,27 @@ export function LoginForm() {
       const auth = await getAuthRuntime()
       const db = await getDbRuntime()
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
-      const userSnap = await getDoc(doc(db, "users", userCredential.user.uid))
-      const userData = userSnap.exists()
-        ? (userSnap.data() as { role?: string; estado?: string })
-        : { role: "", estado: "" }
+      const user = userCredential.user
+
+      // Check if email is verified
+      if (!user.emailVerified) {
+        // User needs to verify email first
+        router.push(`/verify-email?email=${encodeURIComponent(user.email || email)}`)
+        return
+      }
+
+      // Email is verified, check if user document exists
+      const userSnap = await getDoc(doc(db, "users", user.uid))
+      
+      if (!userSnap.exists()) {
+        // User verified email but doesn't have document yet
+        // This can happen if they verified but didn't complete the flow
+        // Redirect to verify-email page which will create the document
+        router.push(`/verify-email?email=${encodeURIComponent(user.email || email)}`)
+        return
+      }
+
+      const userData = userSnap.data() as { role?: string; estado?: string }
       const role = userData.role || ""
       const estado = userData.estado || ""
 

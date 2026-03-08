@@ -25,6 +25,8 @@ type SchoolInfo = {
   educationLevel: string;
   emailDomain: string;
   requireInstitutionalEmail: boolean;
+  allowGoogleLogin: boolean;
+  requiresPhone: boolean;
 };
 
 export function SchoolInfoForm() {
@@ -39,6 +41,8 @@ export function SchoolInfoForm() {
     educationLevel: "",
     emailDomain: "",
     requireInstitutionalEmail: false,
+    allowGoogleLogin: false,
+    requiresPhone: false,
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -61,6 +65,8 @@ export function SchoolInfoForm() {
           address: data.address || "",
           contact: data.contact || "",
           educationLevel: data.educationLevel || "",
+          allowGoogleLogin: Boolean(data.allowGoogleLogin),
+          requiresPhone: Boolean(data.requiresPhone),
           emailDomain: data.emailDomain || "",
           requireInstitutionalEmail: Boolean(data.requireInstitutionalEmail),
         });
@@ -181,17 +187,58 @@ export function SchoolInfoForm() {
                   placeholder="@escola.pt"
                   required
                 />
+              </div>space-y-3">
+              <div className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
+                <input
+                  id="requireInstitutionalEmail"
+                  type="checkbox"
+                  checked={form.requireInstitutionalEmail}
+                  onChange={(event) => updateField("requireInstitutionalEmail", event.target.checked)}
+                  className="h-4 w-4 rounded border-border"
+                />
+                <Label htmlFor="requireInstitutionalEmail" className="cursor-pointer">
+                  Exigir email institucional para registo
+                </Label>
               </div>
-            </div>
-            <div className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
-              <input
-                id="requireInstitutionalEmail"
-                type="checkbox"
-                checked={form.requireInstitutionalEmail}
-                onChange={(event) => updateField("requireInstitutionalEmail", event.target.checked)}
-                className="h-4 w-4 rounded border-border"
-              />
-              <Label htmlFor="requireInstitutionalEmail">
+
+              <div className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
+                <input
+                  id="allowGoogleLogin"
+                  type="checkbox"
+                  checked={form.allowGoogleLogin}
+                  onChange={(event) => updateField("allowGoogleLogin", event.target.checked)}
+                  className="h-4 w-4 rounded border-border"
+                  disabled={form.requireInstitutionalEmail}
+                />
+                <div className="flex-1">
+                  <Label htmlFor="allowGoogleLogin" className={form.requireInstitutionalEmail ? "cursor-not-allowed opacity-50" : "cursor-pointer"}>
+                    Permitir login com Google
+                  </Label>
+                  {form.requireInstitutionalEmail && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Desativado automaticamente quando email institucional é obrigatório
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
+                <input
+                  id="requiresPhone"
+                  type="checkbox"
+                  checked={form.requiresPhone}
+                  onChange={(event) => updateField("requiresPhone", event.target.checked)}
+                  className="h-4 w-4 rounded border-border"
+                />
+                <div className="flex-1">
+                  <Label htmlFor="requiresPhone" className="cursor-pointer">
+                    Exigir verificação de número de telemóvel (SMS)
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Após verificação de email, os utilizadores devem verificar o número de telemóvel via SMS
+                  </p>
+                </div>
+              </divhtmlFor="requireInstitutionalEmail">
                 Exigir email institucional para associar à escola e cursos
               </Label>
             </div>
