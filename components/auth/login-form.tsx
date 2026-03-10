@@ -25,6 +25,11 @@ export function LoginForm() {
   const router = useRouter()
   const googleLockRef = useRef(false)
 
+  const resetGoogleLoginState = () => {
+    googleLockRef.current = false
+    setIsGoogleLoading(false)
+  }
+
   const handleGoogleLogin = async () => {
     if (googleLockRef.current) return
     
@@ -103,19 +108,21 @@ export function LoginForm() {
         router.push("/account-status")
       }
     } catch (err: any) {
+      if (err?.code === "auth/popup-closed-by-user" || err?.code === "auth/cancelled-popup-request") {
+        setError("")
+        return
+      }
+
       console.error("Erro no login com Google:", err)
-      
-      if (err.code === "auth/popup-closed-by-user") {
-        setError("Login cancelado.")
-      } else if (err.code === "auth/account-exists-with-different-credential") {
+
+      if (err.code === "auth/account-exists-with-different-credential") {
         setError("Já existe uma conta associada a este email. Inicie sessão com email e password.")
       } else {
         const message = err instanceof Error ? err.message : String(err)
         setError(message.includes("Firebase config") ? message : "Erro ao fazer login com Google. Tente novamente.")
       }
     } finally {
-      googleLockRef.current = false
-      setIsGoogleLoading(false)
+      resetGoogleLoginState()
     }
   }
 

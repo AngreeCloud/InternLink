@@ -378,10 +378,13 @@ export default function StudentRegisterPage() {
       setAuthMethod("google");
       setStep("registration-form");
     } catch (error: any) {
+      if (error?.code === "auth/popup-closed-by-user" || error?.code === "auth/cancelled-popup-request") {
+        setSubmitError("");
+        return;
+      }
+
       console.error("Erro no registo Google:", error);
-      if (error.code === "auth/popup-closed-by-user") {
-        setSubmitError("Login cancelado.");
-      } else if (error.code === "auth/email-already-in-use") {
+      if (error.code === "auth/email-already-in-use") {
         setSubmitError("Este email já está registado. Faça login em vez de registar.");
       } else {
         setSubmitError("Erro ao registar com Google. Tente novamente.");
