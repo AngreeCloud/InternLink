@@ -211,6 +211,11 @@ export default function ProfessorRegisterPage() {
       return;
     }
 
+    if (!schoolConfig.allowGoogleLogin || schoolConfig.requireInstitutionalEmail) {
+      setSubmitError("Login com Google não permitido para esta escola.");
+      return;
+    }
+
     googleSignInLockRef.current = true;
     setSubmitError("");
 
@@ -390,7 +395,7 @@ export default function ProfessorRegisterPage() {
                       {schoolConfig.requirePhoneVerification && (
                         <li>Verificação de telemóvel após verificação de email</li>
                       )}
-                      {!schoolConfig.allowGoogleLogin && schoolConfig.requireInstitutionalEmail && (
+                      {(!schoolConfig.allowGoogleLogin || schoolConfig.requireInstitutionalEmail) && (
                         <li>Login com Google não permitido (use email/password)</li>
                       )}
                     </ul>
@@ -420,7 +425,7 @@ export default function ProfessorRegisterPage() {
                 Continuar com Email e Password
               </Button>
 
-              {schoolConfig?.allowGoogleLogin && (
+              {schoolConfig?.allowGoogleLogin && !schoolConfig.requireInstitutionalEmail && (
                 <Button
                   type="button"
                   variant="outline"
@@ -450,7 +455,7 @@ export default function ProfessorRegisterPage() {
                 </Button>
               )}
 
-              {!schoolConfig?.allowGoogleLogin && (
+              {(schoolConfig?.requireInstitutionalEmail || !schoolConfig?.allowGoogleLogin) && (
                 <p className="text-sm text-muted-foreground">Esta escola não permite registo com Google.</p>
               )}
 
@@ -656,13 +661,22 @@ export default function ProfessorRegisterPage() {
                   <FormField
                     control={form.control}
                     name="telefone"
+                    rules={
+                      schoolConfig?.requirePhone
+                        ? { required: "O telefone é obrigatório." }
+                        : undefined
+                    }
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>
                           Telefone {schoolConfig?.requirePhone ? "(Obrigatório)" : "(Opcional)"}
                         </FormLabel>
                         <FormControl>
-                          <Input placeholder="O seu contacto" {...field} />
+                          <Input
+                            placeholder="O seu contacto"
+                            required={schoolConfig?.requirePhone}
+                            {...field}
+                          />
                         </FormControl>
                         {schoolConfig?.requirePhoneVerification && (
                           <FormDescription>

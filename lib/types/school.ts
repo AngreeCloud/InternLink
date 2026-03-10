@@ -14,9 +14,6 @@ export type School = {
    */
   allowGoogleLogin?: boolean;
   /**
-   * Se true, exige validação de número de telemóvel via SMS após verificação de email.
-   */
-  /**
    * Backwards-compatible flag. Original field used `requiresPhone`.
    * New fields split responsibilities:
    * - `requirePhone`: se true, o número de telemóvel é obrigatório no registo

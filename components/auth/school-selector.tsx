@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import type { ChangeEvent, KeyboardEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { School } from "@/lib/types/school";
@@ -75,7 +76,7 @@ export function SchoolSelector({
   );
 
   const handleInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    (e: ChangeEvent<HTMLInputElement>) => {
       const newValue = e.target.value;
       setInputValue(newValue);
       setIsOpen(true);
@@ -108,7 +109,7 @@ export function SchoolSelector({
   }, [inputValue, onChange, schools, value]);
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
+    (e: KeyboardEvent<HTMLInputElement>) => {
       if (!isOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
         setIsOpen(true);
         return;

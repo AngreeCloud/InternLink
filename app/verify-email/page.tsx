@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
-import { onAuthStateChanged, sendEmailVerification } from "firebase/auth";
+import { onAuthStateChanged, sendEmailVerification, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -115,6 +115,9 @@ export default function EmailVerificationPage() {
 
       if (!pendingSnap.exists()) {
         setState((s) => ({ ...s, error: "Dados de registo não encontrados" }));
+        const auth = await getAuthRuntime();
+        await signOut(auth);
+        router.replace("/register");
         return;
       }
 

@@ -50,30 +50,41 @@ export function LoginForm() {
       const userSnap = await getDoc(doc(db, "users", user.uid))
       
       if (!userSnap.exists()) {
-        router.push(`/verify-email?email=${encodeURIComponent(userEmail)}`)
+        await signOut(auth)
+        setError("Não encontrámos uma conta associada a este login Google. Registe-se para continuar.")
         return
       }
 
-      const userData = userSnap.data() as { role?: string; estado?: string; escolaId?: string }
+      const userData = userSnap.data() as { role?: string; estado?: string; schoolId?: string }
       const role = userData.role || ""
       const estado = userData.estado || ""
-      const escolaId = userData.escolaId || ""
+      const schoolId = userData.schoolId || ""
 
       // Check school settings for Google login restrictions
-      if (escolaId) {
-        const schoolSnap = await getDoc(doc(db, "schools", escolaId))
-        if (schoolSnap.exists()) {
-          const schoolData = schoolSnap.data() as { 
-            requireInstitutionalEmail?: boolean
-            allowGoogleLogin?: boolean
-          }
-          
-          // If school requires institutional email, Google login is not allowed
-          if (schoolData.requireInstitutionalEmail) {
-            await signOut(auth)
-            setError("Login com Google indisponível: a sua escola exige login com email institucional.")
-            return
-          }
+      if (schoolId) {
+        const schoolSnap = await getDoc(doc(db, "schools", schoolId))
+
+        if (!schoolSnap.exists()) {
+          await signOut(auth)
+          setError("Login com Google indisponível: configuração da sua escola não permite login com Google.")
+          return
+        }
+
+        const schoolData = schoolSnap.data() as {
+          requireInstitutionalEmail?: boolean
+          allowGoogleLogin?: boolean
+        }
+
+        if (schoolData.requireInstitutionalEmail) {
+          await signOut(auth)
+          setError("Login com Google indisponível: a sua escola exige login com email institucional.")
+          return
+        }
+
+        if (schoolData.allowGoogleLogin === false) {
+          await signOut(auth)
+          setError("Login com Google indisponível: a sua escola não permite login com Google.")
+          return
         }
       }
 
@@ -130,9 +141,8 @@ export function LoginForm() {
       const userSnap = await getDoc(doc(db, "users", user.uid))
       
       if (!userSnap.exists()) {
-        // User verified email but doesn't have document yet
-        // This can happen if they verified but didn't complete the flow
-        // Redirect to verify-email page which will create the document
+        // User verified email but doesn't have document yet.
+        // Redirect to verification flow so pending registration can be finalized.
         router.push(`/verify-email?email=${encodeURIComponent(user.email || email)}`)
         return
       }
