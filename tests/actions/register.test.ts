@@ -19,7 +19,7 @@ vi.mock("@/lib/validators/register", () => ({
 
 // we will import the functions under test after setting up mocks so
 // their static imports don't fail during module evaluation
-import { registerAluno } from "../../actions/register";
+import { registerAluno, registerProfessor, registerTutor } from "../../actions/register";
 
 // --- mocks ------------------------------------------------
 const mockCreateUser = vi.fn();
@@ -27,6 +27,14 @@ const mockDeleteUser = vi.fn();
 const mockSendEmailVerification = vi.fn();
 const mockSetDoc = vi.fn();
 const mockGetDoc = vi.fn();
+
+type RegistrationResult = Awaited<ReturnType<typeof registerAluno>>;
+
+type AuthUserFixture = {
+  uid: string;
+  email: string;
+  metadata: { creationTime: string };
+};
 
 vi.mock("firebase/auth", () => ({
   createUserWithEmailAndPassword: (...args: any[]) => mockCreateUser(...args),
@@ -63,11 +71,84 @@ function makeAlunoPayload() {
   };
 }
 
+function makeProfessorPayload() {
+  return {
+    nome: "Test Professor",
+    email: "professor@example.com",
+    password: "secret123",
+    escolaId: "school123",
+    escolaNome: "School",
+    recaptchaToken: undefined,
+    dataNascimento: "1985-05-10",
+    localidade: "Braga",
+    telefone: "912345678",
+  };
+}
+
+function makeTutorPayload() {
+  return {
+    nome: "Test Tutor",
+    email: "tutor@example.com",
+    password: "secret123",
+    empresa: "Empresa XPTO",
+    recaptchaToken: undefined,
+    dataNascimento: "1980-03-15",
+    localidade: "Porto",
+    telefone: "919999999",
+  };
+}
+
 function makeSchoolSnapshot(data: Record<string, unknown> = {}, exists = true) {
   return {
     exists: () => exists,
     data: () => data,
   };
+}
+
+function makeAuthUser(uid: string, email: string): AuthUserFixture {
+  return {
+    uid,
+    email,
+    metadata: { creationTime: "now" },
+  };
+}
+
+function mockCreateUserSuccess(uid: string, email: string) {
+  mockCreateUser.mockResolvedValue({ user: makeAuthUser(uid, email) });
+}
+
+function mockPendingRegistrationSuccess() {
+  mockSetDoc.mockResolvedValue(undefined);
+  mockSendEmailVerification.mockResolvedValue(undefined);
+}
+
+function mockPendingRegistrationFailure(message = "firestore error") {
+  mockDeleteUser.mockResolvedValue(undefined);
+  mockSetDoc.mockRejectedValue(new Error(message));
+}
+
+function mockInstitutionalSchool(emailDomain = "school.pt") {
+  mockGetDoc.mockResolvedValue(
+    makeSchoolSnapshot({ requireInstitutionalEmail: true, emailDomain }, true)
+  );
+}
+
+function mockSchoolWithoutInstitutionalDomain() {
+  mockGetDoc.mockResolvedValue(makeSchoolSnapshot({ requireInstitutionalEmail: false }, true));
+}
+
+function expectPendingRegistration(uid: string, data: Record<string, unknown>) {
+  expect(mockSetDoc).toHaveBeenCalledWith(
+    expect.objectContaining({ path: `pendingRegistrations/${uid}` }),
+    expect.objectContaining(data)
+  );
+}
+
+async function expectRollback(action: Promise<unknown>, message = "firestore error") {
+  await expect(action).rejects.toThrow(message);
+  expect(mockCreateUser).toHaveBeenCalled();
+  expect(mockSetDoc).toHaveBeenCalled();
+  expect(mockDeleteUser).toHaveBeenCalledTimes(1);
 }
 
 // Clean firebase debug logs once before and once after this test file runs.
@@ -101,50 +182,34 @@ beforeEach(() => {
 // --- test cases -------------------------------------------
 describe("registerAluno action", () => {
   it("creates auth account and stores pending registration on success", async () => {
-    // arrange: make createUser return a fake user credential
-    mockCreateUser.mockResolvedValue({
-      user: { uid: "uid-1", email: "test@example.com", metadata: { creationTime: "now" } },
-    });
-    mockGetDoc.mockResolvedValue(
-      makeSchoolSnapshot({ requireInstitutionalEmail: true, emailDomain: "@example.com" }, true)
-    );
-    mockSetDoc.mockResolvedValue(undefined);
-    mockSendEmailVerification.mockResolvedValue(undefined);
+    mockCreateUserSuccess("uid-1", "test@example.com");
+    mockInstitutionalSchool("@example.com");
+    mockPendingRegistrationSuccess();
 
     const result = await registerAluno(makeAlunoPayload());
 
     expect(mockCreateUser).toHaveBeenCalled();
-    // Should create pendingRegistrations document, not users document
-    expect(mockSetDoc).toHaveBeenCalled();
+    expectPendingRegistration("uid-1", {
+      role: "aluno",
+      schoolId: "school123",
+      courseId: "course456",
+      estado: "pendente",
+      emailVerified: false,
+    });
     expect(mockSendEmailVerification).toHaveBeenCalled();
     expect(result.uid).toBe("uid-1");
   });
 
   it("propagates error when pending registration write fails after auth creation", async () => {
-    // arrange: make createUser return a fake user credential so the action
-    // proceeds to the Firestore write before failing
-    mockCreateUser.mockResolvedValue({
-      user: { uid: "uid-2", email: "test@example.com", metadata: { creationTime: "now" } },
-    });
-    mockDeleteUser.mockResolvedValue(undefined);
-    mockGetDoc.mockResolvedValue(
-      makeSchoolSnapshot({ requireInstitutionalEmail: true, emailDomain: "example.com" }, true)
-    );
-    // simulate failure when writing the pending registration to Firestore
-    mockSetDoc.mockRejectedValue(new Error("firestore error"));
-    // we expect the action to reject with the Firestore error, and we also
-    // verify that the auth account creation was attempted (which currently
-    // happens before the Firestore write in the implementation)
-    await expect(registerAluno(makeAlunoPayload())).rejects.toThrow("firestore error");
-    expect(mockCreateUser).toHaveBeenCalled();
-    expect(mockSetDoc).toHaveBeenCalled();
-    expect(mockDeleteUser).toHaveBeenCalledTimes(1);
+    mockCreateUserSuccess("uid-2", "test@example.com");
+    mockInstitutionalSchool("example.com");
+    mockPendingRegistrationFailure();
+
+    await expectRollback(registerAluno(makeAlunoPayload()));
   });
 
   it("rejects non-school email when institutional domain is required", async () => {
-    mockGetDoc.mockResolvedValue(
-      makeSchoolSnapshot({ requireInstitutionalEmail: true, emailDomain: "@school.pt" }, true)
-    );
+    mockInstitutionalSchool("@school.pt");
 
     const payload = {
       ...makeAlunoPayload(),
@@ -157,14 +222,9 @@ describe("registerAluno action", () => {
   });
 
   it("accepts school email when institutional domain is required", async () => {
-    mockGetDoc.mockResolvedValue(
-      makeSchoolSnapshot({ requireInstitutionalEmail: true, emailDomain: "@school.pt" }, true)
-    );
-    mockCreateUser.mockResolvedValue({
-      user: { uid: "uid-3", email: "student@school.pt", metadata: { creationTime: "now" } },
-    });
-    mockSetDoc.mockResolvedValue(undefined);
-    mockSendEmailVerification.mockResolvedValue(undefined);
+    mockInstitutionalSchool("@school.pt");
+    mockCreateUserSuccess("uid-3", "student@school.pt");
+    mockPendingRegistrationSuccess();
 
     const payload = {
       ...makeAlunoPayload(),
@@ -173,19 +233,18 @@ describe("registerAluno action", () => {
 
     const result = await registerAluno(payload);
     expect(mockCreateUser).toHaveBeenCalled();
-    expect(mockSetDoc).toHaveBeenCalled();
+    expectPendingRegistration("uid-3", {
+      role: "aluno",
+      email: "student@school.pt",
+      estado: "pendente",
+    });
     expect(result.uid).toBe("uid-3");
   });
 
   it("does not require email domain validation when not configured", async () => {
-    mockGetDoc.mockResolvedValue(
-      makeSchoolSnapshot({ requireInstitutionalEmail: false }, true)
-    );
-    mockCreateUser.mockResolvedValue({
-      user: { uid: "uid-4", email: "student@gmail.com", metadata: { creationTime: "now" } },
-    });
-    mockSetDoc.mockResolvedValue(undefined);
-    mockSendEmailVerification.mockResolvedValue(undefined);
+    mockSchoolWithoutInstitutionalDomain();
+    mockCreateUserSuccess("uid-4", "student@gmail.com");
+    mockPendingRegistrationSuccess();
 
     const payload = {
       ...makeAlunoPayload(),
@@ -194,7 +253,87 @@ describe("registerAluno action", () => {
 
     const result = await registerAluno(payload);
     expect(mockCreateUser).toHaveBeenCalled();
-    expect(mockSetDoc).toHaveBeenCalled();
+    expectPendingRegistration("uid-4", {
+      role: "aluno",
+      email: "student@gmail.com",
+      estado: "pendente",
+    });
     expect(result.uid).toBe("uid-4");
+  });
+});
+
+describe("registerProfessor action", () => {
+  it("creates auth account and stores pending registration on success", async () => {
+    mockCreateUserSuccess("prof-1", "professor@school.pt");
+    mockInstitutionalSchool("school.pt");
+    mockPendingRegistrationSuccess();
+
+    const result: RegistrationResult = await registerProfessor({
+      ...makeProfessorPayload(),
+      email: "professor@school.pt",
+    });
+
+    expect(mockCreateUser).toHaveBeenCalled();
+    expectPendingRegistration("prof-1", {
+      role: "professor",
+      schoolId: "school123",
+      estado: "pendente",
+      emailVerified: false,
+    });
+    expect(mockSendEmailVerification).toHaveBeenCalled();
+    expect(result.uid).toBe("prof-1");
+  });
+
+  it("rolls back auth user when pending registration write fails", async () => {
+    mockCreateUserSuccess("prof-2", "professor@school.pt");
+    mockInstitutionalSchool("school.pt");
+    mockPendingRegistrationFailure();
+
+    await expectRollback(
+      registerProfessor({
+        ...makeProfessorPayload(),
+        email: "professor@school.pt",
+      })
+    );
+  });
+
+  it("rejects non-school email when institutional domain is required", async () => {
+    mockInstitutionalSchool("school.pt");
+
+    await expect(
+      registerProfessor({
+        ...makeProfessorPayload(),
+        email: "professor@gmail.com",
+      })
+    ).rejects.toThrow("Esta escola exige email institucional");
+
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(mockSetDoc).not.toHaveBeenCalled();
+  });
+});
+
+describe("registerTutor action", () => {
+  it("creates auth account and stores pending registration with initial inactive state", async () => {
+    mockCreateUserSuccess("tutor-1", "tutor@example.com");
+    mockPendingRegistrationSuccess();
+
+    const result: RegistrationResult = await registerTutor(makeTutorPayload());
+
+    expect(mockCreateUser).toHaveBeenCalled();
+    expectPendingRegistration("tutor-1", {
+      role: "tutor",
+      empresa: "Empresa XPTO",
+      estado: "inativo",
+      emailVerified: false,
+    });
+    expect(mockSendEmailVerification).toHaveBeenCalled();
+    expect(result.uid).toBe("tutor-1");
+  });
+
+  it("rolls back auth user when tutor pending registration write fails", async () => {
+    mockCreateUserSuccess("tutor-2", "tutor@example.com");
+    mockPendingRegistrationFailure();
+
+    await expectRollback(registerTutor(makeTutorPayload()));
   });
 });
