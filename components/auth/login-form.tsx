@@ -13,6 +13,7 @@ import Link from "next/link"
 import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth"
 import { doc, getDoc } from "firebase/firestore"
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime"
+import { finalizePendingRegistration, isVerificationBypassEnabled } from "@/lib/verification"
 import { useRouter } from "next/navigation"
 
 export function LoginForm() {
@@ -30,6 +31,22 @@ export function LoginForm() {
     setIsGoogleLoading(false)
   }
 
+  const redirectBasedOnRole = (role: string, estado: string) => {
+    if (role === "admin_escolar") {
+      router.push("/school-admin")
+    } else if (role === "aluno" && estado !== "ativo") {
+      router.push("/waiting")
+    } else if (role === "aluno") {
+      router.push("/dashboard")
+    } else if (role === "professor" && estado === "ativo") {
+      router.push("/professor")
+    } else if (role === "tutor" && estado === "ativo") {
+      router.push("/tutor")
+    } else {
+      router.push("/account-status")
+    }
+  }
+
   const handleGoogleLogin = async () => {
     if (googleLockRef.current) return
     
@@ -45,22 +62,33 @@ export function LoginForm() {
       const result = await signInWithPopup(auth, provider)
       const user = result.user
       const userEmail = user.email || ""
+      const verificationBypassEnabled = isVerificationBypassEnabled()
 
-      if (!user.emailVerified) {
+      if (!user.emailVerified && !verificationBypassEnabled) {
         router.push(`/verify-email?email=${encodeURIComponent(userEmail)}`)
         return
       }
 
       // Check if user document exists
       const userSnap = await getDoc(doc(db, "users", user.uid))
+      let userData = userSnap.exists()
+        ? (userSnap.data() as { role?: string; estado?: string; schoolId?: string })
+        : null
       
-      if (!userSnap.exists()) {
-        await signOut(auth)
-        setError("Não encontrámos uma conta associada a este login Google. Registe-se para continuar.")
-        return
+      if (!userData) {
+        const finalizedUser = await finalizePendingRegistration(db, user.uid, {
+          markEmailVerified: user.emailVerified || verificationBypassEnabled,
+        })
+
+        if (!finalizedUser) {
+          await signOut(auth)
+          setError("Não encontrámos uma conta associada a este login Google. Registe-se para continuar.")
+          return
+        }
+
+        userData = finalizedUser
       }
 
-      const userData = userSnap.data() as { role?: string; estado?: string; schoolId?: string }
       const role = userData.role || ""
       const estado = userData.estado || ""
       const schoolId = userData.schoolId || ""
@@ -93,20 +121,7 @@ export function LoginForm() {
         }
       }
 
-      // Redirect based on role
-      if (role === "admin_escolar") {
-        router.push("/school-admin")
-      } else if (role === "aluno" && estado !== "ativo") {
-        router.push("/waiting")
-      } else if (role === "aluno") {
-        router.push("/dashboard")
-      } else if (role === "professor" && estado === "ativo") {
-        router.push("/professor")
-      } else if (role === "tutor" && estado === "ativo") {
-        router.push("/tutor")
-      } else {
-        router.push("/account-status")
-      }
+      redirectBasedOnRole(role, estado)
     } catch (err: any) {
       if (err?.code === "auth/popup-closed-by-user" || err?.code === "auth/cancelled-popup-request") {
         setError("")
@@ -136,9 +151,10 @@ export function LoginForm() {
       const db = await getDbRuntime()
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
       const user = userCredential.user
+      const verificationBypassEnabled = isVerificationBypassEnabled()
 
       // Check if email is verified
-      if (!user.emailVerified) {
+      if (!user.emailVerified && !verificationBypassEnabled) {
         // User needs to verify email first
         router.push(`/verify-email?email=${encodeURIComponent(user.email || email)}`)
         return
@@ -146,31 +162,25 @@ export function LoginForm() {
 
       // Email is verified, check if user document exists
       const userSnap = await getDoc(doc(db, "users", user.uid))
+      let userData = userSnap.exists() ? (userSnap.data() as { role?: string; estado?: string }) : null
       
-      if (!userSnap.exists()) {
-        // User verified email but doesn't have document yet.
-        // Redirect to verification flow so pending registration can be finalized.
-        router.push(`/verify-email?email=${encodeURIComponent(user.email || email)}`)
-        return
+      if (!userData) {
+        const finalizedUser = await finalizePendingRegistration(db, user.uid, {
+          markEmailVerified: user.emailVerified || verificationBypassEnabled,
+        })
+
+        if (!finalizedUser) {
+          router.push(`/verify-email?email=${encodeURIComponent(user.email || email)}`)
+          return
+        }
+
+        userData = finalizedUser
       }
 
-      const userData = userSnap.data() as { role?: string; estado?: string }
       const role = userData.role || ""
       const estado = userData.estado || ""
 
-      if (role === "admin_escolar") {
-        router.push("/school-admin")
-      } else if (role === "aluno" && estado !== "ativo") {
-        router.push("/waiting")
-      } else if (role === "aluno") {
-        router.push("/dashboard")
-      } else if (role === "professor" && estado === "ativo") {
-        router.push("/professor")
-      } else if (role === "tutor" && estado === "ativo") {
-        router.push("/tutor")
-      } else {
-        router.push("/account-status")
-      }
+      redirectBasedOnRole(role, estado)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setError(message.includes("Firebase config") ? message : "Erro ao fazer login. Verifique as suas credenciais e tente novamente.")

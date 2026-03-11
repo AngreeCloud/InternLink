@@ -4,11 +4,12 @@ import { useEffect, useState, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { onAuthStateChanged, sendEmailVerification, signOut } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp, deleteDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Mail, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
+import { finalizePendingRegistration, isVerificationBypassEnabled } from "@/lib/verification";
 
 export default function EmailVerificationPage() {
   const searchParams = useSearchParams();
@@ -43,8 +44,9 @@ export default function EmailVerificationPage() {
         setState((s) => ({ ...s, email: userEmail, loading: false }));
 
         // Check if email is already verified
-        if (user.emailVerified) {
+        if (user.emailVerified || isVerificationBypassEnabled()) {
           await user.getIdToken(true);
+          setState((s) => ({ ...s, verified: true }));
 
           // Check if user document exists
           const userDocSnap = await getDoc(doc(db, "users", user.uid));
@@ -110,10 +112,9 @@ export default function EmailVerificationPage() {
         await auth.currentUser.getIdToken(true);
       }
 
-      // Get pending registration data
-      const pendingSnap = await getDoc(doc(db, "pendingRegistrations", userId));
+      const finalizedUser = await finalizePendingRegistration(db, userId, { markEmailVerified: true });
 
-      if (!pendingSnap.exists()) {
+      if (!finalizedUser) {
         setState((s) => ({ ...s, error: "Dados de registo não encontrados" }));
         const auth = await getAuthRuntime();
         await signOut(auth);
@@ -121,37 +122,8 @@ export default function EmailVerificationPage() {
         return;
       }
 
-      const pendingData = pendingSnap.data();
-      const role = pendingData.role;
-
-      // Create user document
-      const userDoc = {
-        ...pendingData,
-        emailVerified: true,
-        updatedAt: serverTimestamp(),
-      };
-
-      await setDoc(doc(db, "users", userId), userDoc);
-
-      // For professors, also create pendingTeachers entry
-      if (role === "professor" && pendingData.schoolId) {
-        await setDoc(
-          doc(db, "schools", pendingData.schoolId, "pendingTeachers", userId),
-          {
-            name: pendingData.nome,
-            email: pendingData.email,
-            role: "teacher",
-            createdAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
-      }
-
-      // Delete pending registration
-      await deleteDoc(doc(db, "pendingRegistrations", userId));
-
       // Redirect based on role
-      redirectBasedOnRole(role, pendingData.estado || "");
+      redirectBasedOnRole(finalizedUser.role, finalizedUser.estado);
     } catch (error) {
       console.error("Erro ao criar documento de utilizador:", error);
       setState((s) => ({ ...s, error: "Erro ao criar conta. Tente novamente." }));
