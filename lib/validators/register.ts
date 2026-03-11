@@ -16,6 +16,21 @@ function isNotFutureDate(value: string) {
   return inputDate.getTime() <= todayUtc.getTime();
 }
 
+function isAtLeastAge(value: string, minAge: number) {
+  const birth = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(birth.getTime())) return false;
+  const today = new Date();
+  const yearNow = today.getUTCFullYear();
+  const monthNow = today.getUTCMonth();
+  const dayNow = today.getUTCDate();
+
+  let age = yearNow - birth.getUTCFullYear();
+  if (monthNow < birth.getUTCMonth() || (monthNow === birth.getUTCMonth() && dayNow < birth.getUTCDate())) {
+    age -= 1;
+  }
+  return age >= minAge;
+}
+
 const nomeSchema = z
   .string()
   .trim()
@@ -38,13 +53,17 @@ const requiredBirthDateSchema = z
   .trim()
   .min(1, "A data de nascimento é obrigatória.")
   .refine(isValidDateString, "Data de nascimento inválida.")
-  .refine(isNotFutureDate, "A data de nascimento não pode ser futura.");
+  .refine(isNotFutureDate, "A data de nascimento não pode ser futura.")
+  .refine((value) => isAtLeastAge(value, 13), "Deve ter pelo menos 13 anos.");
+
+
 
 const optionalBirthDateSchema = z
   .string()
   .trim()
   .refine((value) => value === "" || isValidDateString(value), "Data de nascimento inválida.")
-  .refine((value) => value === "" || isNotFutureDate(value), "A data de nascimento não pode ser futura.");
+  .refine((value) => value === "" || isNotFutureDate(value), "A data de nascimento não pode ser futura.")
+  .refine((value) => value === "" || isAtLeastAge(value, 13), "Deve ter pelo menos 13 anos.");
 
 const telefoneSchema = z
   .string()
@@ -53,36 +72,54 @@ const telefoneSchema = z
 
 const localidadeSchema = z.string().trim().max(120, "A localidade é demasiado longa.").optional();
 
-export const alunoRegisterFormSchema = z.object({
-  nome: nomeSchema,
-  email: emailSchema,
-  password: passwordSchema,
-  escola: z.string().min(1, "A escola é obrigatória."),
-  curso: z.string().min(1, "O curso é obrigatório."),
-  dataNascimento: requiredBirthDateSchema,
-  localidade: localidadeSchema,
-  telefone: telefoneSchema.optional(),
-});
+export const alunoRegisterFormSchema = z
+  .object({
+    nome: nomeSchema,
+    email: emailSchema,
+    password: passwordSchema,
+    confirmPassword: passwordSchema,
+    escola: z.string().min(1, "A escola é obrigatória."),
+    curso: z.string().min(1, "O curso é obrigatório."),
+    dataNascimento: requiredBirthDateSchema,
+    localidade: localidadeSchema,
+    telefone: telefoneSchema.optional(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "As passwords não coincidem.",
+    path: ["confirmPassword"],
+  });
 
-export const professorRegisterFormSchema = z.object({
-  nome: nomeSchema,
-  email: emailSchema,
-  password: passwordSchema,
-  escola: z.string().min(1, "A escola é obrigatória."),
-  dataNascimento: optionalBirthDateSchema.optional(),
-  localidade: localidadeSchema,
-  telefone: telefoneSchema.optional(),
-});
+export const professorRegisterFormSchema = z
+  .object({
+    nome: nomeSchema,
+    email: emailSchema,
+    password: passwordSchema,
+    confirmPassword: passwordSchema,
+    escola: z.string().min(1, "A escola é obrigatória."),
+    dataNascimento: optionalBirthDateSchema.optional(),
+    localidade: localidadeSchema,
+    telefone: telefoneSchema.optional(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "As passwords não coincidem.",
+    path: ["confirmPassword"],
+  });
 
-export const tutorRegisterFormSchema = z.object({
-  nome: nomeSchema,
-  email: emailSchema,
-  password: passwordSchema,
-  empresa: z.string().trim().min(1, "A empresa é obrigatória.").max(160, "A empresa é demasiado longa."),
-  dataNascimento: optionalBirthDateSchema.optional(),
-  localidade: localidadeSchema,
-  telefone: telefoneSchema.optional(),
-});
+export const tutorRegisterFormSchema = z
+  .object({
+    nome: nomeSchema,
+    email: emailSchema,
+    password: passwordSchema,
+    confirmPassword: passwordSchema,
+    empresa: z.string().trim().min(1, "A empresa é obrigatória.").max(160, "A empresa é demasiado longa."),
+    dataNascimento: optionalBirthDateSchema.optional(),
+    localidade: localidadeSchema,
+    telefone: telefoneSchema.optional(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "As passwords não coincidem.",
+    path: ["confirmPassword"],
+  });
 
 export const alunoRegisterActionSchema = z
   .object({

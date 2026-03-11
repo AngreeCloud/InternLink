@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 import { useSchoolAdmin } from "@/components/school-admin/school-admin-context";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -25,12 +25,18 @@ type SchoolInfo = {
   educationLevel: string;
   emailDomain: string;
   requireInstitutionalEmail: boolean;
+  allowGoogleLogin: boolean;
+  requiresPhone: boolean;
+  requirePhone: boolean;
+  requirePhoneVerification: boolean;
 };
 
 export function SchoolInfoForm() {
   const { schoolId } = useSchoolAdmin();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [form, setForm] = useState<SchoolInfo>({
     name: "",
     shortName: "",
@@ -39,9 +45,11 @@ export function SchoolInfoForm() {
     educationLevel: "",
     emailDomain: "",
     requireInstitutionalEmail: false,
+    allowGoogleLogin: false,
+    requiresPhone: false,
+    requirePhone: false,
+    requirePhoneVerification: false,
   });
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -63,6 +71,14 @@ export function SchoolInfoForm() {
           educationLevel: data.educationLevel || "",
           emailDomain: data.emailDomain || "",
           requireInstitutionalEmail: Boolean(data.requireInstitutionalEmail),
+          allowGoogleLogin: Boolean(data.allowGoogleLogin),
+          // Backwards compatibility: prefer new flags if present
+          requiresPhone: Boolean(data.requiresPhone),
+          requirePhone: data.requirePhone !== undefined ? Boolean(data.requirePhone) : Boolean(data.requiresPhone),
+          requirePhoneVerification:
+            data.requirePhoneVerification !== undefined
+              ? Boolean(data.requirePhoneVerification)
+              : Boolean(data.requiresPhone),
         });
       }
 
@@ -80,7 +96,7 @@ export function SchoolInfoForm() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
     setSuccess("");
@@ -96,19 +112,29 @@ export function SchoolInfoForm() {
     }
 
     setSaving(true);
-    const db = await getDbRuntime();
+    try {
+      const db = await getDbRuntime();
+      const requiresPhone = Boolean(form.requirePhone || form.requirePhoneVerification);
+      const allowGoogleLogin = form.requireInstitutionalEmail ? false : form.allowGoogleLogin;
 
-    await setDoc(
-      doc(db, "schools", schoolId),
-      {
-        ...form,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
+      await setDoc(
+        doc(db, "schools", schoolId),
+        {
+          ...form,
+          requiresPhone,
+          allowGoogleLogin,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
 
-    setSaving(false);
-    setSuccess("Informações atualizadas com sucesso.");
+      setSuccess("Informações atualizadas com sucesso.");
+    } catch (err) {
+      console.error("Erro ao atualizar informações da escola:", err);
+      setError("Não foi possível atualizar as informações da escola. Tente novamente mais tarde.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -131,6 +157,7 @@ export function SchoolInfoForm() {
                 required
               />
             </div>
+
             <div className="space-y-2">
               <Label>Abreviatura</Label>
               <Input
@@ -139,6 +166,7 @@ export function SchoolInfoForm() {
                 placeholder="Sigla (opcional)"
               />
             </div>
+
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Endereço</Label>
@@ -157,6 +185,7 @@ export function SchoolInfoForm() {
                 />
               </div>
             </div>
+
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Nível de ensino</Label>
@@ -183,17 +212,84 @@ export function SchoolInfoForm() {
                 />
               </div>
             </div>
-            <div className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
-              <input
-                id="requireInstitutionalEmail"
-                type="checkbox"
-                checked={form.requireInstitutionalEmail}
-                onChange={(event) => updateField("requireInstitutionalEmail", event.target.checked)}
-                className="h-4 w-4 rounded border-border"
-              />
-              <Label htmlFor="requireInstitutionalEmail">
-                Exigir email institucional para associar à escola e cursos
-              </Label>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
+                <input
+                  id="requireInstitutionalEmail"
+                  type="checkbox"
+                  checked={form.requireInstitutionalEmail}
+                  onChange={(event) => {
+                    const checked = event.target.checked;
+                    setForm((prev) => ({
+                      ...prev,
+                      requireInstitutionalEmail: checked,
+                      allowGoogleLogin: checked ? false : prev.allowGoogleLogin,
+                    }));
+                  }}
+                  className="h-4 w-4 rounded border-border"
+                />
+                <Label htmlFor="requireInstitutionalEmail" className="cursor-pointer">
+                  Exigir email institucional para registo
+                </Label>
+              </div>
+
+              <div className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
+                <input
+                  id="allowGoogleLogin"
+                  type="checkbox"
+                  checked={form.allowGoogleLogin}
+                  onChange={(event) => updateField("allowGoogleLogin", event.target.checked)}
+                  className="h-4 w-4 rounded border-border"
+                  disabled={form.requireInstitutionalEmail}
+                />
+                <div className="flex-1">
+                  <Label
+                    htmlFor="allowGoogleLogin"
+                    className={form.requireInstitutionalEmail ? "cursor-not-allowed opacity-50" : "cursor-pointer"}
+                  >
+                    Permitir login com Google
+                  </Label>
+                  {form.requireInstitutionalEmail && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Desativado automaticamente quando email institucional é obrigatório
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
+                <input
+                  id="requirePhone"
+                  type="checkbox"
+                  checked={form.requirePhone}
+                  onChange={(event) => updateField("requirePhone", event.target.checked)}
+                  className="h-4 w-4 rounded border-border"
+                />
+                <div className="flex-1">
+                  <Label htmlFor="requirePhone" className="cursor-pointer">
+                    Tornar o número de telemóvel obrigatório no registo
+                  </Label>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
+                <input
+                  id="requirePhoneVerification"
+                  type="checkbox"
+                  checked={form.requirePhoneVerification}
+                  onChange={(event) => updateField("requirePhoneVerification", event.target.checked)}
+                  className="h-4 w-4 rounded border-border"
+                />
+                <div className="flex-1">
+                  <Label htmlFor="requirePhoneVerification" className="cursor-pointer">
+                    Exigir verificação por SMS após verificação de email
+                  </Label>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Quando ativo, os utilizadores terão de confirmar o número via SMS depois do email.
+                  </p>
+                </div>
+              </div>
             </div>
 
             {error && <p className="text-sm text-red-600">{error}</p>}

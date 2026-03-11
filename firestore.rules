@@ -15,6 +15,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(userId);
     }
 
+    function pendingRegistrationPath(userId) {
+      return /databases/$(database)/documents/pendingRegistrations/$(userId);
+    }
+
     function currentUserDoc() {
       return get(userPath(request.auth.uid));
     }
@@ -25,6 +29,14 @@ service cloud.firestore {
 
     function currentUserData() {
       return currentUserDoc().data;
+    }
+
+    function pendingRegistrationExists(userId) {
+      return exists(pendingRegistrationPath(userId));
+    }
+
+    function pendingRegistrationData(userId) {
+      return get(pendingRegistrationPath(userId)).data;
     }
 
     function isSchoolAdmin() {
@@ -81,9 +93,14 @@ service cloud.firestore {
         || (isSchoolAdmin() && resource.data.schoolId == currentUserData().schoolId)
         || (isProfessor() && resource.data.schoolId == currentUserData().schoolId);
 
+      // O documento final do utilizador tem de vir do pendingRegistrations do próprio.
       allow create: if isSelf(userId)
-        && request.resource.data.role in ["aluno", "professor", "tutor"]
-        && request.resource.data.estado in ["pendente", "inativo"];
+        && pendingRegistrationExists(userId)
+        && request.auth.token.email_verified == true
+        && request.resource.data.role == pendingRegistrationData(userId).role
+        && request.resource.data.estado == pendingRegistrationData(userId).estado
+        && request.resource.data.email == pendingRegistrationData(userId).email
+        && request.resource.data.emailVerified == true;
 
       // Permite ao próprio editar apenas campos de perfil, sem escalar permissões/estado.
       allow update: if isSelf(userId) && isSelfUserDocImmutable();
@@ -97,6 +114,20 @@ service cloud.firestore {
         && resource.data.schoolId == currentUserData().schoolId
         && resource.data.role == "aluno"
         && professorCanUpdateStudentFields();
+    }
+
+    // REGISTOS PENDENTES (antes da verificação de email)
+    match /pendingRegistrations/{userId} {
+      allow create: if isSelf(userId)
+        && request.resource.data.role in ["aluno", "professor", "tutor"]
+        && request.resource.data.estado in ["pendente", "inativo"]
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.emailVerified == request.auth.token.email_verified;
+
+      allow read, delete: if isSelf(userId);
+
+      // Não permitir updates parciais para evitar manipulação de role/estado fora do fluxo.
+      allow update: if false;
     }
 
     // SCHOOLS + FOLDERS + PENDING TEACHERS

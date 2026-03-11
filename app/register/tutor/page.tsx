@@ -27,6 +27,7 @@ export default function TutorRegisterPage() {
       nome: "",
       email: "",
       password: "",
+      confirmPassword: "",
       empresa: "",
       dataNascimento: "",
       localidade: "",
@@ -77,13 +78,17 @@ export default function TutorRegisterPage() {
       }
 
       const result = await registerTutor({
-        ...values,
+        nome: values.nome,
+        email: values.email,
+        password: values.password,
+        empresa: values.empresa,
+        dataNascimento: values.dataNascimento,
+        localidade: values.localidade,
+        telefone: values.telefone,
         recaptchaToken,
       });
       router.push(
-        `/account-status?email=${encodeURIComponent(result.email ?? values.email)}&createdAt=${encodeURIComponent(
-          result.createdAt ?? ""
-        )}`
+        `/verify-email?email=${encodeURIComponent(result.email ?? values.email)}`
       );
     } catch (error) {
       console.error("Erro ao criar conta de tutor:", error);
@@ -123,7 +128,7 @@ export default function TutorRegisterPage() {
                   <FormMessage />
                 </FormItem>
               )} />
-               <FormField control={form.control} name="email" render={({ field }) => (
+              <FormField control={form.control} name="email" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl><Input type="email" placeholder="teu@email.com" {...field} /></FormControl>
@@ -133,7 +138,14 @@ export default function TutorRegisterPage() {
               <FormField control={form.control} name="password" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Password</FormLabel>
-                  <FormControl><Input type="password" {...field} /></FormControl>
+                  <FormControl><Input type="password" placeholder="Mínimo 6 caracteres" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="confirmPassword" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Confirmar Password</FormLabel>
+                  <FormControl><Input type="password" placeholder="Repita a password" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -144,7 +156,7 @@ export default function TutorRegisterPage() {
                   <FormMessage />
                 </FormItem>
               )} />
-               <FormField control={form.control} name="dataNascimento" render={({ field }) => (
+              <FormField control={form.control} name="dataNascimento" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Data de Nascimento (Opcional)</FormLabel>
                   <FormControl><Input type="date" {...field} /></FormControl>
@@ -165,6 +177,10 @@ export default function TutorRegisterPage() {
                   <FormMessage />
                 </FormItem>
               )} />
+              <p className="text-xs text-muted-foreground text-center">
+                Após criar a conta, receberá um email de verificação. Só poderá aceder à
+                plataforma após verificar o seu email.
+              </p>
               {recaptchaSiteKey && (
                 <p className="text-xs text-muted-foreground">Este formulário usa reCAPTCHA para proteção automática.</p>
               )}
