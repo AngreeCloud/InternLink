@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { MessageSquare } from "lucide-react";
 
 type ChatData = {
   loading: boolean;
@@ -30,50 +29,33 @@ export function StudentChatPlaceholder() {
 
       unsubscribe = onAuthStateChanged(auth, async (user) => {
         if (!user || !active) {
-          if (active) {
-            setState((prev) => ({ ...prev, loading: false }));
-          }
+          if (active) setState((prev) => ({ ...prev, loading: false }));
           return;
         }
 
-        const internshipSnap = await getDocs(query(collection(db, "internships"), where("studentId", "==", user.uid)));
+        const internshipSnap = await getDocs(
+          query(collection(db, "internships"), where("studentId", "==", user.uid))
+        );
         const internshipData = internshipSnap.docs[0]?.data() as
-          | {
-              teacherId?: string;
-              professorId?: string;
-              tutorId?: string;
-            }
+          | { teacherId?: string; professorId?: string; tutorId?: string }
           | undefined;
 
         const professorId = internshipData?.teacherId || internshipData?.professorId || "";
         const tutorId = internshipData?.tutorId || "";
-
         let professorName = "";
         let tutorName = "";
 
         if (professorId) {
-          const professorSnap = await getDoc(doc(db, "users", professorId));
-          if (professorSnap.exists()) {
-            const data = professorSnap.data() as { nome?: string };
-            professorName = data.nome || "Professor responsável";
-          }
+          const snap = await getDoc(doc(db, "users", professorId));
+          if (snap.exists()) professorName = (snap.data() as { nome?: string }).nome || "Professor";
         }
-
         if (tutorId) {
-          const tutorSnap = await getDoc(doc(db, "users", tutorId));
-          if (tutorSnap.exists()) {
-            const data = tutorSnap.data() as { nome?: string };
-            tutorName = data.nome || "Tutor";
-          }
+          const snap = await getDoc(doc(db, "users", tutorId));
+          if (snap.exists()) tutorName = (snap.data() as { nome?: string }).nome || "Tutor";
         }
 
         if (!active) return;
-
-        setState({
-          loading: false,
-          professorName,
-          tutorName,
-        });
+        setState({ loading: false, professorName, tutorName });
       });
     })();
 
@@ -84,43 +66,36 @@ export function StudentChatPlaceholder() {
   }, []);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Chat</h1>
-        <p className="text-muted-foreground">Canais diretos de comunicação do estágio.</p>
+    <div className="flex flex-col -mt-10 -mb-10 -mx-4 sm:-mx-6 lg:-mx-8 h-[calc(100svh-4rem)]">
+      <div className="flex flex-1 overflow-hidden">
+        <div className="hidden lg:flex w-72 shrink-0 flex-col border-r border-border bg-card">
+          <div className="shrink-0 border-b border-border px-4 py-3">
+            <p className="text-sm font-semibold">Conversas</p>
+            <p className="text-xs text-muted-foreground">Em breve</p>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            {!state.loading && state.professorName && (
+              <div className="rounded-lg p-3 bg-muted/40">
+                <p className="truncate text-sm font-medium">{state.professorName}</p>
+                <p className="text-xs text-muted-foreground">Professor</p>
+              </div>
+            )}
+            {!state.loading && state.tutorName && (
+              <div className="rounded-lg p-3 bg-muted/40">
+                <p className="truncate text-sm font-medium">{state.tutorName}</p>
+                <p className="text-xs text-muted-foreground">Tutor</p>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
+          <MessageSquare className="h-10 w-10 opacity-30" />
+          <p className="text-sm font-medium">Chat em breve</p>
+          <p className="text-xs max-w-xs text-center">
+            O chat em tempo real será disponibilizado numa próxima versão.
+          </p>
+        </div>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Canais disponíveis</CardTitle>
-          <CardDescription>
-            TODO: implementação futura da estrutura de estágio editável pelo professor e chat em tempo real.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {state.loading ? (
-            <p className="text-sm text-muted-foreground">A carregar canais...</p>
-          ) : (
-            <>
-              <div className="rounded-md border border-border p-3">
-                <p className="text-sm font-medium text-foreground">Canal com Professor Responsável</p>
-                <p className="text-xs text-muted-foreground">
-                  {state.professorName || "Professor responsável ainda não associado ao estágio."}
-                </p>
-                <Badge variant="secondary" className="mt-2">Em breve</Badge>
-              </div>
-
-              <div className="rounded-md border border-border p-3">
-                <p className="text-sm font-medium text-foreground">Canal com Tutor</p>
-                <p className="text-xs text-muted-foreground">
-                  {state.tutorName || "Tutor ainda não associado ao estágio."}
-                </p>
-                <Badge variant="secondary" className="mt-2">Em breve</Badge>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }
