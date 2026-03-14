@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { GraduationCap, Inbox, LayoutDashboard, LogOut, MessageSquare, User } from "lucide-react";
+import { Briefcase, GraduationCap, Inbox, LayoutDashboard, LogOut, MessageSquare, User } from "lucide-react";
 
 type AuthState = {
   loading: boolean;
@@ -43,6 +43,7 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
   const navItems = [
     { href: "/tutor", label: "Dashboard", icon: LayoutDashboard },
     { href: "/tutor/inbox", label: "Caixa de Entrada", icon: Inbox },
+    { href: "/tutor/estagios", label: "Estágios", icon: Briefcase },
     { href: "/tutor/chat", label: "Chat", icon: MessageSquare },
     { href: "/tutor/documentos", label: "Documentos", icon: User },
   ];

@@ -253,6 +253,10 @@ service cloud.firestore {
       allow read: if isSignedIn()
         && (
           resource.data.studentId == request.auth.uid
+          || (isTutor() && (
+            resource.data.tutorId == request.auth.uid
+            || (resource.data.tutorEmail != null && resource.data.tutorEmail == currentUserData().email)
+          ))
           || (resource.data.schoolId != null && isSchoolAdminFor(resource.data.schoolId))
         );
 

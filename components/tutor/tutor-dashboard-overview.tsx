@@ -6,7 +6,21 @@ import { onAuthStateChanged } from "firebase/auth";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Briefcase, FileText, School } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Briefcase, Building2, FileText, School } from "lucide-react";
+
+type SchoolSummary = {
+  schoolId: string;
+  schoolName: string;
+  schoolShortName: string;
+  bannerUrl: string;
+  profileImageUrl: string;
+  bannerFocusX: number;
+  bannerFocusY: number;
+  address: string;
+  contact: string;
+  joinedAt: string;
+};
 
 type OverviewData = {
   loading: boolean;
@@ -15,6 +29,7 @@ type OverviewData = {
   estagios: number;
   documentos: number;
   associatedSchools: number;
+  schools: SchoolSummary[];
 };
 
 export function TutorDashboardOverview() {
@@ -25,6 +40,7 @@ export function TutorDashboardOverview() {
     estagios: 0,
     documentos: 0,
     associatedSchools: 0,
+    schools: [],
   });
 
   useEffect(() => {
@@ -45,19 +61,29 @@ export function TutorDashboardOverview() {
           ? (userSnap.data() as { nome?: string; empresa?: string; email?: string })
           : {};
 
-        const email = userData.email || user.email || "";
+        const resolvedEmail = (userData.email || user.email || "").trim();
 
         let estagios = 0;
         let documentos = 0;
-        let associatedSchools = 0;
+        let schools: SchoolSummary[] = [];
 
         try {
-          const estagiosSnap = await getDocs(query(collection(db, "estagios"), where("tutorEmail", "==", email)));
-          estagios = estagiosSnap.size;
+          const byTutorId = await getDocs(query(collection(db, "estagios"), where("tutorId", "==", user.uid)));
+          const byTutorEmail = resolvedEmail
+            ? await getDocs(query(collection(db, "estagios"), where("tutorEmail", "==", resolvedEmail)))
+            : null;
 
-          for (const estagioDoc of estagiosSnap.docs) {
+          const estagioMap = new Map<string, string>();
+          const estagioDocs = byTutorEmail ? [...byTutorId.docs, ...byTutorEmail.docs] : byTutorId.docs;
+          for (const docSnap of estagioDocs) {
+            estagioMap.set(docSnap.id, docSnap.id);
+          }
+          const estagioIds = Array.from(estagioMap.keys());
+          estagios = estagioIds.length;
+
+          for (const estagioId of estagioIds) {
             try {
-              const docsSnap = await getDocs(query(collection(db, "documentos"), where("estagioId", "==", estagioDoc.id)));
+              const docsSnap = await getDocs(query(collection(db, "documentos"), where("estagioId", "==", estagioId)));
               documentos += docsSnap.size;
             } catch {
               // ignore
@@ -69,9 +95,72 @@ export function TutorDashboardOverview() {
 
         try {
           const schoolsSnap = await getDocs(query(collectionGroup(db, "tutors"), where("tutorId", "==", user.uid)));
-          associatedSchools = schoolsSnap.size;
+          const mapped = await Promise.all(
+            schoolsSnap.docs.map(async (schoolTutorDoc) => {
+              const data = schoolTutorDoc.data() as {
+                schoolId?: string;
+                schoolName?: string;
+                schoolShortName?: string;
+                joinedAt?: { toDate?: () => Date };
+              };
+              const schoolId = data.schoolId || "";
+              let schoolName = data.schoolName || "Escola";
+              let schoolShortName = data.schoolShortName || "";
+              let bannerUrl = "";
+              let profileImageUrl = "";
+              let bannerFocusX = 50;
+              let bannerFocusY = 50;
+              let address = "";
+              let contact = "";
+
+              if (schoolId) {
+                try {
+                  const schoolSnap = await getDoc(doc(db, "schools", schoolId));
+                  if (schoolSnap.exists()) {
+                    const schoolData = schoolSnap.data() as {
+                      name?: string;
+                      shortName?: string;
+                      bannerUrl?: string;
+                      profileImageUrl?: string;
+                      bannerFocusX?: number;
+                      bannerFocusY?: number;
+                      address?: string;
+                      contact?: string;
+                    };
+                    schoolName = schoolData.name || schoolName;
+                    schoolShortName = schoolData.shortName || schoolShortName;
+                    bannerUrl = schoolData.bannerUrl || "";
+                    profileImageUrl = schoolData.profileImageUrl || "";
+                    bannerFocusX = typeof schoolData.bannerFocusX === "number" ? schoolData.bannerFocusX : 50;
+                    bannerFocusY = typeof schoolData.bannerFocusY === "number" ? schoolData.bannerFocusY : 50;
+                    address = schoolData.address || "";
+                    contact = schoolData.contact || "";
+                  }
+                } catch {
+                  // ignore
+                }
+              }
+
+              return {
+                schoolId,
+                schoolName,
+                schoolShortName,
+                bannerUrl,
+                profileImageUrl,
+                bannerFocusX,
+                bannerFocusY,
+                address,
+                contact,
+                joinedAt: data.joinedAt?.toDate?.()?.toLocaleDateString("pt-PT") || "—",
+              } as SchoolSummary;
+            })
+          );
+
+          schools = mapped
+            .filter((item, index, self) => item.schoolId && self.findIndex((x) => x.schoolId === item.schoolId) === index)
+            .sort((a, b) => (a.schoolShortName || a.schoolName).localeCompare(b.schoolShortName || b.schoolName, "pt-PT"));
         } catch {
-          // ignore
+          schools = [];
         }
 
         setState({
@@ -80,7 +169,8 @@ export function TutorDashboardOverview() {
           empresa: userData.empresa || "—",
           estagios,
           documentos,
-          associatedSchools,
+          associatedSchools: schools.length,
+          schools,
         });
       });
     })();
@@ -95,7 +185,7 @@ export function TutorDashboardOverview() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Dashboard do Tutor</h1>
         <p className="text-muted-foreground">
-          A caixa de entrada está sempre disponível para novos convites de escolas e para abrir chat com professores.
+          A caixa de entrada está sempre disponível para novos convites e os estágios podem ser geridos por escola.
         </p>
       </div>
 
@@ -131,7 +221,7 @@ export function TutorDashboardOverview() {
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-bold">{state.estagios}</p>
-                <p className="text-xs text-muted-foreground">Total de estágios em diferentes empresas.</p>
+                <p className="text-xs text-muted-foreground">Estágios em que está encarregado(a).</p>
               </CardContent>
             </Card>
 
@@ -148,6 +238,64 @@ export function TutorDashboardOverview() {
               </CardContent>
             </Card>
           </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Escolas associadas</CardTitle>
+              <CardDescription>
+                Imagem e banner da escola disponíveis na dashboard assim que a associação é aprovada.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {state.schools.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Ainda não está associado ao sistema de nenhuma escola.</p>
+              ) : (
+                <div className="space-y-4">
+                  {state.schools.map((school) => {
+                    const schoolLabel = school.schoolShortName || school.schoolName;
+                    return (
+                      <div key={school.schoolId} className="overflow-hidden rounded-lg border border-border">
+                        {school.bannerUrl ? (
+                          <div className="h-32 w-full bg-muted">
+                            <img
+                              src={school.bannerUrl}
+                              alt={`Banner de ${school.schoolName}`}
+                              className="h-full w-full object-cover"
+                              style={{ objectPosition: `${school.bannerFocusX}% ${school.bannerFocusY}%` }}
+                            />
+                          </div>
+                        ) : null}
+                        <div className="flex flex-wrap items-start justify-between gap-3 p-4">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              {school.profileImageUrl ? (
+                                <Avatar className="h-8 w-8">
+                                  <AvatarImage src={school.profileImageUrl} alt={school.schoolName} />
+                                  <AvatarFallback>{schoolLabel.charAt(0)}</AvatarFallback>
+                                </Avatar>
+                              ) : (
+                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                                  <Building2 className="h-4 w-4" />
+                                </div>
+                              )}
+                              <p className="text-sm font-medium">{schoolLabel}</p>
+                              <Badge variant="default">Associado</Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground">Entrada no sistema: {school.joinedAt}</p>
+                            {(school.address || school.contact) && (
+                              <p className="text-xs text-muted-foreground">
+                                {[school.address, school.contact].filter(Boolean).join(" • ")}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

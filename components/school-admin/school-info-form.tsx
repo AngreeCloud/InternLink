@@ -1,8 +1,9 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, type MouseEvent, useEffect, useState } from "react";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { getDbRuntime } from "@/lib/firebase-runtime";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { getDbRuntime, getStorageRuntime } from "@/lib/firebase-runtime";
 import { useSchoolAdmin } from "@/components/school-admin/school-admin-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,10 @@ type SchoolInfo = {
   contact: string;
   bannerUrl: string;
   profileImageUrl: string;
+  bannerFocusX: number;
+  bannerFocusY: number;
+  profileFocusX: number;
+  profileFocusY: number;
   educationLevel: string;
   emailDomain: string;
   requireInstitutionalEmail: boolean;
@@ -37,6 +42,8 @@ export function SchoolInfoForm() {
   const { schoolId } = useSchoolAdmin();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingProfile, setUploadingProfile] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [form, setForm] = useState<SchoolInfo>({
@@ -46,6 +53,10 @@ export function SchoolInfoForm() {
     contact: "",
     bannerUrl: "",
     profileImageUrl: "",
+    bannerFocusX: 50,
+    bannerFocusY: 50,
+    profileFocusX: 50,
+    profileFocusY: 50,
     educationLevel: "",
     emailDomain: "",
     requireInstitutionalEmail: false,
@@ -74,6 +85,10 @@ export function SchoolInfoForm() {
           contact: data.contact || "",
           bannerUrl: data.bannerUrl || "",
           profileImageUrl: data.profileImageUrl || "",
+          bannerFocusX: typeof data.bannerFocusX === "number" ? data.bannerFocusX : 50,
+          bannerFocusY: typeof data.bannerFocusY === "number" ? data.bannerFocusY : 50,
+          profileFocusX: typeof data.profileFocusX === "number" ? data.profileFocusX : 50,
+          profileFocusY: typeof data.profileFocusY === "number" ? data.profileFocusY : 50,
           educationLevel: data.educationLevel || "",
           emailDomain: data.emailDomain || "",
           requireInstitutionalEmail: Boolean(data.requireInstitutionalEmail),
@@ -98,8 +113,73 @@ export function SchoolInfoForm() {
     };
   }, [schoolId]);
 
-  const updateField = (field: keyof SchoolInfo, value: string | boolean) => {
+  const updateField = (field: keyof SchoolInfo, value: string | boolean | number) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleFocusClick = (
+    event: MouseEvent<HTMLDivElement>,
+    assetType: "profile" | "banner",
+  ) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = Math.round(((event.clientX - rect.left) / rect.width) * 100);
+    const y = Math.round(((event.clientY - rect.top) / rect.height) * 100);
+    if (assetType === "banner") {
+      setForm((prev) => ({ ...prev, bannerFocusX: x, bannerFocusY: y }));
+    } else {
+      setForm((prev) => ({ ...prev, profileFocusX: x, profileFocusY: y }));
+    }
+  };
+
+  const uploadSchoolImage = async (file: File, assetType: "profile" | "banner") => {
+    if (!file.type.startsWith("image/")) {
+      setError("Apenas imagens são permitidas.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("A imagem não pode exceder 5MB.");
+      return;
+    }
+
+    setError("");
+    setSuccess("");
+
+    if (assetType === "profile") {
+      setUploadingProfile(true);
+    } else {
+      setUploadingBanner(true);
+    }
+
+    try {
+      const storage = await getStorageRuntime();
+      const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+      const objectPath = `school-assets/${schoolId}/${assetType}-${Date.now()}-${safeName}`;
+      const objectRef = ref(storage, objectPath);
+
+      await uploadBytes(objectRef, file, {
+        contentType: file.type,
+        cacheControl: "public,max-age=3600",
+      });
+
+      const downloadUrl = await getDownloadURL(objectRef);
+      if (assetType === "profile") {
+        updateField("profileImageUrl", downloadUrl);
+      } else {
+        updateField("bannerUrl", downloadUrl);
+      }
+
+      setSuccess(assetType === "profile" ? "Imagem da escola carregada." : "Banner da escola carregado.");
+    } catch (err) {
+      console.error("Erro ao carregar imagem da escola:", err);
+      setError("Não foi possível carregar a imagem. Tente novamente.");
+    } finally {
+      if (assetType === "profile") {
+        setUploadingProfile(false);
+      } else {
+        setUploadingBanner(false);
+      }
+    }
   };
 
   const handleSubmit = async (event: FormEvent) => {
@@ -194,37 +274,121 @@ export function SchoolInfoForm() {
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>URL da imagem da escola</Label>
+                <Label htmlFor="schoolProfileImage">Imagem da escola</Label>
                 <Input
-                  value={form.profileImageUrl}
-                  onChange={(event) => updateField("profileImageUrl", event.target.value)}
-                  placeholder="https://..."
+                  id="schoolProfileImage"
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) {
+                      void uploadSchoolImage(file, "profile");
+                    }
+                    event.target.value = "";
+                  }}
+                  disabled={uploadingProfile || uploadingBanner}
                 />
+                <p className="text-xs text-muted-foreground">PNG, JPG ou WEBP até 5MB.</p>
               </div>
               <div className="space-y-2">
-                <Label>URL do banner da escola</Label>
+                <Label htmlFor="schoolBannerImage">Banner da escola</Label>
                 <Input
-                  value={form.bannerUrl}
-                  onChange={(event) => updateField("bannerUrl", event.target.value)}
-                  placeholder="https://..."
+                  id="schoolBannerImage"
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) {
+                      void uploadSchoolImage(file, "banner");
+                    }
+                    event.target.value = "";
+                  }}
+                  disabled={uploadingProfile || uploadingBanner}
                 />
+                <p className="text-xs text-muted-foreground">Use um formato horizontal para melhor resultado.</p>
               </div>
             </div>
 
+            {(uploadingProfile || uploadingBanner) && (
+              <p className="text-sm text-muted-foreground">
+                {uploadingProfile ? "A carregar imagem da escola..." : "A carregar banner da escola..."}
+              </p>
+            )}
+
             {(form.profileImageUrl || form.bannerUrl) && (
-              <div className="space-y-2 rounded-lg border border-border p-3">
-                <p className="text-xs text-muted-foreground">Pré-visualização</p>
+              <div className="space-y-3 rounded-lg border border-border p-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Pré-visualização — clique para ajustar o ponto de foco
+                </p>
                 {form.bannerUrl ? (
-                  <div className="h-24 w-full overflow-hidden rounded-md bg-muted">
-                    <img src={form.bannerUrl} alt="Banner da escola" className="h-full w-full object-cover" />
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Banner</p>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Clique no banner para ajustar o ponto de foco"
+                      className="relative h-48 w-full cursor-crosshair select-none overflow-hidden rounded-md bg-muted"
+                      onClick={(e) => handleFocusClick(e, "banner")}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") e.currentTarget.click();
+                      }}
+                    >
+                      <img
+                        src={form.bannerUrl}
+                        alt="Banner da escola"
+                        className="pointer-events-none h-full w-full object-cover"
+                        style={{ objectPosition: `${form.bannerFocusX}% ${form.bannerFocusY}%` }}
+                      />
+                      <div
+                        className="pointer-events-none absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-md ring-1 ring-black/20"
+                        style={{ left: `${form.bannerFocusX}%`, top: `${form.bannerFocusY}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Foco: {form.bannerFocusX}%&nbsp;×&nbsp;{form.bannerFocusY}%
+                    </p>
                   </div>
                 ) : null}
                 {form.profileImageUrl ? (
-                  <img
-                    src={form.profileImageUrl}
-                    alt="Imagem da escola"
-                    className="h-12 w-12 rounded-full object-cover ring-1 ring-border"
-                  />
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Imagem de perfil</p>
+                    <div className="flex items-center gap-3">
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Clique na imagem para ajustar o ponto de foco"
+                        className="relative h-20 w-20 cursor-crosshair select-none overflow-hidden rounded-full bg-muted ring-1 ring-border"
+                        onClick={(e) => handleFocusClick(e, "profile")}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") e.currentTarget.click();
+                        }}
+                      >
+                        <img
+                          src={form.profileImageUrl}
+                          alt="Imagem da escola"
+                          className="pointer-events-none h-full w-full object-cover"
+                          style={{ objectPosition: `${form.profileFocusX}% ${form.profileFocusY}%` }}
+                        />
+                        <div
+                          className="pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-md ring-1 ring-black/20"
+                          style={{ left: `${form.profileFocusX}%`, top: `${form.profileFocusY}%` }}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">
+                          Foco: {form.profileFocusX}%&nbsp;×&nbsp;{form.profileFocusY}%
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => updateField("profileImageUrl", "")}
+                        >
+                          Remover
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 ) : null}
               </div>
             )}

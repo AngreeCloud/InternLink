@@ -86,6 +86,10 @@ export function InternshipManager() {
   const [schoolId, setSchoolId] = useState("");
   const [schoolName, setSchoolName] = useState("");
   const [schoolShortName, setSchoolShortName] = useState("");
+  const [schoolBannerUrl, setSchoolBannerUrl] = useState("");
+  const [schoolProfileImageUrl, setSchoolProfileImageUrl] = useState("");
+  const [schoolAddress, setSchoolAddress] = useState("");
+  const [schoolContact, setSchoolContact] = useState("");
   const [professorName, setProfessorName] = useState("Professor");
   const [professorPhotoURL, setProfessorPhotoURL] = useState("");
 
@@ -181,12 +185,27 @@ export function InternshipManager() {
 
       const schoolSnap = await getDoc(doc(db, "schools", userData.schoolId));
       if (schoolSnap.exists()) {
-        const schoolData = schoolSnap.data() as { name?: string; shortName?: string };
+        const schoolData = schoolSnap.data() as {
+          name?: string;
+          shortName?: string;
+          bannerUrl?: string;
+          profileImageUrl?: string;
+          address?: string;
+          contact?: string;
+        };
         setSchoolName(schoolData.name || "");
         setSchoolShortName(schoolData.shortName || "");
+        setSchoolBannerUrl(schoolData.bannerUrl || "");
+        setSchoolProfileImageUrl(schoolData.profileImageUrl || "");
+        setSchoolAddress(schoolData.address || "");
+        setSchoolContact(schoolData.contact || "");
       } else {
         setSchoolName("");
         setSchoolShortName("");
+        setSchoolBannerUrl("");
+        setSchoolProfileImageUrl("");
+        setSchoolAddress("");
+        setSchoolContact("");
       }
 
       try {
@@ -413,6 +432,10 @@ export function InternshipManager() {
         schoolId,
         schoolName,
         schoolShortName,
+        schoolBannerUrl,
+        schoolProfileImageUrl,
+        schoolAddress,
+        schoolContact,
         professorId: user.uid,
         professorName,
         professorPhotoURL,

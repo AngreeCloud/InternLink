@@ -10,12 +10,30 @@ service firebase.storage {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function currentUserData() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isSchoolAdminFor(schoolId) {
+      return isSignedIn()
+        && currentUserData().role == "admin_escolar"
+        && currentUserData().schoolId == schoolId;
+    }
+
     match /profile-photos/{userId}/{allPaths=**} {
       allow read: if isSignedIn();
       allow create, update: if isOwner(userId)
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
       allow delete: if isOwner(userId);
+    }
+
+    match /school-assets/{schoolId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow create, update: if isSchoolAdminFor(schoolId)
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isSchoolAdminFor(schoolId);
     }
 
     match /{allPaths=**} {

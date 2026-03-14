@@ -19,13 +19,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, CheckCircle2, Inbox, Mail, MessageSquare, School } from "lucide-react";
+import { Building2, CheckCircle2, ChevronDown, ChevronUp, Inbox, Mail, MessageSquare, School } from "lucide-react";
 
 type TutorInvite = {
   id: string;
   schoolId: string;
   schoolName: string;
   schoolShortName: string;
+  schoolBannerUrl: string;
+  schoolProfileImageUrl: string;
+  schoolAddress: string;
+  schoolContact: string;
+  bannerFocusX: number;
+  bannerFocusY: number;
   professorId: string;
   professorName: string;
   professorPhotoURL: string;
@@ -44,6 +50,8 @@ type AssociatedSchool = {
   joinedAt: string;
   bannerUrl: string;
   profileImageUrl: string;
+  bannerFocusX: number;
+  bannerFocusY: number;
   address: string;
   contact: string;
 };
@@ -55,6 +63,7 @@ export function TutorInbox() {
   const [invites, setInvites] = useState<TutorInvite[]>([]);
   const [associatedSchools, setAssociatedSchools] = useState<AssociatedSchool[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [expandedSchoolId, setExpandedSchoolId] = useState("");
 
   const pendingInvites = useMemo(
     () => invites.filter((invite) => (invite.estado || "pendente") === "pendente"),
@@ -93,6 +102,10 @@ export function TutorInbox() {
             schoolId?: string;
             schoolName?: string;
             schoolShortName?: string;
+            schoolBannerUrl?: string;
+            schoolProfileImageUrl?: string;
+            schoolAddress?: string;
+            schoolContact?: string;
             professorId?: string;
             professorName?: string;
             professorPhotoURL?: string;
@@ -101,11 +114,59 @@ export function TutorInbox() {
             createdAt?: { toDate: () => Date };
           };
 
+          let schoolBannerUrl = data.schoolBannerUrl || "";
+          let schoolProfileImageUrl = data.schoolProfileImageUrl || "";
+          let schoolAddress = data.schoolAddress || "";
+          let schoolContact = data.schoolContact || "";
+          let bannerFocusX = 50;
+          let bannerFocusY = 50;
+
+          if (data.schoolId && (!schoolBannerUrl || !schoolProfileImageUrl || !schoolAddress || !schoolContact)) {
+            try {
+              const schoolSnap = await getDoc(doc(db, "schools", data.schoolId));
+              if (schoolSnap.exists()) {
+                const schoolData = schoolSnap.data() as {
+                  bannerUrl?: string;
+                  profileImageUrl?: string;
+                  bannerFocusX?: number;
+                  bannerFocusY?: number;
+                  address?: string;
+                  contact?: string;
+                };
+                schoolBannerUrl = schoolBannerUrl || schoolData.bannerUrl || "";
+                schoolProfileImageUrl = schoolProfileImageUrl || schoolData.profileImageUrl || "";
+                schoolAddress = schoolAddress || schoolData.address || "";
+                schoolContact = schoolContact || schoolData.contact || "";
+                bannerFocusX = typeof schoolData.bannerFocusX === "number" ? schoolData.bannerFocusX : 50;
+                bannerFocusY = typeof schoolData.bannerFocusY === "number" ? schoolData.bannerFocusY : 50;
+              }
+            } catch {
+              // ignore
+            }
+          } else if (data.schoolId) {
+            try {
+              const schoolSnap = await getDoc(doc(db, "schools", data.schoolId));
+              if (schoolSnap.exists()) {
+                const schoolData = schoolSnap.data() as { bannerFocusX?: number; bannerFocusY?: number };
+                bannerFocusX = typeof schoolData.bannerFocusX === "number" ? schoolData.bannerFocusX : 50;
+                bannerFocusY = typeof schoolData.bannerFocusY === "number" ? schoolData.bannerFocusY : 50;
+              }
+            } catch {
+              // ignore
+            }
+          }
+
           inviteMap.set(inviteDoc.id, {
             id: inviteDoc.id,
             schoolId: data.schoolId || "",
             schoolName: data.schoolName || "Escola",
             schoolShortName: data.schoolShortName || "",
+            schoolBannerUrl,
+            schoolProfileImageUrl,
+            schoolAddress,
+            schoolContact,
+            bannerFocusX,
+            bannerFocusY,
             professorId: data.professorId || "",
             professorName: data.professorName || "Professor",
             professorPhotoURL: data.professorPhotoURL || "",
@@ -128,53 +189,33 @@ export function TutorInbox() {
         (invite) => invite.estado === "aceite" || invite.estado === "aceito"
       );
 
-      const schoolsList = await Promise.all(
-        acceptedInvites.map(async (invite) => {
-          const schoolId = invite.schoolId || "";
-          let bannerUrl = "";
-          let profileImageUrl = "";
-          let address = "";
-          let contact = "";
+      const schoolsList = acceptedInvites.map((invite) => ({
+        schoolId: invite.schoolId || "",
+        schoolName: invite.schoolName || "Escola",
+        schoolShortName: invite.schoolShortName || "",
+        approvedByProfessorId: invite.professorId || "",
+        approvedByProfessorName: invite.professorName || "Professor",
+        approvedByProfessorPhotoURL: invite.professorPhotoURL || "",
+        joinedAt: invite.createdAt || "—",
+        bannerUrl: invite.schoolBannerUrl || "",
+        profileImageUrl: invite.schoolProfileImageUrl || "",
+        bannerFocusX: invite.bannerFocusX,
+        bannerFocusY: invite.bannerFocusY,
+        address: invite.schoolAddress || "",
+        contact: invite.schoolContact || "",
+      }));
 
-          if (schoolId) {
-            const schoolSnap = await getDoc(doc(db, "schools", schoolId));
-            if (schoolSnap.exists()) {
-              const schoolData = schoolSnap.data() as {
-                bannerUrl?: string;
-                profileImageUrl?: string;
-                address?: string;
-                contact?: string;
-              };
-              bannerUrl = schoolData.bannerUrl || "";
-              profileImageUrl = schoolData.profileImageUrl || "";
-              address = schoolData.address || "";
-              contact = schoolData.contact || "";
-            }
-          }
-
-          return {
-            schoolId,
-            schoolName: invite.schoolName || "Escola",
-            schoolShortName: invite.schoolShortName || "",
-            approvedByProfessorId: invite.professorId || "",
-            approvedByProfessorName: invite.professorName || "Professor",
-            approvedByProfessorPhotoURL: invite.professorPhotoURL || "",
-            joinedAt: invite.createdAt || "—",
-            bannerUrl,
-            profileImageUrl,
-            address,
-            contact,
-          } as AssociatedSchool;
-        })
-      );
-
-      const uniqueSchools = schoolsList.filter(
-        (item, index, self) => item.schoolId && self.findIndex((x) => x.schoolId === item.schoolId) === index
-      );
+      const uniqueSchools = schoolsList
+        .filter((item, index, self) => item.schoolId && self.findIndex((x) => x.schoolId === item.schoolId) === index)
+        .sort((a, b) => (a.schoolShortName || a.schoolName).localeCompare(b.schoolShortName || b.schoolName, "pt-PT"));
 
       setAssociatedSchools(uniqueSchools);
+      if (expandedSchoolId && !uniqueSchools.some((school) => school.schoolId === expandedSchoolId)) {
+        setExpandedSchoolId("");
+      }
     } catch {
       setAssociatedSchools([]);
+      setExpandedSchoolId("");
     }
 
     setLoading(false);
@@ -210,6 +251,10 @@ export function TutorInbox() {
           schoolId: invite.schoolId,
           schoolName: invite.schoolName || "",
           schoolShortName: invite.schoolShortName || "",
+          schoolBannerUrl: invite.schoolBannerUrl || "",
+          schoolProfileImageUrl: invite.schoolProfileImageUrl || "",
+          schoolAddress: invite.schoolAddress || "",
+          schoolContact: invite.schoolContact || "",
           nome: userData.nome || user.displayName || "Tutor",
           email: userData.email || user.email || invite.email,
           photoURL: userData.photoURL || "",
@@ -260,7 +305,7 @@ export function TutorInbox() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Caixa de Entrada</h1>
         <p className="text-muted-foreground">
-          Sempre disponível: aceite convites de escolas e abra chat com os professores que o convidaram.
+          Convites de escolas, associação ao sistema e acesso rápido ao chat e estágios.
         </p>
       </div>
 
@@ -286,30 +331,57 @@ export function TutorInbox() {
             pendingInvites.map((invite) => {
               const schoolLabel = invite.schoolShortName || invite.schoolName;
               return (
-                <div key={invite.id} className="rounded-lg border border-border p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">Pendente</Badge>
-                        <span className="text-sm font-medium">{schoolLabel}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Avatar className="h-5 w-5">
-                          <AvatarImage src={invite.professorPhotoURL || "/placeholder.svg"} alt={invite.professorName} />
-                          <AvatarFallback>{invite.professorName.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <span>Professor: {invite.professorName}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground">Convite enviado em: {invite.createdAt}</p>
+                <div key={invite.id} className="overflow-hidden rounded-lg border border-border">
+                  {invite.schoolBannerUrl ? (
+                    <div className="h-32 w-full bg-muted">
+                      <img
+                        src={invite.schoolBannerUrl}
+                        alt={`Banner de ${invite.schoolName}`}
+                        className="h-full w-full object-cover"
+                        style={{ objectPosition: `${invite.bannerFocusX}% ${invite.bannerFocusY}%` }}
+                      />
                     </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => handleAcceptInvite(invite)}
-                      disabled={actionLoading === invite.id}
-                    >
-                      {actionLoading === invite.id ? "A aceitar..." : "Aceitar e abrir chat"}
-                    </Button>
+                  ) : null}
+                  <div className="p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          {invite.schoolProfileImageUrl ? (
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={invite.schoolProfileImageUrl} alt={invite.schoolName} />
+                              <AvatarFallback>{schoolLabel.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                          ) : (
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                              <Building2 className="h-4 w-4" />
+                            </div>
+                          )}
+                          <Badge variant="secondary">Pendente</Badge>
+                          <span className="text-sm font-medium">{schoolLabel}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage src={invite.professorPhotoURL || "/placeholder.svg"} alt={invite.professorName} />
+                            <AvatarFallback>{invite.professorName.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <span>Professor: {invite.professorName}</span>
+                        </div>
+                        {invite.schoolAddress || invite.schoolContact ? (
+                          <p className="text-xs text-muted-foreground">
+                            {[invite.schoolAddress, invite.schoolContact].filter(Boolean).join(" • ")}
+                          </p>
+                        ) : null}
+                        <p className="text-xs text-muted-foreground">Convite enviado em: {invite.createdAt}</p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => handleAcceptInvite(invite)}
+                        disabled={actionLoading === invite.id}
+                      >
+                        {actionLoading === invite.id ? "A aceitar..." : "Aceitar e abrir chat"}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );
@@ -325,7 +397,7 @@ export function TutorInbox() {
             Escolas Associadas
           </CardTitle>
           <CardDescription>
-            {associatedSchools.length} escola(s) associada(s). Pode estar associado a várias escolas e estágios em paralelo.
+            {associatedSchools.length} escola(s) associada(s). Clique para expandir e ver a mini página da escola.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -336,52 +408,80 @@ export function TutorInbox() {
           ) : (
             associatedSchools.map((school) => {
               const schoolLabel = school.schoolShortName || school.schoolName;
+              const expanded = expandedSchoolId === school.schoolId;
               return (
                 <div key={school.schoolId} className="overflow-hidden rounded-lg border border-border">
-                  {school.bannerUrl ? (
-                    <div className="h-24 w-full bg-muted">
-                      <img src={school.bannerUrl} alt={`Banner de ${school.schoolName}`} className="h-full w-full object-cover" />
-                    </div>
-                  ) : null}
-
-                  <div className="p-4">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          {school.profileImageUrl ? (
-                            <img
-                              src={school.profileImageUrl}
-                              alt={`Imagem de ${school.schoolName}`}
-                              className="h-8 w-8 rounded-full object-cover ring-1 ring-border"
-                            />
-                          ) : (
-                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                              <Building2 className="h-4 w-4" />
-                            </div>
-                          )}
-                          <p className="text-sm font-medium">{schoolLabel}</p>
-                          <Badge variant="default">Associado</Badge>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedSchoolId(expanded ? "" : school.schoolId)}
+                    className="flex w-full items-center justify-between gap-3 p-4 text-left hover:bg-muted/40"
+                  >
+                    <div className="flex items-center gap-2">
+                      {school.profileImageUrl ? (
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={school.profileImageUrl} alt={school.schoolName} />
+                          <AvatarFallback>{schoolLabel.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                      ) : (
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                          <Building2 className="h-4 w-4" />
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          Professor responsável: {school.approvedByProfessorName} • Entrada: {school.joinedAt}
-                        </p>
-                        {school.address || school.contact ? (
-                          <p className="text-xs text-muted-foreground">
+                      )}
+                      <div>
+                        <p className="text-sm font-medium">{schoolLabel}</p>
+                        <p className="text-xs text-muted-foreground">Entrada: {school.joinedAt}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      {expanded ? "Ocultar" : "Ver detalhes"}
+                      {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </div>
+                  </button>
+
+                  {expanded && (
+                    <div className="border-t border-border bg-card">
+                      {school.bannerUrl ? (
+                        <div className="h-40 w-full bg-muted">
+                          <img
+                            src={school.bannerUrl}
+                            alt={`Banner de ${school.schoolName}`}
+                            className="h-full w-full object-cover"
+                            style={{ objectPosition: `${school.bannerFocusX}% ${school.bannerFocusY}%` }}
+                          />
+                        </div>
+                      ) : null}
+                      <div className="space-y-3 p-4">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="default">Associado</Badge>
+                          <span className="text-sm text-muted-foreground">Professor responsável: {school.approvedByProfessorName}</span>
+                        </div>
+                        <p className="text-sm text-foreground">{school.schoolName}</p>
+                        {(school.address || school.contact) && (
+                          <p className="text-sm text-muted-foreground">
                             {[school.address, school.contact].filter(Boolean).join(" • ")}
                           </p>
-                        ) : null}
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => router.push(`/tutor/chat?schoolId=${encodeURIComponent(school.schoolId)}`)}
+                          >
+                            <MessageSquare className="mr-2 h-4 w-4" />
+                            Abrir chat
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => router.push(`/tutor/estagios?schoolId=${encodeURIComponent(school.schoolId)}`)}
+                          >
+                            Ver estágios
+                          </Button>
+                        </div>
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => router.push(`/tutor/chat?schoolId=${encodeURIComponent(school.schoolId)}`)}
-                      >
-                        <MessageSquare className="mr-2 h-4 w-4" />
-                        Abrir chat
-                      </Button>
                     </div>
-                  </div>
+                  )}
                 </div>
               );
             })
@@ -394,7 +494,7 @@ export function TutorInbox() {
           <CardContent className="py-4 text-sm text-emerald-700">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4" />
-              Chat desbloqueado: já pode falar com professores das escolas associadas.
+              Associação ativa: já pode falar com professores e acompanhar estágios por escola.
             </div>
           </CardContent>
         </Card>

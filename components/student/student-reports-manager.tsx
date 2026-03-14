@@ -34,6 +34,9 @@ type ReportState = {
   saving: boolean;
   studentId: string;
   courseId: string;
+  schoolId: string;
+  tutorId: string;
+  tutorEmail: string;
   completedHours: number;
   reportMinHours: number;
   reportWaitDays: number;
@@ -58,6 +61,9 @@ export function StudentReportsManager() {
     saving: false,
     studentId: "",
     courseId: "",
+    schoolId: "",
+    tutorId: "",
+    tutorEmail: "",
     completedHours: 0,
     reportMinHours: DEFAULT_MIN_HOURS,
     reportWaitDays: 0,
@@ -85,6 +91,15 @@ export function StudentReportsManager() {
           completedHours?: number;
           internshipStartDate?: string;
           startDate?: string;
+        }
+      | undefined;
+
+    const estagioSnap = await getDocs(query(collection(db, "estagios"), where("alunoId", "==", studentId)));
+    const estagioData = estagioSnap.docs[0]?.data() as
+      | {
+          schoolId?: string;
+          tutorId?: string;
+          tutorEmail?: string;
         }
       | undefined;
 
@@ -132,6 +147,9 @@ export function StudentReportsManager() {
       loading: false,
       studentId,
       courseId: userData.courseId || "",
+      schoolId: estagioData?.schoolId || "",
+      tutorId: estagioData?.tutorId || "",
+      tutorEmail: estagioData?.tutorEmail || "",
       completedHours: internshipData?.serviceHoursCompleted ?? internshipData?.completedHours ?? 0,
       reportMinHours,
       reportWaitDays,
@@ -211,6 +229,9 @@ export function StudentReportsManager() {
         await addDoc(collection(db, "internshipReports"), {
           studentId: state.studentId,
           courseId: state.courseId || null,
+          schoolId: state.schoolId || null,
+          tutorId: state.tutorId || null,
+          tutorEmail: state.tutorEmail || null,
           title: state.title.trim(),
           summary: state.summary.trim(),
           status: "submetido",
