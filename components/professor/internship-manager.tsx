@@ -21,15 +21,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Briefcase, Mail, Pencil, Plus, Search, Trash2, UserPlus, Users } from "lucide-react";
+import { Briefcase, DoorOpen, Mail, Pencil, Plus, Search, Trash2, UserPlus, Users } from "lucide-react";
 
 type Estagio = {
   id: string;
@@ -112,6 +114,8 @@ export function InternshipManager() {
   const [inviting, setInviting] = useState(false);
   const [updatingTutor, setUpdatingTutor] = useState(false);
   const [removingInviteId, setRemovingInviteId] = useState<string | null>(null);
+  const [removingSchoolTutorId, setRemovingSchoolTutorId] = useState<string | null>(null);
+  const [confirmRemoveTutor, setConfirmRemoveTutor] = useState<SchoolTutor | null>(null);
 
   const filteredStudents = useMemo(() => {
     const term = studentSearch.trim().toLowerCase();
@@ -148,7 +152,8 @@ export function InternshipManager() {
   const selectedStudent = students.find((student) => student.id === alunoId) || null;
   const selectedTutor = schoolTutors.find((tutor) => tutor.id === tutorId) || null;
   const selectedEditTutor = schoolTutors.find((tutor) => tutor.id === editTutorId) || null;
-  const pendingInvitesCount = tutorInvites.filter((invite) => invite.estado === "pendente").length;
+  const pendingInvites = tutorInvites.filter((invite) => invite.estado === "pendente");
+  const pendingInvitesCount = pendingInvites.length;
 
   const loadData = async () => {
     setLoading(true);
@@ -389,10 +394,12 @@ export function InternshipManager() {
       const user = auth.currentUser;
       if (!user) return;
 
-      const defaultTutorName = inviteTutorEmail.trim().split("@")[0] || "Tutor";
+      const normalizedInviteEmail = inviteTutorEmail.trim().toLowerCase();
+      const defaultTutorName = normalizedInviteEmail.split("@")[0] || "Tutor";
 
       await addDoc(collection(db, "tutorInvites"), {
-        email: inviteTutorEmail.trim(),
+        email: normalizedInviteEmail,
+        emailNormalized: normalizedInviteEmail,
         nome: inviteTutorName.trim() || defaultTutorName,
         schoolId,
         schoolName,
@@ -426,6 +433,21 @@ export function InternshipManager() {
       console.error("Erro ao remover convite:", error);
     } finally {
       setRemovingInviteId(null);
+    }
+  };
+
+  const handleRemoveSchoolTutor = async (schoolTutorId: string) => {
+    if (!schoolId) return;
+
+    setRemovingSchoolTutorId(schoolTutorId);
+    try {
+      const db = await getDbRuntime();
+      await deleteDoc(doc(db, "schools", schoolId, "tutors", schoolTutorId));
+      setSchoolTutors((prev) => prev.filter((tutor) => tutor.id !== schoolTutorId));
+    } catch (error) {
+      console.error("Erro ao remover tutor do sistema da escola:", error);
+    } finally {
+      setRemovingSchoolTutorId(null);
     }
   };
 
@@ -663,17 +685,17 @@ export function InternshipManager() {
             Tutores Convidados
           </CardTitle>
           <CardDescription>
-            Os seus convites enviados para {schoolLabel} ({tutorInvites.length}). Pendentes: {pendingInvitesCount}.
+            Convites pendentes enviados para {schoolLabel} ({pendingInvitesCount}).
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {tutorInvites.length === 0 ? (
+          {pendingInvitesCount === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Ainda não há convites enviados. Clique em "Convidar Tutor" para enviar o primeiro.
+              Não existem convites pendentes. Quando o tutor aceita, o convite desaparece desta lista.
             </p>
           ) : (
             <div className="space-y-3">
-              {tutorInvites.map((invite) => (
+              {pendingInvites.map((invite) => (
                 <div key={invite.id} className="flex items-center justify-between rounded-lg border border-border p-3">
                   <div className="flex items-center gap-3">
                     <Avatar className="h-9 w-9">
@@ -685,17 +707,7 @@ export function InternshipManager() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <Badge
-                      variant={
-                        invite.estado === "aceite" || invite.estado === "aceito"
-                          ? "default"
-                          : invite.estado === "recusado"
-                            ? "destructive"
-                            : "secondary"
-                      }
-                    >
-                      {invite.estado}
-                    </Badge>
+                    <Badge variant="secondary">pendente</Badge>
                     <p className="mt-1 text-xs text-muted-foreground">
                       Por: {invite.professorName} • {invite.createdAt}
                     </p>
@@ -747,9 +759,22 @@ export function InternshipManager() {
                       <p className="text-xs text-muted-foreground">{tutor.email} • {tutor.empresa}</p>
                     </div>
                   </div>
-                  <div className="text-right text-xs text-muted-foreground">
-                    <p>Convidado por: {tutor.approvedByProfessorName}</p>
-                    <p>Entrada: {tutor.joinedAt}</p>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right text-xs text-muted-foreground">
+                      <p>Convidado por: {tutor.approvedByProfessorName}</p>
+                      <p>Entrada: {tutor.joinedAt}</p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => setConfirmRemoveTutor(tutor)}
+                    >
+                      <DoorOpen className="mr-2 h-4 w-4" />
+                      Remover
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -757,6 +782,37 @@ export function InternshipManager() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={Boolean(confirmRemoveTutor)} onOpenChange={(open) => !open && setConfirmRemoveTutor(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remover tutor do sistema da escola?</DialogTitle>
+            <DialogDescription>
+              Esta ação remove <strong>{confirmRemoveTutor?.nome || "o tutor"}</strong> do "Sistema de Estágios da Escola".
+              <br />
+              <br />
+              Aviso: isto pode impactar associações futuras. Use apenas se tiver certeza.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cancelar</Button>
+            </DialogClose>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={!confirmRemoveTutor || removingSchoolTutorId === confirmRemoveTutor.id}
+              onClick={async () => {
+                if (!confirmRemoveTutor) return;
+                await handleRemoveSchoolTutor(confirmRemoveTutor.id);
+                setConfirmRemoveTutor(null);
+              }}
+            >
+              {confirmRemoveTutor && removingSchoolTutorId === confirmRemoveTutor.id ? "A remover..." : "Confirmar remoção"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editTutorDialogOpen} onOpenChange={setEditTutorDialogOpen}>
         <DialogContent className="max-w-xl">

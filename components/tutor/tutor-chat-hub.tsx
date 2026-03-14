@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { collectionGroup, doc, getDoc, getDocs, query, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -64,20 +64,54 @@ export function TutorChatHub() {
           return;
         }
 
-        const associationsSnap = await getDocs(
-          query(collectionGroup(db, "tutors"), where("tutorId", "==", user.uid))
-        );
+        const tokenEmailRaw = (user.email || "").trim();
+        const tokenEmail = tokenEmailRaw.toLowerCase();
+        if (!tokenEmail) {
+          setThreads([]);
+          setLoading(false);
+          return;
+        }
 
-        const list: ChatThread[] = await Promise.all(
-          associationsSnap.docs.map(async (associationDoc) => {
-            const data = associationDoc.data() as {
+        let acceptedInvites: Array<{
+          schoolId?: string;
+          schoolName?: string;
+          schoolShortName?: string;
+          professorId?: string;
+          professorName?: string;
+          professorPhotoURL?: string;
+        }> = [];
+
+        try {
+          const [byEmail, byNormalizedEmail] = await Promise.all([
+            getDocs(query(collection(db, "tutorInvites"), where("email", "==", tokenEmailRaw))),
+            getDocs(query(collection(db, "tutorInvites"), where("email", "==", tokenEmail))),
+            getDocs(query(collection(db, "tutorInvites"), where("emailNormalized", "==", tokenEmail))),
+          ]);
+
+          const inviteMap = new Map<string, Record<string, unknown>>();
+          for (const inviteDoc of [...byEmail.docs, ...byNormalizedEmail.docs]) {
+            inviteMap.set(inviteDoc.id, inviteDoc.data() as Record<string, unknown>);
+          }
+
+          acceptedInvites = Array.from(inviteMap.values())
+            .map((data) => data as {
               schoolId?: string;
               schoolName?: string;
               schoolShortName?: string;
-              approvedByProfessorId?: string;
-              approvedByProfessorName?: string;
-              approvedByProfessorPhotoURL?: string;
-            };
+              professorId?: string;
+              professorName?: string;
+              professorPhotoURL?: string;
+              estado?: string;
+            })
+            .filter((data) => data.estado === "aceite" || data.estado === "aceito");
+        } catch {
+          setThreads([]);
+          setLoading(false);
+          return;
+        }
+
+        const list: ChatThread[] = await Promise.all(
+          acceptedInvites.map(async (data) => {
 
             const schoolId = data.schoolId || "";
             let schoolName = data.schoolName || "Escola";
@@ -93,13 +127,13 @@ export function TutorChatHub() {
             }
 
             return {
-              id: `${schoolId}-${data.approvedByProfessorId || "professor"}`,
+              id: `${schoolId}-${data.professorId || "professor"}`,
               schoolId,
               schoolName,
               schoolShortName,
-              professorId: data.approvedByProfessorId || "",
-              professorName: data.approvedByProfessorName || "Professor",
-              professorPhotoURL: data.approvedByProfessorPhotoURL || "",
+              professorId: data.professorId || "",
+              professorName: data.professorName || "Professor",
+              professorPhotoURL: data.professorPhotoURL || "",
             };
           })
         );

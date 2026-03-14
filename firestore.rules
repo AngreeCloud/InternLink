@@ -67,12 +67,36 @@ service cloud.firestore {
 
     function isTutorInviteReceiver() {
       return isSignedIn()
-        && resource.data.email == request.auth.token.email;
+        && (
+          resource.data.email == request.auth.token.email
+          || (
+            resource.data.email is string
+            && request.auth.token.email is string
+            && resource.data.email.lower() == request.auth.token.email.lower()
+          )
+          || (
+            resource.data.emailNormalized is string
+            && request.auth.token.email is string
+            && resource.data.emailNormalized == request.auth.token.email.lower()
+          )
+        );
     }
 
     function isTutorInviteReceiverCreate() {
       return isSignedIn()
-        && request.resource.data.email == request.auth.token.email;
+        && (
+          request.resource.data.email == request.auth.token.email
+          || (
+            request.resource.data.email is string
+            && request.auth.token.email is string
+            && request.resource.data.email.lower() == request.auth.token.email.lower()
+          )
+          || (
+            request.resource.data.emailNormalized is string
+            && request.auth.token.email is string
+            && request.resource.data.emailNormalized == request.auth.token.email.lower()
+          )
+        );
     }
 
     function isProfessorPendingFor(schoolId, userId) {
@@ -306,6 +330,10 @@ service cloud.firestore {
       || (
         isTutorInviteReceiver()
         && request.resource.data.email == resource.data.email
+        && (
+          !resource.data.keys().hasAny(["emailNormalized"])
+          || request.resource.data.emailNormalized == resource.data.emailNormalized
+        )
         && request.resource.data.schoolId == resource.data.schoolId
         && request.resource.data.professorId == resource.data.professorId
       );

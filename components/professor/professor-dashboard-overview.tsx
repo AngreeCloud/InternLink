@@ -63,17 +63,21 @@ export function ProfessorDashboardOverview() {
 
           try {
             const internshipsSnap = await getDocs(
-              query(collection(db, "estagios"), where("schoolId", "==", userData.schoolId))
+              query(collection(db, "estagios"), where("professorId", "==", user.uid))
             );
             activeInternships = internshipsSnap.size;
-          } catch { /* ignore */ }
+          } catch {
+            // ignore permission errors
+          }
 
           try {
             const docsSnap = await getDocs(
-              query(collection(db, "documentos"), where("schoolId", "==", userData.schoolId))
+              query(collection(db, "documentos"), where("professorId", "==", user.uid))
             );
             totalDocuments = docsSnap.size;
-          } catch { /* ignore */ }
+          } catch {
+            // ignore permission errors
+          }
         }
 
         if (!active) return;

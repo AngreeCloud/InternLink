@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   collection,
-  collectionGroup,
   doc,
   getDoc,
   getDocs,
@@ -72,16 +71,24 @@ export function TutorInbox() {
 
     const userSnap = await getDoc(doc(db, "users", user.uid));
     const userData = userSnap.exists() ? (userSnap.data() as { email?: string }) : {};
-    const resolvedEmail = userData.email || user.email || "";
-    setEmail(resolvedEmail);
+    const tokenEmailRaw = (user.email || "").trim();
+    const tokenEmail = tokenEmailRaw.toLowerCase();
+    const profileEmail = (userData.email || "").trim().toLowerCase();
+    const resolvedEmail = tokenEmail || profileEmail;
+    setEmail(resolvedEmail || user.email || userData.email || "");
 
+    let inviteList: TutorInvite[] = [];
     try {
-      const invitesSnap = await getDocs(
-        query(collection(db, "tutorInvites"), where("email", "==", resolvedEmail))
-      );
+      const snapshots = await Promise.all([
+        getDocs(query(collection(db, "tutorInvites"), where("email", "==", tokenEmailRaw))),
+        getDocs(query(collection(db, "tutorInvites"), where("email", "==", resolvedEmail))),
+        getDocs(query(collection(db, "tutorInvites"), where("emailNormalized", "==", resolvedEmail))),
+      ]);
 
-      const inviteList: TutorInvite[] = invitesSnap.docs
-        .map((inviteDoc) => {
+      const inviteMap = new Map<string, TutorInvite>();
+
+      for (const invitesSnap of snapshots) {
+        for (const inviteDoc of invitesSnap.docs) {
           const data = inviteDoc.data() as {
             schoolId?: string;
             schoolName?: string;
@@ -94,7 +101,7 @@ export function TutorInbox() {
             createdAt?: { toDate: () => Date };
           };
 
-          return {
+          inviteMap.set(inviteDoc.id, {
             id: inviteDoc.id,
             schoolId: data.schoolId || "",
             schoolName: data.schoolName || "Escola",
@@ -105,33 +112,25 @@ export function TutorInbox() {
             email: data.email || resolvedEmail,
             estado: data.estado || "pendente",
             createdAt: data.createdAt?.toDate?.()?.toLocaleDateString("pt-PT") || "—",
-          };
-        })
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+          });
+        }
+      }
 
+      inviteList = Array.from(inviteMap.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       setInvites(inviteList);
     } catch {
       setInvites([]);
+      inviteList = [];
     }
 
     try {
-      const schoolsSnap = await getDocs(
-        query(collectionGroup(db, "tutors"), where("tutorId", "==", user.uid))
+      const acceptedInvites = inviteList.filter(
+        (invite) => invite.estado === "aceite" || invite.estado === "aceito"
       );
 
       const schoolsList = await Promise.all(
-        schoolsSnap.docs.map(async (schoolTutorDoc) => {
-          const data = schoolTutorDoc.data() as {
-            schoolId?: string;
-            schoolName?: string;
-            schoolShortName?: string;
-            approvedByProfessorId?: string;
-            approvedByProfessorName?: string;
-            approvedByProfessorPhotoURL?: string;
-            joinedAt?: { toDate: () => Date };
-          };
-
-          const schoolId = data.schoolId || "";
+        acceptedInvites.map(async (invite) => {
+          const schoolId = invite.schoolId || "";
           let bannerUrl = "";
           let profileImageUrl = "";
           let address = "";
@@ -155,12 +154,12 @@ export function TutorInbox() {
 
           return {
             schoolId,
-            schoolName: data.schoolName || "Escola",
-            schoolShortName: data.schoolShortName || "",
-            approvedByProfessorId: data.approvedByProfessorId || "",
-            approvedByProfessorName: data.approvedByProfessorName || "Professor",
-            approvedByProfessorPhotoURL: data.approvedByProfessorPhotoURL || "",
-            joinedAt: data.joinedAt?.toDate?.()?.toLocaleDateString("pt-PT") || "—",
+            schoolName: invite.schoolName || "Escola",
+            schoolShortName: invite.schoolShortName || "",
+            approvedByProfessorId: invite.professorId || "",
+            approvedByProfessorName: invite.professorName || "Professor",
+            approvedByProfessorPhotoURL: invite.professorPhotoURL || "",
+            joinedAt: invite.createdAt || "—",
             bannerUrl,
             profileImageUrl,
             address,
