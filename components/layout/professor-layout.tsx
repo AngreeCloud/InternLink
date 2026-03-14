@@ -27,6 +27,7 @@ import {
   FileText,
   LogOut,
   Menu,
+  MessageSquare,
   User,
 } from "lucide-react";
 
@@ -36,6 +37,7 @@ const navigation = [
   { name: "Aprovações de Alunos", href: "/professor/aprovacoes", icon: UserCheck },
   { name: "Estágios", href: "/professor/estagios", icon: Briefcase },
   { name: "Documentos", href: "/professor/documentos", icon: FileText },
+  { name: "Chat", href: "/professor/chat", icon: MessageSquare },
 ];
 
 type AuthState = {

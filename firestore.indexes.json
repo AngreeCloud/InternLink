@@ -8,6 +8,14 @@
         { "fieldPath": "role", "order": "ASCENDING" },
         { "fieldPath": "estado", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "estagios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "professorId", "order": "ASCENDING" },
+        { "fieldPath": "schoolId", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

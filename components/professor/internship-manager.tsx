@@ -106,6 +106,9 @@ export function InternshipManager() {
   const [tutorSearch, setTutorSearch] = useState("");
   const [editTutorSearch, setEditTutorSearch] = useState("");
 
+  const [studentListOpen, setStudentListOpen] = useState(false);
+  const [tutorListOpen, setTutorListOpen] = useState(false);
+
   const [editingEstagio, setEditingEstagio] = useState<Estagio | null>(null);
   const [editTutorId, setEditTutorId] = useState("");
   const [editTutorEmailManual, setEditTutorEmailManual] = useState("");
@@ -188,7 +191,11 @@ export function InternshipManager() {
 
       try {
         const estagiosSnap = await getDocs(
-          query(collection(db, "estagios"), where("schoolId", "==", userData.schoolId))
+          query(
+            collection(db, "estagios"),
+            where("professorId", "==", user.uid),
+            where("schoolId", "==", userData.schoolId)
+          )
         );
         const list: Estagio[] = estagiosSnap.docs.map((docSnap) => {
           const data = docSnap.data() as {
@@ -343,6 +350,8 @@ export function InternshipManager() {
     setTutorEmailManual("");
     setStudentSearch("");
     setTutorSearch("");
+    setStudentListOpen(false);
+    setTutorListOpen(false);
   };
 
   const handleCreateEstagio = async () => {
@@ -571,33 +580,41 @@ export function InternshipManager() {
                     placeholder="Pesquisar aluno por nome ou email..."
                     value={studentSearch}
                     onChange={(event) => setStudentSearch(event.target.value)}
+                    onFocus={() => setStudentListOpen(true)}
+                    onBlur={() => setTimeout(() => setStudentListOpen(false), 150)}
                   />
-                  <div className="max-h-52 space-y-2 overflow-y-auto rounded-md border border-border p-2">
-                    {filteredStudents.length === 0 ? (
-                      <p className="px-2 py-1 text-sm text-muted-foreground">Nenhum aluno encontrado.</p>
-                    ) : (
-                      filteredStudents.map((student) => (
-                        <button
-                          key={student.id}
-                          type="button"
-                          onClick={() => setAlunoId(student.id)}
-                          className={[
-                            "flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors",
-                            alunoId === student.id ? "bg-primary/10" : "hover:bg-muted",
-                          ].join(" ")}
-                        >
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage src={student.photoURL || "/placeholder.svg"} alt={student.nome} />
-                            <AvatarFallback>{student.nome.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">{student.nome}</p>
-                            <p className="truncate text-xs text-muted-foreground">{student.email}</p>
-                          </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
+                  {(studentListOpen || studentSearch.trim()) && (
+                    <div className="max-h-52 space-y-1 overflow-y-auto rounded-md border border-border p-2">
+                      {filteredStudents.length === 0 ? (
+                        <p className="px-2 py-1 text-sm text-muted-foreground">Nenhum aluno encontrado.</p>
+                      ) : (
+                        filteredStudents.map((student) => (
+                          <button
+                            key={student.id}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setAlunoId(student.id);
+                              setStudentListOpen(false);
+                            }}
+                            className={[
+                              "flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors",
+                              alunoId === student.id ? "bg-primary/10" : "hover:bg-muted",
+                            ].join(" ")}
+                          >
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={student.photoURL || "/placeholder.svg"} alt={student.nome} />
+                              <AvatarFallback>{student.nome.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">{student.nome}</p>
+                              <p className="truncate text-xs text-muted-foreground">{student.email}</p>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
                   {selectedStudent && (
                     <p className="text-xs text-muted-foreground">
                       Selecionado: <strong>{selectedStudent.nome}</strong> ({selectedStudent.email})
@@ -611,38 +628,44 @@ export function InternshipManager() {
                     placeholder="Pesquisar tutor da escola por nome, email ou empresa..."
                     value={tutorSearch}
                     onChange={(event) => setTutorSearch(event.target.value)}
+                    onFocus={() => setTutorListOpen(true)}
+                    onBlur={() => setTimeout(() => setTutorListOpen(false), 150)}
                   />
-                  <div className="max-h-44 space-y-2 overflow-y-auto rounded-md border border-border p-2">
-                    {filteredTutors.length === 0 ? (
-                      <p className="px-2 py-1 text-sm text-muted-foreground">Nenhum tutor associado ao sistema da escola.</p>
-                    ) : (
-                      filteredTutors.map((tutor) => (
-                        <button
-                          key={tutor.id}
-                          type="button"
-                          onClick={() => {
-                            setTutorId(tutor.id);
-                            setTutorEmailManual(tutor.email);
-                          }}
-                          className={[
-                            "flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors",
-                            tutorId === tutor.id ? "bg-primary/10" : "hover:bg-muted",
-                          ].join(" ")}
-                        >
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage src={tutor.photoURL || "/placeholder.svg"} alt={tutor.nome} />
-                            <AvatarFallback>{tutor.nome.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">{tutor.nome}</p>
-                            <p className="truncate text-xs text-muted-foreground">
-                              {tutor.email} • {tutor.empresa}
-                            </p>
-                          </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
+                  {(tutorListOpen || tutorSearch.trim()) && (
+                    <div className="max-h-44 space-y-1 overflow-y-auto rounded-md border border-border p-2">
+                      {filteredTutors.length === 0 ? (
+                        <p className="px-2 py-1 text-sm text-muted-foreground">Nenhum tutor associado ao sistema da escola.</p>
+                      ) : (
+                        filteredTutors.map((tutor) => (
+                          <button
+                            key={tutor.id}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setTutorId(tutor.id);
+                              setTutorEmailManual(tutor.email);
+                              setTutorListOpen(false);
+                            }}
+                            className={[
+                              "flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors",
+                              tutorId === tutor.id ? "bg-primary/10" : "hover:bg-muted",
+                            ].join(" ")}
+                          >
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={tutor.photoURL || "/placeholder.svg"} alt={tutor.nome} />
+                              <AvatarFallback>{tutor.nome.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">{tutor.nome}</p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {tutor.email} • {tutor.empresa}
+                              </p>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <Label htmlFor="estagioTutorEmail">Ou email direto do tutor (opcional)</Label>
