@@ -40,7 +40,7 @@ export function LoginForm() {
       router.push("/dashboard")
     } else if (role === "professor" && estado === "ativo") {
       router.push("/professor")
-    } else if (role === "tutor" && estado === "ativo") {
+    } else if (role === "tutor") {
       router.push("/tutor")
     } else {
       router.push("/account-status")
@@ -77,7 +77,7 @@ export function LoginForm() {
       
       if (!userData) {
         const finalizedUser = await finalizePendingRegistration(db, user.uid, {
-          markEmailVerified: user.emailVerified || verificationBypassEnabled,
+          markEmailVerified: user.emailVerified,
         })
 
         if (!finalizedUser) {
@@ -166,7 +166,7 @@ export function LoginForm() {
       
       if (!userData) {
         const finalizedUser = await finalizePendingRegistration(db, user.uid, {
-          markEmailVerified: user.emailVerified || verificationBypassEnabled,
+          markEmailVerified: user.emailVerified,
         })
 
         if (!finalizedUser) {

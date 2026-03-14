@@ -22,6 +22,8 @@ type SchoolInfo = {
   shortName: string;
   address: string;
   contact: string;
+  bannerUrl: string;
+  profileImageUrl: string;
   educationLevel: string;
   emailDomain: string;
   requireInstitutionalEmail: boolean;
@@ -42,6 +44,8 @@ export function SchoolInfoForm() {
     shortName: "",
     address: "",
     contact: "",
+    bannerUrl: "",
+    profileImageUrl: "",
     educationLevel: "",
     emailDomain: "",
     requireInstitutionalEmail: false,
@@ -68,6 +72,8 @@ export function SchoolInfoForm() {
           shortName: data.shortName || "",
           address: data.address || "",
           contact: data.contact || "",
+          bannerUrl: data.bannerUrl || "",
+          profileImageUrl: data.profileImageUrl || "",
           educationLevel: data.educationLevel || "",
           emailDomain: data.emailDomain || "",
           requireInstitutionalEmail: Boolean(data.requireInstitutionalEmail),
@@ -185,6 +191,43 @@ export function SchoolInfoForm() {
                 />
               </div>
             </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>URL da imagem da escola</Label>
+                <Input
+                  value={form.profileImageUrl}
+                  onChange={(event) => updateField("profileImageUrl", event.target.value)}
+                  placeholder="https://..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>URL do banner da escola</Label>
+                <Input
+                  value={form.bannerUrl}
+                  onChange={(event) => updateField("bannerUrl", event.target.value)}
+                  placeholder="https://..."
+                />
+              </div>
+            </div>
+
+            {(form.profileImageUrl || form.bannerUrl) && (
+              <div className="space-y-2 rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Pré-visualização</p>
+                {form.bannerUrl ? (
+                  <div className="h-24 w-full overflow-hidden rounded-md bg-muted">
+                    <img src={form.bannerUrl} alt="Banner da escola" className="h-full w-full object-cover" />
+                  </div>
+                ) : null}
+                {form.profileImageUrl ? (
+                  <img
+                    src={form.profileImageUrl}
+                    alt="Imagem da escola"
+                    className="h-12 w-12 rounded-full object-cover ring-1 ring-border"
+                  />
+                ) : null}
+              </div>
+            )}
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">

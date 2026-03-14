@@ -65,6 +65,16 @@ service cloud.firestore {
         && currentUserData().role == "tutor";
     }
 
+    function isTutorInviteReceiver() {
+      return isSignedIn()
+        && resource.data.email == request.auth.token.email;
+    }
+
+    function isTutorInviteReceiverCreate() {
+      return isSignedIn()
+        && request.resource.data.email == request.auth.token.email;
+    }
+
     function isProfessorPendingFor(schoolId, userId) {
       return isSelf(userId)
         && currentUserExists()
@@ -93,14 +103,30 @@ service cloud.firestore {
         || (isSchoolAdmin() && resource.data.schoolId == currentUserData().schoolId)
         || (isProfessor() && resource.data.schoolId == currentUserData().schoolId);
 
-      // O documento final do utilizador tem de vir do pendingRegistrations do próprio.
-      allow create: if isSelf(userId)
+      // Criação final de utilizadores vindos de pendingRegistrations (aluno/professor).
+      allow create: if (
+        isSelf(userId)
         && pendingRegistrationExists(userId)
-        && request.auth.token.email_verified == true
         && request.resource.data.role == pendingRegistrationData(userId).role
         && request.resource.data.estado == pendingRegistrationData(userId).estado
         && request.resource.data.email == pendingRegistrationData(userId).email
-        && request.resource.data.emailVerified == true;
+        && request.resource.data.emailVerified == request.auth.token.email_verified
+        && (
+          request.auth.token.email_verified == true
+          || (
+            pendingRegistrationData(userId).role == "tutor"
+            && pendingRegistrationData(userId).estado == "inativo"
+          )
+        )
+      )
+      // Registo direto de tutor sem aprovação de escola.
+      || (
+        isSelf(userId)
+        && request.resource.data.role == "tutor"
+        && request.resource.data.estado == "ativo"
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.emailVerified == request.auth.token.email_verified
+      );
 
       // Permite ao próprio editar apenas campos de perfil, sem escalar permissões/estado.
       allow update: if isSelf(userId) && isSelfUserDocImmutable();
@@ -150,6 +176,23 @@ service cloud.firestore {
 
       match /approvalHistory/{docId} {
         allow read, create: if isSchoolAdminFor(schoolId);
+      }
+
+      match /tutors/{tutorId} {
+        allow read: if isSelf(tutorId)
+          || isSchoolAdminFor(schoolId)
+          || isProfessorFor(schoolId);
+
+        allow create: if isSelf(tutorId)
+          && request.resource.data.tutorId == tutorId
+          && request.resource.data.schoolId == schoolId
+          && request.resource.data.role == "tutor";
+
+        allow update: if isSelf(tutorId)
+          || isSchoolAdminFor(schoolId)
+          || isProfessorFor(schoolId);
+
+        allow delete: if isSchoolAdminFor(schoolId);
       }
     }
 
@@ -205,6 +248,7 @@ service cloud.firestore {
         && (
           resource.data.alunoId == request.auth.uid
           || resource.data.professorId == request.auth.uid
+          || (isTutor() && resource.data.tutorEmail == currentUserData().email)
           || (resource.data.schoolId != null && isSchoolAdminFor(resource.data.schoolId))
         );
 
@@ -246,13 +290,27 @@ service cloud.firestore {
         && (
           resource.data.professorId == request.auth.uid
           || (resource.data.schoolId != null && isSchoolAdminFor(resource.data.schoolId))
+          || isTutorInviteReceiver()
         );
 
       allow create: if isSignedIn()
         && currentUserExists()
         && currentUserData().role == "professor";
 
-      allow update, delete: if isSignedIn()
+      allow update: if (
+        isSignedIn()
+        && currentUserExists()
+        && currentUserData().role == "professor"
+        && resource.data.professorId == request.auth.uid
+      )
+      || (
+        isTutorInviteReceiver()
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.schoolId == resource.data.schoolId
+        && request.resource.data.professorId == resource.data.professorId
+      );
+
+      allow delete: if isSignedIn()
         && currentUserExists()
         && currentUserData().role == "professor"
         && resource.data.professorId == request.auth.uid;

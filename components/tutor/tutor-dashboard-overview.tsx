@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, collectionGroup, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Briefcase, FileText } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Briefcase, FileText, School } from "lucide-react";
 
 type OverviewData = {
   loading: boolean;
@@ -13,6 +14,7 @@ type OverviewData = {
   empresa: string;
   estagios: number;
   documentos: number;
+  associatedSchools: number;
 };
 
 export function TutorDashboardOverview() {
@@ -22,62 +24,68 @@ export function TutorDashboardOverview() {
     empresa: "",
     estagios: 0,
     documentos: 0,
+    associatedSchools: 0,
   });
 
   useEffect(() => {
     let unsubscribe = () => {};
-    let active = true;
 
     (async () => {
       const auth = await getAuthRuntime();
       const db = await getDbRuntime();
 
       unsubscribe = onAuthStateChanged(auth, async (user) => {
-        if (!user || !active) {
-          if (active) setState((prev) => ({ ...prev, loading: false }));
+        if (!user) {
+          setState((prev) => ({ ...prev, loading: false }));
           return;
         }
 
-        const { doc, getDoc } = await import("firebase/firestore");
         const userSnap = await getDoc(doc(db, "users", user.uid));
         const userData = userSnap.exists()
           ? (userSnap.data() as { nome?: string; empresa?: string; email?: string })
           : {};
 
-        let estagiosCount = 0;
-        let documentosCount = 0;
+        const email = userData.email || user.email || "";
+
+        let estagios = 0;
+        let documentos = 0;
+        let associatedSchools = 0;
 
         try {
-          const estagiosSnap = await getDocs(
-            query(collection(db, "estagios"), where("tutorEmail", "==", userData.email || user.email))
-          );
-          estagiosCount = estagiosSnap.size;
+          const estagiosSnap = await getDocs(query(collection(db, "estagios"), where("tutorEmail", "==", email)));
+          estagios = estagiosSnap.size;
 
-          // Count documents visible to tutor
           for (const estagioDoc of estagiosSnap.docs) {
             try {
-              const docsSnap = await getDocs(
-                query(collection(db, "documentos"), where("estagioId", "==", estagioDoc.id))
-              );
-              documentosCount += docsSnap.size;
-            } catch { /* ignore */ }
+              const docsSnap = await getDocs(query(collection(db, "documentos"), where("estagioId", "==", estagioDoc.id)));
+              documentos += docsSnap.size;
+            } catch {
+              // ignore
+            }
           }
-        } catch { /* ignore permission errors */ }
+        } catch {
+          // ignore
+        }
 
-        if (!active) return;
+        try {
+          const schoolsSnap = await getDocs(query(collectionGroup(db, "tutors"), where("tutorId", "==", user.uid)));
+          associatedSchools = schoolsSnap.size;
+        } catch {
+          // ignore
+        }
 
         setState({
           loading: false,
           tutorName: userData.nome || user.displayName || "Tutor",
           empresa: userData.empresa || "—",
-          estagios: estagiosCount,
-          documentos: documentosCount,
+          estagios,
+          documentos,
+          associatedSchools,
         });
       });
     })();
 
     return () => {
-      active = false;
       unsubscribe();
     };
   }, []);
@@ -87,7 +95,7 @@ export function TutorDashboardOverview() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Dashboard do Tutor</h1>
         <p className="text-muted-foreground">
-          Acompanhe os estágios e documentos associados.
+          A caixa de entrada está sempre disponível para novos convites de escolas e para abrir chat com professores.
         </p>
       </div>
 
@@ -104,7 +112,18 @@ export function TutorDashboardOverview() {
             </CardHeader>
           </Card>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Escolas Associadas</CardTitle>
+                <School className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">{state.associatedSchools}</p>
+                <p className="text-xs text-muted-foreground">Pode estar associado a várias escolas.</p>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Estágios Associados</CardTitle>
@@ -112,7 +131,7 @@ export function TutorDashboardOverview() {
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-bold">{state.estagios}</p>
-                <p className="text-xs text-muted-foreground">Total de estágios</p>
+                <p className="text-xs text-muted-foreground">Total de estágios em diferentes empresas.</p>
               </CardContent>
             </Card>
 
@@ -123,7 +142,9 @@ export function TutorDashboardOverview() {
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-bold">{state.documentos}</p>
-                <p className="text-xs text-muted-foreground">Total de documentos disponíveis</p>
+                <Badge variant={state.associatedSchools > 0 ? "default" : "secondary"}>
+                  {state.associatedSchools > 0 ? "Chat desbloqueado" : "Aguardando associação"}
+                </Badge>
               </CardContent>
             </Card>
           </div>

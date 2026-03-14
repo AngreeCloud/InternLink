@@ -209,8 +209,7 @@ export async function registerTutor(data: z.input<typeof tutorRegisterActionSche
   const user = userCredential.user;
   const userId = user.uid;
 
-  // Store registration data in pendingRegistrations collection
-  const pendingRegistrationData = {
+  const tutorUserData = {
     role: "tutor",
     nome,
     email,
@@ -218,17 +217,18 @@ export async function registerTutor(data: z.input<typeof tutorRegisterActionSche
     dataNascimento: dataNascimento || "",
     localidade: localidade || "",
     telefone: telefone || "",
-    estado: "inativo",
-    emailVerified: false,
+    estado: "ativo",
+    emailVerified: user.emailVerified,
     createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   };
 
   try {
-    // Store pending registration data
-    await setDoc(doc(db, "pendingRegistrations", userId), pendingRegistrationData);
-    
-    // Send email verification
-    await sendEmailVerification(user);
+    await setDoc(doc(db, "users", userId), tutorUserData);
+
+    if (!user.emailVerified) {
+      await sendEmailVerification(user);
+    }
   } catch (error) {
     await rollbackAuthUser(user);
     throw error;

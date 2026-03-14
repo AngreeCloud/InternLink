@@ -165,7 +165,7 @@ export default function TutorRegisterPage() {
           throw new Error("Sessão Google inválida. Inicie novamente o registo com Google.");
         }
 
-        await setDoc(doc(db, "pendingRegistrations", user.uid), {
+        await setDoc(doc(db, "users", user.uid), {
           role: "tutor",
           nome: values.nome,
           email: values.email,
@@ -173,16 +173,17 @@ export default function TutorRegisterPage() {
           dataNascimento: values.dataNascimento || "",
           localidade: values.localidade || "",
           telefone: values.telefone || "",
-          estado: "inativo",
+          estado: "ativo",
           emailVerified: user.emailVerified,
           createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
         });
 
         if (!user.emailVerified) {
           await sendEmailVerification(user);
         }
 
-        router.push(`/verify-email?email=${encodeURIComponent(user.email ?? values.email)}`);
+        router.push("/tutor");
       } else {
         let recaptchaToken = "";
         if (recaptchaSiteKey) {
@@ -199,7 +200,7 @@ export default function TutorRegisterPage() {
           telefone: values.telefone,
           recaptchaToken,
         });
-        router.push(`/verify-email?email=${encodeURIComponent(result.email ?? values.email)}`);
+        router.push("/tutor");
       }
     } catch (error) {
       console.error("Erro ao criar conta de tutor:", error);

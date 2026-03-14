@@ -20,6 +20,7 @@ export default function EmailVerificationPage() {
     verified: false,
     error: "",
     resendCooldown: 0,
+    role: "",
   });
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const cooldownIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -54,6 +55,7 @@ export default function EmailVerificationPage() {
           if (userDocSnap.exists()) {
             // User already has a document, redirect to appropriate page
             const userData = userDocSnap.data() as { role?: string; estado?: string };
+            setState((s) => ({ ...s, role: userData.role || "" }));
             redirectBasedOnRole(userData.role || "", userData.estado || "");
           } else {
             // User verified email but no document exists yet
@@ -61,6 +63,19 @@ export default function EmailVerificationPage() {
             await createUserDocumentFromPending(user.uid, db);
           }
         } else {
+          const userDocSnap = await getDoc(doc(db, "users", user.uid));
+
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data() as { role?: string };
+            setState((s) => ({ ...s, role: userData.role || "" }));
+          } else {
+            const pendingSnap = await getDoc(doc(db, "pendingRegistrations", user.uid));
+            if (pendingSnap.exists()) {
+              const pendingData = pendingSnap.data() as { role?: string };
+              setState((s) => ({ ...s, role: pendingData.role || "" }));
+            }
+          }
+
           // Email not verified, set up periodic check
           setupEmailVerificationCheck(user.uid);
         }
@@ -112,7 +127,9 @@ export default function EmailVerificationPage() {
         await auth.currentUser.getIdToken(true);
       }
 
-      const finalizedUser = await finalizePendingRegistration(db, userId, { markEmailVerified: true });
+      const finalizedUser = await finalizePendingRegistration(db, userId, {
+        markEmailVerified: auth.currentUser?.emailVerified ?? false,
+      });
 
       if (!finalizedUser) {
         setState((s) => ({ ...s, error: "Dados de registo não encontrados" }));
@@ -146,11 +163,7 @@ export default function EmailVerificationPage() {
         router.replace("/account-status");
       }
     } else if (role === "tutor") {
-      if (estado === "ativo") {
-        router.replace("/tutor");
-      } else {
-        router.replace("/account-status");
-      }
+      router.replace("/tutor");
     } else {
       router.replace("/account-status");
     }
@@ -190,6 +203,38 @@ export default function EmailVerificationPage() {
           ? "Muitas tentativas. Aguarde alguns minutos."
           : "Erro ao reenviar email. Tente novamente.";
       setState((s) => ({ ...s, error: message }));
+    }
+  };
+
+  const handleLoginWithoutVerification = async () => {
+    try {
+      const auth = await getAuthRuntime();
+      const db = await getDbRuntime();
+      const user = auth.currentUser;
+
+      if (!user) {
+        setState((s) => ({ ...s, error: "Não autenticado" }));
+        return;
+      }
+
+      const userDocSnap = await getDoc(doc(db, "users", user.uid));
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data() as { role?: string; estado?: string };
+        redirectBasedOnRole(userData.role || "", userData.estado || "");
+        return;
+      }
+
+      const finalizedUser = await finalizePendingRegistration(db, user.uid, { markEmailVerified: false });
+
+      if (!finalizedUser) {
+        setState((s) => ({ ...s, error: "Dados de registo não encontrados" }));
+        return;
+      }
+
+      redirectBasedOnRole(finalizedUser.role, finalizedUser.estado);
+    } catch (error) {
+      console.error("Erro ao entrar sem verificar email:", error);
+      setState((s) => ({ ...s, error: "Não foi possível concluir a entrada sem verificação." }));
     }
   };
 
@@ -269,6 +314,22 @@ export default function EmailVerificationPage() {
                       : "Reenviar Email"}
                   </Button>
                 </div>
+
+                {state.role === "tutor" && (
+                  <div className="pt-1">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="w-full"
+                      onClick={handleLoginWithoutVerification}
+                    >
+                      Entrar sem verificar
+                    </Button>
+                    <p className="mt-2 text-xs text-muted-foreground text-center">
+                      Pode verificar o email mais tarde na página de perfil.
+                    </p>
+                  </div>
+                )}
 
                 <p className="text-xs text-muted-foreground text-center">
                   Esta página verifica automaticamente se o seu email foi verificado.
