@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  collection,
+  collection, collectionGroup,
   doc,
   getDoc,
   getDocs,
@@ -84,6 +84,7 @@ export function TutorInbox() {
     const tokenEmail = tokenEmailRaw.toLowerCase();
     const profileEmail = (userData.email || "").trim().toLowerCase();
     const resolvedEmail = tokenEmail || profileEmail;
+    const normalizedEmail = resolvedEmail.toLowerCase();
     setEmail(resolvedEmail || user.email || userData.email || "");
 
     let inviteList: TutorInvite[] = [];
@@ -91,7 +92,13 @@ export function TutorInbox() {
       const snapshots = await Promise.all([
         getDocs(query(collection(db, "tutorInvites"), where("email", "==", tokenEmailRaw))),
         getDocs(query(collection(db, "tutorInvites"), where("email", "==", resolvedEmail))),
+        ...(normalizedEmail && normalizedEmail !== resolvedEmail
+          ? [getDocs(query(collection(db, "tutorInvites"), where("email", "==", normalizedEmail)))]
+          : []),
         getDocs(query(collection(db, "tutorInvites"), where("emailNormalized", "==", resolvedEmail))),
+        ...(normalizedEmail && normalizedEmail !== resolvedEmail
+          ? [getDocs(query(collection(db, "tutorInvites"), where("emailNormalized", "==", normalizedEmail)))]
+          : []),
       ]);
 
       const inviteMap = new Map<string, TutorInvite>();
@@ -204,6 +211,97 @@ export function TutorInbox() {
         address: invite.schoolAddress || "",
         contact: invite.schoolContact || "",
       }));
+
+      try {
+        const byTutorId = await getDocs(query(collectionGroup(db, "tutors"), where("tutorId", "==", userId)));
+        const byTutorEmail = resolvedEmail
+          ? await getDocs(query(collectionGroup(db, "tutors"), where("email", "==", resolvedEmail)))
+          : null;
+        const byTutorEmailNormalized = normalizedEmail && normalizedEmail !== resolvedEmail
+          ? await getDocs(query(collectionGroup(db, "tutors"), where("email", "==", normalizedEmail)))
+          : null;
+
+        const tutorDocs = [
+          ...byTutorId.docs,
+          ...(byTutorEmail?.docs || []),
+          ...(byTutorEmailNormalized?.docs || []),
+        ];
+        for (const tutorDoc of tutorDocs) {
+          const tutorData = tutorDoc.data() as {
+            schoolId?: string;
+            schoolName?: string;
+            schoolShortName?: string;
+            approvedByProfessorId?: string;
+            approvedByProfessorName?: string;
+            approvedByProfessorPhotoURL?: string;
+            schoolBannerUrl?: string;
+            schoolProfileImageUrl?: string;
+            schoolAddress?: string;
+            schoolContact?: string;
+            joinedAt?: { toDate?: () => Date };
+          };
+
+          const schoolId = tutorData.schoolId || tutorDoc.ref.parent.parent?.id || "";
+          if (!schoolId) continue;
+
+          if (schoolsList.some((school) => school.schoolId === schoolId)) {
+            continue;
+          }
+
+          let schoolName = tutorData.schoolName || "Escola";
+          let schoolShortName = tutorData.schoolShortName || "";
+          let bannerUrl = tutorData.schoolBannerUrl || "";
+          let profileImageUrl = tutorData.schoolProfileImageUrl || "";
+          let address = tutorData.schoolAddress || "";
+          let contact = tutorData.schoolContact || "";
+          let bannerFocusX = 50;
+          let bannerFocusY = 50;
+
+          try {
+            const schoolSnap = await getDoc(doc(db, "schools", schoolId));
+            if (schoolSnap.exists()) {
+              const schoolData = schoolSnap.data() as {
+                name?: string;
+                shortName?: string;
+                bannerUrl?: string;
+                profileImageUrl?: string;
+                bannerFocusX?: number;
+                bannerFocusY?: number;
+                address?: string;
+                contact?: string;
+              };
+              schoolName = schoolData.name || schoolName;
+              schoolShortName = schoolData.shortName || schoolShortName;
+              bannerUrl = bannerUrl || schoolData.bannerUrl || "";
+              profileImageUrl = profileImageUrl || schoolData.profileImageUrl || "";
+              address = address || schoolData.address || "";
+              contact = contact || schoolData.contact || "";
+              bannerFocusX = typeof schoolData.bannerFocusX === "number" ? schoolData.bannerFocusX : 50;
+              bannerFocusY = typeof schoolData.bannerFocusY === "number" ? schoolData.bannerFocusY : 50;
+            }
+          } catch {
+            // ignore
+          }
+
+          schoolsList.push({
+            schoolId,
+            schoolName,
+            schoolShortName,
+            approvedByProfessorId: tutorData.approvedByProfessorId || "",
+            approvedByProfessorName: tutorData.approvedByProfessorName || "Professor",
+            approvedByProfessorPhotoURL: tutorData.approvedByProfessorPhotoURL || "",
+            joinedAt: tutorData.joinedAt?.toDate?.()?.toLocaleDateString("pt-PT") || "—",
+            bannerUrl,
+            profileImageUrl,
+            bannerFocusX,
+            bannerFocusY,
+            address,
+            contact,
+          });
+        }
+      } catch {
+        // ignore
+      }
 
       const uniqueSchools = schoolsList
         .filter((item, index, self) => item.schoolId && self.findIndex((x) => x.schoolId === item.schoolId) === index)

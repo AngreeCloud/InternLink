@@ -62,21 +62,34 @@ export function TutorDashboardOverview() {
           : {};
 
         const resolvedEmail = (userData.email || user.email || "").trim();
+        const normalizedEmail = resolvedEmail.toLowerCase();
 
         let estagios = 0;
         let documentos = 0;
         let schools: SchoolSummary[] = [];
+        const estagioSchoolIds = new Set<string>();
 
         try {
           const byTutorId = await getDocs(query(collection(db, "estagios"), where("tutorId", "==", user.uid)));
           const byTutorEmail = resolvedEmail
             ? await getDocs(query(collection(db, "estagios"), where("tutorEmail", "==", resolvedEmail)))
             : null;
+          const byTutorEmailNormalized = normalizedEmail && normalizedEmail !== resolvedEmail
+            ? await getDocs(query(collection(db, "estagios"), where("tutorEmail", "==", normalizedEmail)))
+            : null;
 
           const estagioMap = new Map<string, string>();
-          const estagioDocs = byTutorEmail ? [...byTutorId.docs, ...byTutorEmail.docs] : byTutorId.docs;
+          const estagioDocs = [
+            ...byTutorId.docs,
+            ...(byTutorEmail?.docs || []),
+            ...(byTutorEmailNormalized?.docs || []),
+          ];
           for (const docSnap of estagioDocs) {
             estagioMap.set(docSnap.id, docSnap.id);
+            const estagioData = docSnap.data() as { schoolId?: string };
+            if (estagioData.schoolId) {
+              estagioSchoolIds.add(estagioData.schoolId);
+            }
           }
           const estagioIds = Array.from(estagioMap.keys());
           estagios = estagioIds.length;
@@ -94,16 +107,29 @@ export function TutorDashboardOverview() {
         }
 
         try {
-          const schoolsSnap = await getDocs(query(collectionGroup(db, "tutors"), where("tutorId", "==", user.uid)));
+          const byTutorId = await getDocs(query(collectionGroup(db, "tutors"), where("tutorId", "==", user.uid)));
+          const byTutorEmail = resolvedEmail
+            ? await getDocs(query(collectionGroup(db, "tutors"), where("email", "==", resolvedEmail)))
+            : null;
+          const byTutorEmailNormalized = normalizedEmail && normalizedEmail !== resolvedEmail
+            ? await getDocs(query(collectionGroup(db, "tutors"), where("email", "==", normalizedEmail)))
+            : null;
+
+          const schoolsSnapDocs = [
+            ...byTutorId.docs,
+            ...(byTutorEmail?.docs || []),
+            ...(byTutorEmailNormalized?.docs || []),
+          ];
+
           const mapped = await Promise.all(
-            schoolsSnap.docs.map(async (schoolTutorDoc) => {
+            schoolsSnapDocs.map(async (schoolTutorDoc) => {
               const data = schoolTutorDoc.data() as {
                 schoolId?: string;
                 schoolName?: string;
                 schoolShortName?: string;
                 joinedAt?: { toDate?: () => Date };
               };
-              const schoolId = data.schoolId || "";
+              const schoolId = data.schoolId || schoolTutorDoc.ref.parent.parent?.id || "";
               let schoolName = data.schoolName || "Escola";
               let schoolShortName = data.schoolShortName || "";
               let bannerUrl = "";
@@ -161,6 +187,64 @@ export function TutorDashboardOverview() {
             .sort((a, b) => (a.schoolShortName || a.schoolName).localeCompare(b.schoolShortName || b.schoolName, "pt-PT"));
         } catch {
           schools = [];
+        }
+
+        if (schools.length === 0 && estagioSchoolIds.size > 0) {
+          try {
+            const fallbackSchools = await Promise.all(
+              Array.from(estagioSchoolIds).map(async (schoolId) => {
+                let schoolName = "Escola";
+                let schoolShortName = "";
+                let bannerUrl = "";
+                let profileImageUrl = "";
+                let bannerFocusX = 50;
+                let bannerFocusY = 50;
+                let address = "";
+                let contact = "";
+
+                const schoolSnap = await getDoc(doc(db, "schools", schoolId));
+                if (schoolSnap.exists()) {
+                  const schoolData = schoolSnap.data() as {
+                    name?: string;
+                    shortName?: string;
+                    bannerUrl?: string;
+                    profileImageUrl?: string;
+                    bannerFocusX?: number;
+                    bannerFocusY?: number;
+                    address?: string;
+                    contact?: string;
+                  };
+                  schoolName = schoolData.name || schoolName;
+                  schoolShortName = schoolData.shortName || schoolShortName;
+                  bannerUrl = schoolData.bannerUrl || "";
+                  profileImageUrl = schoolData.profileImageUrl || "";
+                  bannerFocusX = typeof schoolData.bannerFocusX === "number" ? schoolData.bannerFocusX : 50;
+                  bannerFocusY = typeof schoolData.bannerFocusY === "number" ? schoolData.bannerFocusY : 50;
+                  address = schoolData.address || "";
+                  contact = schoolData.contact || "";
+                }
+
+                return {
+                  schoolId,
+                  schoolName,
+                  schoolShortName,
+                  bannerUrl,
+                  profileImageUrl,
+                  bannerFocusX,
+                  bannerFocusY,
+                  address,
+                  contact,
+                  joinedAt: "—",
+                } as SchoolSummary;
+              })
+            );
+
+            schools = fallbackSchools
+              .filter((item) => item.schoolId)
+              .sort((a, b) => (a.schoolShortName || a.schoolName).localeCompare(b.schoolShortName || b.schoolName, "pt-PT"));
+          } catch {
+            // ignore
+          }
         }
 
         setState({
@@ -243,7 +327,7 @@ export function TutorDashboardOverview() {
             <CardHeader>
               <CardTitle>Escolas associadas</CardTitle>
               <CardDescription>
-                Imagem e banner da escola disponíveis na dashboard assim que a associação é aprovada.
+                Cartões de informação da escola disponíveis assim que a associação é aprovada.
               </CardDescription>
             </CardHeader>
             <CardContent>

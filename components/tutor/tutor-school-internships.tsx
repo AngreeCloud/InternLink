@@ -86,6 +86,7 @@ export function TutorSchoolInternships({ schoolId }: { schoolId: string }) {
         const userSnap = await getDoc(doc(db, "users", user.uid));
         const userData = userSnap.exists() ? (userSnap.data() as { email?: string }) : {};
         const resolvedEmail = (userData.email || user.email || "").trim();
+        const normalizedEmail = resolvedEmail.toLowerCase();
 
         let list: Estagio[] = [];
 
@@ -106,9 +107,22 @@ export function TutorSchoolInternships({ schoolId }: { schoolId: string }) {
                 )
               )
             : null;
+          const byTutorEmailNormalized = normalizedEmail && normalizedEmail !== resolvedEmail
+            ? await getDocs(
+                query(
+                  collection(db, "estagios"),
+                  where("schoolId", "==", schoolId),
+                  where("tutorEmail", "==", normalizedEmail)
+                )
+              )
+            : null;
 
           const map = new Map<string, Estagio>();
-          const estagioDocs = byTutorEmail ? [...byTutorId.docs, ...byTutorEmail.docs] : byTutorId.docs;
+          const estagioDocs = [
+            ...byTutorId.docs,
+            ...(byTutorEmail?.docs || []),
+            ...(byTutorEmailNormalized?.docs || []),
+          ];
           for (const docSnap of estagioDocs) {
             const data = docSnap.data() as {
               titulo?: string;

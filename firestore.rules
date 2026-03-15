@@ -65,6 +65,16 @@ service cloud.firestore {
         && currentUserData().role == "tutor";
     }
 
+    function tutorEmailMatches(emailValue) {
+      return isTutor()
+        && emailValue is string
+        && currentUserData().email is string
+        && (
+          emailValue == currentUserData().email
+          || emailValue.lower() == currentUserData().email.lower()
+        );
+    }
+
     function isTutorInviteReceiver() {
       return isSignedIn()
         && (
@@ -204,6 +214,8 @@ service cloud.firestore {
 
       match /tutors/{tutorId} {
         allow read: if isSelf(tutorId)
+          || (isTutor() && resource.data.tutorId == request.auth.uid)
+          || tutorEmailMatches(resource.data.email)
           || isSchoolAdminFor(schoolId)
           || isProfessorFor(schoolId);
 
@@ -276,7 +288,8 @@ service cloud.firestore {
         && (
           resource.data.alunoId == request.auth.uid
           || resource.data.professorId == request.auth.uid
-          || (isTutor() && resource.data.tutorEmail == currentUserData().email)
+          || (isTutor() && resource.data.tutorId == request.auth.uid)
+          || tutorEmailMatches(resource.data.tutorEmail)
           || (resource.data.schoolId != null && isSchoolAdminFor(resource.data.schoolId))
         );
 

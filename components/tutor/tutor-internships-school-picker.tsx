@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
+import { collection, collectionGroup, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,6 +52,7 @@ export function TutorInternshipsSchoolPicker() {
         const userSnap = await getDoc(doc(db, "users", user.uid));
         const userData = userSnap.exists() ? (userSnap.data() as { email?: string }) : {};
         const resolvedEmail = (userData.email || user.email || "").trim();
+        const normalizedEmail = resolvedEmail.toLowerCase();
 
         let estagiosDocs: Array<{ schoolId?: string }> = [];
         try {
@@ -59,9 +60,16 @@ export function TutorInternshipsSchoolPicker() {
           const byTutorEmail = resolvedEmail
             ? await getDocs(query(collection(db, "estagios"), where("tutorEmail", "==", resolvedEmail)))
             : null;
+          const byTutorEmailNormalized = normalizedEmail && normalizedEmail !== resolvedEmail
+            ? await getDocs(query(collection(db, "estagios"), where("tutorEmail", "==", normalizedEmail)))
+            : null;
 
           const merged = new Map<string, { schoolId?: string }>();
-          const estagioDocs = byTutorEmail ? [...byTutorId.docs, ...byTutorEmail.docs] : byTutorId.docs;
+          const estagioDocs = [
+            ...byTutorId.docs,
+            ...(byTutorEmail?.docs || []),
+            ...(byTutorEmailNormalized?.docs || []),
+          ];
           for (const docSnap of estagioDocs) {
             merged.set(docSnap.id, docSnap.data() as { schoolId?: string });
           }
@@ -75,6 +83,32 @@ export function TutorInternshipsSchoolPicker() {
           const schoolId = estagio.schoolId || "";
           if (!schoolId) continue;
           counts.set(schoolId, (counts.get(schoolId) || 0) + 1);
+        }
+
+        try {
+          const byTutorId = await getDocs(query(collectionGroup(db, "tutors"), where("tutorId", "==", user.uid)));
+          const byTutorEmail = resolvedEmail
+            ? await getDocs(query(collectionGroup(db, "tutors"), where("email", "==", resolvedEmail)))
+            : null;
+          const byTutorEmailNormalized = normalizedEmail && normalizedEmail !== resolvedEmail
+            ? await getDocs(query(collectionGroup(db, "tutors"), where("email", "==", normalizedEmail)))
+            : null;
+
+          const tutorDocs = [
+            ...byTutorId.docs,
+            ...(byTutorEmail?.docs || []),
+            ...(byTutorEmailNormalized?.docs || []),
+          ];
+          for (const tutorDoc of tutorDocs) {
+            const tutorData = tutorDoc.data() as { schoolId?: string };
+            const schoolId = tutorData.schoolId || tutorDoc.ref.parent.parent?.id || "";
+            if (!schoolId) continue;
+            if (!counts.has(schoolId)) {
+              counts.set(schoolId, 0);
+            }
+          }
+        } catch {
+          // ignore
         }
 
         const options = await Promise.all(

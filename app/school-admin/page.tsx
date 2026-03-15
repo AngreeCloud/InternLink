@@ -1,6 +1,7 @@
 import { PendingTeachersSection } from "@/components/school-admin/pending-teachers";
 import { CoursesOverview } from "@/components/school-admin/courses-overview";
 import { TutorSystemOverview } from "@/components/school-admin/tutor-system-overview";
+import { SchoolPreviewCard } from "@/components/school-admin/school-preview-card";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export default function SchoolAdminDashboardPage() {
@@ -10,6 +11,8 @@ export default function SchoolAdminDashboardPage() {
         <h1 className="text-3xl font-bold text-foreground">Dashboard da Escola</h1>
         <p className="text-muted-foreground">Visão geral da sua escola e professores pendentes.</p>
       </div>
+
+      <SchoolPreviewCard />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>

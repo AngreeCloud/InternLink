@@ -392,11 +392,9 @@ export function InternshipManager() {
         alunoId,
         alunoNome: selectedStudent?.nome || "",
         alunoEmail: selectedStudent?.email || "",
-        alunoPhotoURL: selectedStudent?.photoURL || "",
         tutorId: selectedTutorById?.id || "",
         tutorNome: selectedTutorById?.nome || "",
         tutorEmail: resolvedTutorEmail,
-        tutorPhotoURL: selectedTutorById?.photoURL || "",
         empresa: empresa.trim(),
         estado: "ativo",
         createdAt: serverTimestamp(),
@@ -504,7 +502,6 @@ export function InternshipManager() {
         tutorId: selectedTutorById?.id || "",
         tutorNome: selectedTutorById?.nome || "",
         tutorEmail: resolvedTutorEmail,
-        tutorPhotoURL: selectedTutorById?.photoURL || "",
         updatedAt: serverTimestamp(),
       });
 
