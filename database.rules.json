@@ -105,7 +105,7 @@
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
         "$conversationId": {
-          ".write": "auth != null && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true",
+          ".write": "auth != null && (root.child('conversations').child($conversationId).child('participants').hasChild(auth.uid) || newData.parent().parent().parent().child('conversations').child($conversationId).child('participants').hasChild(auth.uid))",
           "lastMessageText": {
             ".validate": "newData.val() === null || (newData.isString() && newData.val().length <= 2000)"
           },
@@ -126,7 +126,7 @@
       "$orgId": {
         ".read": "auth != null && root.child('orgMembers').child($orgId).child(auth.uid).exists()",
         "$uid": {
-          ".write": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && (auth.uid === $uid || (root.child('orgMembers').child($orgId).child(auth.uid).exists() && (root.child('orgMembers').child($orgId).child(auth.uid).child('role').val() === 'admin' || root.child('orgMembers').child($orgId).child(auth.uid).child('role').val() === 'teacher')))",
           "name": {
             ".validate": "newData.isString()"
           },
@@ -154,6 +154,7 @@
       "$userId": {
         ".read": "auth != null && auth.uid === $userId",
         "$blockedUserId": {
+          ".read": "auth != null && (auth.uid === $userId || auth.uid === $blockedUserId)",
           ".write": "auth != null && auth.uid === $userId",
           ".validate": "newData.val() === true || newData.val() === null"
         }

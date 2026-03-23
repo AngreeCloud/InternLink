@@ -55,6 +55,11 @@ type OrgMemberIndexEntry = {
   role: ChatRole;
 };
 
+type UserSchoolFields = {
+  schoolId?: string;
+  escolaId?: string;
+};
+
 let dbInstance: Database | null = null;
 
 function sanitizeText(text: string): string {
@@ -63,6 +68,10 @@ function sanitizeText(text: string): string {
 
 function nowTs(): number {
   return Date.now();
+}
+
+function getOrgIdFromUserData(data: UserSchoolFields): string | null {
+  return data.schoolId || data.escolaId || null;
 }
 
 function toChatRole(role: string | undefined): ChatRole {
@@ -121,19 +130,21 @@ export async function getCurrentChatProfile(): Promise<ChatUserProfile | null> {
 
   const data = snap.data() as {
     nome?: string;
+    name?: string;
     email?: string;
     photoURL?: string;
     role?: string;
     schoolId?: string;
+    escolaId?: string;
   };
 
   return {
     uid: user.uid,
-    name: data.nome || user.displayName || "Utilizador",
+    name: data.nome || data.name || user.displayName || "Utilizador",
     email: data.email || user.email || "",
     photoURL: data.photoURL || user.photoURL || "",
     role: toChatRole(data.role),
-    orgId: data.schoolId || null,
+    orgId: getOrgIdFromUserData(data),
   };
 }
 
@@ -147,16 +158,100 @@ export async function ensureOrgMemberIndex(profile: ChatUserProfile): Promise<vo
   });
 }
 
+export async function ensureOrgMemberIndexByUserId(userId: string): Promise<void> {
+  const fsDb = await getDbRuntime();
+  const snap = await getDoc(doc(fsDb, "users", userId));
+  if (!snap.exists()) return;
+
+  const data = snap.data() as {
+    nome?: string;
+    name?: string;
+    email?: string;
+    photoURL?: string;
+    role?: string;
+    schoolId?: string;
+    escolaId?: string;
+  };
+
+  const orgId = getOrgIdFromUserData(data);
+  if (!orgId) return;
+
+  await ensureOrgMemberIndex({
+    uid: userId,
+    name: data.nome || data.name || "Utilizador",
+    email: data.email || "",
+    photoURL: data.photoURL || "",
+    role: toChatRole(data.role),
+    orgId,
+  });
+}
+
 export async function searchInternalMembers(
   orgId: string,
   queryText: string,
   currentUserId: string
 ): Promise<Array<ChatUserProfile>> {
+  const term = queryText.trim().toLowerCase();
+
+  try {
+    const fsDb = await getDbRuntime();
+    const [usersBySchoolId, usersByEscolaId] = await Promise.all([
+      getDocs(fsQuery(collection(fsDb, "users"), where("schoolId", "==", orgId))),
+      getDocs(fsQuery(collection(fsDb, "users"), where("escolaId", "==", orgId))),
+    ]);
+
+    const mergedDocs = new Map<string, (typeof usersBySchoolId.docs)[number]>();
+    for (const docSnap of usersBySchoolId.docs) mergedDocs.set(docSnap.id, docSnap);
+    for (const docSnap of usersByEscolaId.docs) mergedDocs.set(docSnap.id, docSnap);
+
+    const fromUsers = Array.from(mergedDocs.values())
+      .map((docSnap) => {
+        const data = docSnap.data() as {
+          nome?: string;
+          name?: string;
+          email?: string;
+          photoURL?: string;
+          role?: string;
+          estado?: string;
+          schoolId?: string;
+          escolaId?: string;
+        };
+
+        if (docSnap.id === currentUserId) return null;
+
+        const rawEstado = (data.estado || "").toLowerCase();
+        if (rawEstado && rawEstado !== "ativo") return null;
+
+        const profileOrgId = getOrgIdFromUserData(data);
+        if (profileOrgId !== orgId) return null;
+
+        const profile: ChatUserProfile = {
+          uid: docSnap.id,
+          name: data.nome || data.name || "Utilizador",
+          email: data.email || "",
+          photoURL: data.photoURL || "",
+          role: toChatRole(data.role),
+          orgId: profileOrgId,
+        };
+
+        if (!term) return profile;
+        const haystack = `${profile.name} ${profile.email}`.toLowerCase();
+        return haystack.includes(term) ? profile : null;
+      })
+      .filter((item): item is ChatUserProfile => Boolean(item))
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-PT"));
+
+    if (fromUsers.length > 0 || !term) {
+      return fromUsers;
+    }
+  } catch {
+    // Fall through to RTDB index fallback.
+  }
+
   const rtdb = await getRealtimeDb();
   const membersSnap = await get(ref(rtdb, `orgMembers/${orgId}`));
   if (!membersSnap.exists()) return [];
 
-  const term = queryText.trim().toLowerCase();
   const members = membersSnap.val() as Record<string, OrgMemberIndexEntry>;
 
   return Object.entries(members)
@@ -186,9 +281,14 @@ async function getConversation(conversationId: string): Promise<ChatConversation
 }
 
 async function isUserBlocked(targetUserId: string, senderId: string): Promise<boolean> {
-  const rtdb = await getRealtimeDb();
-  const blockedSnap = await get(ref(rtdb, `userBlocks/${targetUserId}/${senderId}`));
-  return blockedSnap.exists() && blockedSnap.val() === true;
+  try {
+    const rtdb = await getRealtimeDb();
+    const blockedSnap = await get(ref(rtdb, `userBlocks/${targetUserId}/${senderId}`));
+    return blockedSnap.exists() && blockedSnap.val() === true;
+  } catch {
+    // Do not block message sending due to block-edge read issues.
+    return false;
+  }
 }
 
 async function areTutorAndStudentAssociated(studentId: string, tutorId: string, fsDb: Firestore): Promise<boolean> {
@@ -283,19 +383,21 @@ export async function getChatProfilesByIds(userIds: string[]): Promise<ChatUserP
       if (!snap.exists()) return null;
       const data = snap.data() as {
         nome?: string;
+        name?: string;
         email?: string;
         photoURL?: string;
         role?: string;
         schoolId?: string;
+        escolaId?: string;
       };
 
       return {
         uid,
-        name: data.nome || "Utilizador",
+        name: data.nome || data.name || "Utilizador",
         email: data.email || "",
         photoURL: data.photoURL || "",
         role: toChatRole(data.role),
-        orgId: data.schoolId || null,
+        orgId: getOrgIdFromUserData(data),
       } satisfies ChatUserProfile;
     })
   );
@@ -313,8 +415,16 @@ async function expandParticipantsForTutorAutoChannel(
   const student = participants.find((p) => p.role === "student");
   if (!student) return participants;
 
-  const rtdb = await getRealtimeDb();
-  const tutorsSnap = await get(ref(rtdb, `userTutors/${student.uid}`));
+  let tutorsSnap;
+  try {
+    const rtdb = await getRealtimeDb();
+    tutorsSnap = await get(ref(rtdb, `userTutors/${student.uid}`));
+  } catch {
+    // Auto-expansion is optional. If rules deny reading tutor links,
+    // keep the original participant set and continue conversation creation.
+    return participants;
+  }
+
   if (!tutorsSnap.exists()) return participants;
 
   const tutorIds = Object.keys(tutorsSnap.val() as Record<string, true>);
@@ -373,12 +483,11 @@ export async function createConversationFromUsers(
     updatedAt: ts,
   };
 
+  const { id: _conversationId, ...conversationPayload } = conversation;
+
   const rtdb = await getRealtimeDb();
   const updates: Record<string, unknown> = {
-    [`conversations/${conversationId}`]: {
-      ...conversation,
-      id: undefined,
-    },
+    [`conversations/${conversationId}`]: conversationPayload,
   };
 
   for (const participant of expanded) {
@@ -391,7 +500,12 @@ export async function createConversationFromUsers(
   }
 
   await update(ref(rtdb), updates);
-  await syncChatAccessDoc(conversation);
+  try {
+    await syncChatAccessDoc(conversation);
+  } catch {
+    // Keep RTDB conversation creation as the source of truth.
+    // chatAccess sync is auxiliary and should not block UX.
+  }
 
   return conversation;
 }
@@ -567,20 +681,24 @@ async function incrementUnreadForParticipants(
 
   await Promise.all(
     participants.map(async (participantId) => {
-      if (participantId === senderId) {
-        await update(ref(rtdb), {
-          [`userConversations/${participantId}/${conversationId}/unreadCount`]: 0,
-        });
-        return;
-      }
-
-      await runTransaction(
-        ref(rtdb, `userConversations/${participantId}/${conversationId}/unreadCount`),
-        (currentValue) => {
-          const value = Number(currentValue || 0);
-          return value + 1;
+      try {
+        if (participantId === senderId) {
+          await update(ref(rtdb), {
+            [`userConversations/${participantId}/${conversationId}/unreadCount`]: 0,
+          });
+          return;
         }
-      );
+
+        await runTransaction(
+          ref(rtdb, `userConversations/${participantId}/${conversationId}/unreadCount`),
+          (currentValue) => {
+            const value = Number(currentValue || 0);
+            return value + 1;
+          }
+        );
+      } catch {
+        // Keep message delivery successful even if unread counter sync fails for one participant.
+      }
     })
   );
 }
@@ -663,12 +781,13 @@ export async function sendMessage(params: {
   };
 
   const lastMessageText = message.text || (Object.keys(uploadedAttachments).length > 0 ? "[Anexo]" : null);
+  const hasAttachments = Object.keys(uploadedAttachments).length > 0;
 
   const updates: Record<string, unknown> = {
     [`messages/${conversationId}/${messageId}`]: {
       senderId: message.senderId,
       text: message.text,
-      attachments: message.attachments,
+      attachments: hasAttachments ? message.attachments : null,
       createdAt: message.createdAt,
       editedAt: message.editedAt,
       deleted: message.deleted,
@@ -678,7 +797,7 @@ export async function sendMessage(params: {
       text: lastMessageText,
       senderId: sender.uid,
       createdAt,
-      hasAttachments: Object.keys(uploadedAttachments).length > 0,
+      hasAttachments,
     },
     [`conversations/${conversationId}/updatedAt`]: createdAt,
   };

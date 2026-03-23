@@ -25,7 +25,7 @@
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
-    "test:rules": "node tests/firestore/run-rules-tests.mjs",
+    "test:rules": "firebase emulators:exec --only firestore,database \"node tests/firestore/run-rules-tests.mjs\"",
     "test:unit": "vitest run tests/actions",
     "test": "npm run test:unit && npm run test:rules"
   },

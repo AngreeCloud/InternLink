@@ -134,6 +134,14 @@ service cloud.firestore {
     // USERS
     match /users/{userId} {
       allow read: if isSelf(userId)
+        || (currentUserExists()
+          && currentUserData().estado == "ativo"
+          && (
+            resource.data.schoolId == currentUserData().schoolId
+            || resource.data.schoolId == currentUserData().escolaId
+            || resource.data.escolaId == currentUserData().schoolId
+            || resource.data.escolaId == currentUserData().escolaId
+          ))
         || (isSchoolAdmin() && resource.data.schoolId == currentUserData().schoolId)
         || (isProfessor() && resource.data.schoolId == currentUserData().schoolId);
 

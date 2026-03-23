@@ -29,6 +29,7 @@ import type {
   ChatConversation,
   ChatMessage,
   ChatMessageView,
+  ChatRole,
   ChatUserProfile,
   UserConversationMeta,
 } from "@/lib/types/chat";
@@ -78,6 +79,7 @@ type PendingMessage = {
 };
 
 const PAGE_SIZE = 30;
+const MESSAGE_SEQUENCE_WINDOW_MS = 60 * 60 * 1000;
 
 function initials(name: string): string {
   const chunks = name.trim().split(/\s+/).slice(0, 2);
@@ -102,6 +104,25 @@ function formatDayDivider(timestamp: number): string {
 function getMessagePreview(meta: UserConversationMeta): string {
   if (!meta.lastMessageText) return "Sem mensagens";
   return meta.lastMessageText;
+}
+
+function getRoleLabel(role: ChatRole): string {
+  switch (role) {
+    case "student":
+      return "Aluno";
+    case "teacher":
+      return "Professor";
+    case "tutor":
+      return "Tutor";
+    case "admin":
+      return "";
+    default:
+      return "Utilizador";
+  }
+}
+
+function shouldShowRole(role: ChatRole): boolean {
+  return role !== "admin";
 }
 
 function getDeliveryIcon(message: ChatMessageView, participantCount: number): JSX.Element {
@@ -144,6 +165,7 @@ export function InternalChatHub() {
   const unsubscribeConversationsRef = useRef<() => void>(() => {});
   const unsubscribeMessagesRef = useRef<() => void>(() => {});
   const unsubscribeTypingRef = useRef<() => void>(() => {});
+  const unsubscribeAuthRef = useRef<() => void>(() => {});
   const lastSeenWriteRef = useRef(0);
   const typingTimeoutRef = useRef<number | null>(null);
   const isTypingFlagRef = useRef(false);
@@ -167,6 +189,28 @@ export function InternalChatHub() {
     if (!profile) return [];
     return selectedParticipants.filter((item) => item.uid !== profile.uid);
   }, [profile, selectedParticipants]);
+
+  const suggestedMembersFromConversations = useMemo(() => {
+    if (!profile) return [];
+
+    const byId = new Map<string, ChatUserProfile>();
+    for (const item of conversations) {
+      const ids = Object.keys(item.conversation.participants || {});
+      for (const uid of ids) {
+        if (uid === profile.uid) continue;
+        const candidate = participantProfiles[uid];
+        if (!candidate) continue;
+        byId.set(uid, candidate);
+      }
+    }
+
+    return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name, "pt-PT"));
+  }, [conversations, participantProfiles, profile]);
+
+  const hasMixedRolesInConversation = useMemo(() => {
+    const uniqueRoles = new Set(selectedParticipants.map((item) => item.role));
+    return uniqueRoles.size > 1;
+  }, [selectedParticipants]);
 
   const isDirect = selectedConversation?.conversation.type === "direct";
   const directPeer = isDirect ? otherParticipants[0] || null : null;
@@ -231,47 +275,67 @@ export function InternalChatHub() {
     let isActive = true;
 
     (async () => {
-      const auth = await getAuthRuntime();
+      try {
+        const auth = await getAuthRuntime();
 
-      onAuthStateChanged(auth, async (user) => {
-        if (!isActive) return;
-        if (!user) {
-          setProfile(null);
-          setLoading(false);
-          return;
-        }
+        unsubscribeAuthRef.current = onAuthStateChanged(auth, async (user) => {
+          if (!isActive) return;
 
-        const currentProfile = await getCurrentChatProfile();
-        if (!currentProfile) {
-          setLoading(false);
-          return;
-        }
+          try {
+            if (!user) {
+              setProfile(null);
+              setLoading(false);
+              return;
+            }
 
-        setProfile(currentProfile);
-        await ensureOrgMemberIndex(currentProfile);
+            const currentProfile = await getCurrentChatProfile();
+            if (!currentProfile) {
+              setProfile(null);
+              setLoading(false);
+              return;
+            }
 
-        unsubscribeConversationsRef.current = await subscribeUserConversations(
-          currentProfile.uid,
-          async (items) => {
-            if (!isActive) return;
-            setConversations(items);
-            await loadParticipantProfiles(items);
-            setSelectedConversationId((prev) => {
-              if (prev && items.some((item) => item.conversation.id === prev)) return prev;
-              return items[0]?.conversation.id || "";
+            setProfile(currentProfile);
+
+            // Do not block chat boot if org index update fails.
+            void ensureOrgMemberIndex(currentProfile).catch((err) => {
+              setError((err as Error).message || "Falha ao sincronizar índice de membros.");
             });
-            setLoading(false);
-          },
-          (err) => {
-            setError(err.message || "Falha ao carregar conversas.");
+
+            unsubscribeConversationsRef.current?.();
+            unsubscribeConversationsRef.current = await subscribeUserConversations(
+              currentProfile.uid,
+              async (items) => {
+                if (!isActive) return;
+                setConversations(items);
+                await loadParticipantProfiles(items);
+                setSelectedConversationId((prev) => {
+                  if (prev && items.some((item) => item.conversation.id === prev)) return prev;
+                  return items[0]?.conversation.id || "";
+                });
+                setLoading(false);
+              },
+              (err) => {
+                setError(err.message || "Falha ao carregar conversas.");
+                setLoading(false);
+              }
+            );
+          } catch (err) {
+            if (!isActive) return;
+            setError((err as Error).message || "Falha ao inicializar chat.");
             setLoading(false);
           }
-        );
-      });
+        });
+      } catch (err) {
+        if (!isActive) return;
+        setError((err as Error).message || "Falha ao inicializar Firebase para chat.");
+        setLoading(false);
+      }
     })();
 
     return () => {
       isActive = false;
+      unsubscribeAuthRef.current?.();
       unsubscribeConversationsRef.current?.();
       unsubscribeMessagesRef.current?.();
       unsubscribeTypingRef.current?.();
@@ -332,17 +396,32 @@ export function InternalChatHub() {
   useEffect(() => {
     if (!isCreateDialogOpen || !profile?.orgId) return;
 
+    const normalized = memberQuery.trim();
+    if (!normalized) {
+      setMemberResults(suggestedMembersFromConversations);
+      return;
+    }
+
     let canceled = false;
     const timeout = window.setTimeout(async () => {
       const results = await searchInternalMembers(profile.orgId!, memberQuery, profile.uid);
-      if (!canceled) setMemberResults(results);
+
+      if (canceled) return;
+
+      const recentSet = new Set(suggestedMembersFromConversations.map((item) => item.uid));
+      const recentFirst = [
+        ...results.filter((item) => recentSet.has(item.uid)),
+        ...results.filter((item) => !recentSet.has(item.uid)),
+      ];
+
+      setMemberResults(recentFirst);
     }, 180);
 
     return () => {
       canceled = true;
       window.clearTimeout(timeout);
     };
-  }, [memberQuery, isCreateDialogOpen, profile]);
+  }, [memberQuery, isCreateDialogOpen, profile, suggestedMembersFromConversations]);
 
   const setTypingState = useCallback(
     async (nextValue: boolean) => {
@@ -389,6 +468,7 @@ export function InternalChatHub() {
       photoURL?: string;
       role?: string;
       schoolId?: string;
+      escolaId?: string;
     };
 
     return {
@@ -397,7 +477,7 @@ export function InternalChatHub() {
       email: data.email || normalized,
       photoURL: data.photoURL || "",
       role: data.role === "professor" ? "teacher" : data.role === "tutor" ? "tutor" : data.role === "admin_escolar" ? "admin" : "student",
-      orgId: data.schoolId || null,
+      orgId: data.schoolId || data.escolaId || null,
     };
   }, []);
 
@@ -619,7 +699,7 @@ export function InternalChatHub() {
   if (!profile) {
     return (
       <Card className="flex h-[calc(100svh-4rem)] items-center justify-center text-sm text-muted-foreground">
-        Faça login para usar o chat.
+        {error || "Faça login para usar o chat."}
       </Card>
     );
   }
@@ -631,7 +711,6 @@ export function InternalChatHub() {
           <div className="flex items-center justify-between px-4 py-3">
             <div>
               <p className="text-sm font-semibold">Conversas</p>
-              <p className="text-xs text-muted-foreground">1 listener ativo</p>
             </div>
 
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -676,19 +755,39 @@ export function InternalChatHub() {
                                 )
                               }
                             >
-                              <span className="truncate">{member.name} ({member.email})</span>
+                              <div className="flex min-w-0 items-center gap-2">
+                                <Avatar className="h-7 w-7">
+                                  <AvatarImage src={member.photoURL || "/placeholder.svg"} alt={member.name} />
+                                  <AvatarFallback className="text-[10px]">{initials(member.name)}</AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="truncate">{member.name}</span>
+                                    {shouldShowRole(member.role) ? (
+                                      <Badge variant="secondary" className="h-5 px-2 text-[10px]">
+                                        {getRoleLabel(member.role)}
+                                      </Badge>
+                                    ) : null}
+                                  </div>
+                                  <p className="truncate text-xs text-muted-foreground">{member.email}</p>
+                                </div>
+                              </div>
                               {selected ? <Check className="h-4 w-4" /> : null}
                             </button>
                           );
                         })}
                         {memberResults.length === 0 && (
-                          <p className="px-3 py-2 text-xs text-muted-foreground">Sem resultados internos.</p>
+                          <p className="px-3 py-2 text-xs text-muted-foreground">
+                            {memberQuery.trim()
+                              ? "Sem resultados internos."
+                              : "Sem sugestões. Escreva para pesquisar membros internos."}
+                          </p>
                         )}
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-xs font-medium">DM externo por email (opcional)</label>
+                      <label className="text-xs font-medium">Participante externo por email (opcional)</label>
                       <Input
                         placeholder="email@externo.com"
                         value={externalEmail}
@@ -708,6 +807,7 @@ export function InternalChatHub() {
                 )}
 
                 <DialogFooter>
+                  {error ? <p className="mr-auto text-xs text-red-500">{error}</p> : null}
                   <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                     Cancelar
                   </Button>
@@ -818,11 +918,31 @@ export function InternalChatHub() {
                     const author = participantProfiles[message.senderId];
                     const mine = message.senderId === profile.uid;
                     const prev = index > 0 ? mergedMessages[index - 1] : null;
+                    const next = index < mergedMessages.length - 1 ? mergedMessages[index + 1] : null;
                     const showDivider = !prev || !isSameDay(prev.createdAt, message.createdAt);
                     const showAvatar = !mine;
+                    const sameSenderAsPrev = Boolean(
+                      prev &&
+                      prev.senderId === message.senderId &&
+                      message.createdAt - prev.createdAt <= MESSAGE_SEQUENCE_WINDOW_MS &&
+                      isSameDay(prev.createdAt, message.createdAt)
+                    );
+                    const sameSenderAsNext = Boolean(
+                      next &&
+                      next.senderId === message.senderId &&
+                      next.createdAt - message.createdAt <= MESSAGE_SEQUENCE_WINDOW_MS &&
+                      isSameDay(next.createdAt, message.createdAt)
+                    );
+                    const showMessageTimestamp = !sameSenderAsNext;
 
                     return (
-                      <div key={message.id} className="space-y-2">
+                      <div
+                        key={message.id}
+                        className={[
+                          "space-y-1",
+                          sameSenderAsPrev ? "mt-1" : "mt-3",
+                        ].join(" ")}
+                      >
                         {showDivider ? (
                           <div className="my-4 flex items-center gap-3">
                             <Separator className="flex-1" />
@@ -843,10 +963,20 @@ export function InternalChatHub() {
                           ) : null}
 
                           <div className={[
-                            "max-w-[82%] rounded-2xl px-3 py-2 text-sm",
+                            "relative max-w-[82%] rounded-2xl px-3 py-2 text-sm transition-[padding]",
+                            showMessageTimestamp ? "pb-2" : "pb-2 group-hover:pb-6",
                             mine ? "bg-primary text-primary-foreground" : "bg-muted",
                           ].join(" ")}>
-                            {!mine ? <p className="mb-1 text-[11px] opacity-70">{author?.name || "Utilizador"}</p> : null}
+                            {!mine ? (
+                              <div className="mb-1 flex items-center gap-2">
+                                <p className="text-[11px] opacity-70">{author?.name || "Utilizador"}</p>
+                                {hasMixedRolesInConversation && shouldShowRole(author?.role || "student") ? (
+                                  <Badge variant="secondary" className="h-5 px-2 text-[10px]">
+                                    {getRoleLabel(author?.role || "student")}
+                                  </Badge>
+                                ) : null}
+                              </div>
+                            ) : null}
 
                             {message.deleted ? (
                               <p className="italic opacity-80">A mensagem foi apagada</p>
@@ -879,16 +1009,24 @@ export function InternalChatHub() {
                               </>
                             )}
 
-                            <div className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-80">
-                              <span>{formatMessageTime(message.createdAt)}</span>
-                              {message.editedAt ? <span>(editada)</span> : null}
-                              {mine ? getDeliveryIcon(message, selectedParticipantIds.length) : null}
-                            </div>
+                            {showMessageTimestamp ? (
+                              <div className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-80">
+                                <span>{formatMessageTime(message.createdAt)}</span>
+                                {message.editedAt ? <span>(editada)</span> : null}
+                                {mine ? getDeliveryIcon(message, selectedParticipantIds.length) : null}
+                              </div>
+                            ) : (
+                              <div className="pointer-events-none absolute bottom-2 right-3 flex items-center justify-end gap-1 text-[10px] opacity-0 transition-opacity group-hover:opacity-80">
+                                <span>{formatMessageTime(message.createdAt)}</span>
+                                {message.editedAt ? <span>(editada)</span> : null}
+                                {mine ? getDeliveryIcon(message, selectedParticipantIds.length) : null}
+                              </div>
+                            )}
                           </div>
                         </div>
 
                         {mine && message.deliveryState !== "sending" && !message.deleted ? (
-                          <div className="mb-3 flex justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                          <div className="hidden justify-end gap-2 group-hover:flex">
                             {message.deliveryState === "failed" ? (
                               <Button size="sm" variant="outline" onClick={() => handleRetryPending(message.id)}>Reenviar</Button>
                             ) : (

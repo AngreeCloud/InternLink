@@ -10,12 +10,13 @@ import { SchoolAdminProvider } from "@/components/school-admin/school-admin-cont
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { CheckSquare, Folder, GraduationCap, History, Home, Info, LogOut, Menu } from "lucide-react";
+import { CheckSquare, Folder, GraduationCap, History, Home, Info, LogOut, Menu, MessageSquare } from "lucide-react";
 
 const navigation = [
   { name: "Dashboard", href: "/school-admin", icon: Home },
   { name: "Informações da Escola", href: "/school-admin/informacoes", icon: Info },
   { name: "Aprovações", href: "/school-admin/aprovacoes", icon: CheckSquare },
+  { name: "Chat", href: "/school-admin/chat", icon: MessageSquare },
   { name: "Histórico", href: "/school-admin/historico", icon: History },
   { name: "Cursos", href: "/school-admin/cursos", icon: Folder },
 ];

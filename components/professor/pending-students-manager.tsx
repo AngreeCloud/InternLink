@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { collection, getDocs, query, where, doc, updateDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
+import { ensureOrgMemberIndexByUserId } from "@/lib/chat/realtime-chat";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -92,6 +93,11 @@ export function PendingStudentsManager() {
     try {
       const db = await getDbRuntime();
       await updateDoc(doc(db, "users", studentId), { estado: "ativo" });
+      try {
+        await ensureOrgMemberIndexByUserId(studentId);
+      } catch (syncError) {
+        console.error("Falha ao sincronizar índice de chat do aluno aprovado:", syncError);
+      }
       setStudents((prev) => prev.filter((s) => s.id !== studentId));
     } catch (error) {
       console.error("Erro ao aprovar aluno:", error);

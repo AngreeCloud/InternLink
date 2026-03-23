@@ -38,6 +38,12 @@ type SchoolInfo = {
   requirePhoneVerification: boolean;
 };
 
+function normalizeSchoolDomain(input: string) {
+  const normalized = input.trim().toLowerCase();
+  if (!normalized) return "";
+  return normalized.startsWith("@") ? normalized.slice(1) : normalized;
+}
+
 export function SchoolInfoForm() {
   const { schoolId } = useSchoolAdmin();
   const [loading, setLoading] = useState(true);
@@ -197,6 +203,12 @@ export function SchoolInfoForm() {
       return;
     }
 
+    const normalizedDomain = normalizeSchoolDomain(form.emailDomain);
+    if (!normalizedDomain.includes(".")) {
+      setError("Introduza um domínio válido (ex.: esrpeixoto.edu.pt).");
+      return;
+    }
+
     setSaving(true);
     try {
       const db = await getDbRuntime();
@@ -207,12 +219,15 @@ export function SchoolInfoForm() {
         doc(db, "schools", schoolId),
         {
           ...form,
+          emailDomain: normalizedDomain,
           requiresPhone,
           allowGoogleLogin,
           updatedAt: serverTimestamp(),
         },
         { merge: true }
       );
+
+      setForm((prev) => ({ ...prev, emailDomain: normalizedDomain }));
 
       setSuccess("Informações atualizadas com sucesso.");
     } catch (err) {
@@ -414,9 +429,10 @@ export function SchoolInfoForm() {
                 <Input
                   value={form.emailDomain}
                   onChange={(event) => updateField("emailDomain", event.target.value)}
-                  placeholder="@escola.pt"
+                  placeholder="escola.pt"
                   required
                 />
+                <p className="text-xs text-muted-foreground">Pode inserir com ou sem @. O sistema guarda apenas o domínio.</p>
               </div>
             </div>
 

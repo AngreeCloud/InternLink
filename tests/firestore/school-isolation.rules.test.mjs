@@ -3,8 +3,8 @@
  * 1) Instalar dependências (se ainda não estiverem):
  *    pnpm install
  * 2) Iniciar o emulador do Firestore num terminal separado:
- *    pnpm dlx firebase-tools emulators:start --only firestore
- *    (ou: npx firebase emulators:start --only firestore)
+ *    pnpm dlx firebase-tools emulators:start --only firestore,database
+ *    (ou: npx firebase emulators:start --only firestore,database)
  * 3) Executar este teste noutro terminal:
  *    pnpm test:rules
  */
@@ -24,7 +24,7 @@ function getFirestoreEmulatorConfig() {
     return { host, port: Number(port) };
   }
 
-  return { host: "127.0.0.1", port: 8080 };
+  return { host: "127.0.0.1", port: 8081 };
 }
 
 test.before(async () => {
