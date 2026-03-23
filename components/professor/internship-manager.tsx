@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   addDoc,
   collection,
+  deleteField,
   deleteDoc,
   doc,
   getDoc,
@@ -11,6 +12,7 @@ import {
   query,
   serverTimestamp,
   updateDoc,
+  writeBatch,
   where,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
@@ -39,11 +41,7 @@ type Estagio = {
   alunoId: string;
   alunoNome: string;
   alunoEmail: string;
-  alunoPhotoURL: string;
   tutorId: string;
-  tutorNome: string;
-  tutorEmail: string;
-  tutorPhotoURL: string;
   empresa: string;
   estado: string;
   createdAt: string;
@@ -101,7 +99,6 @@ export function InternshipManager() {
   const [empresa, setEmpresa] = useState("");
   const [alunoId, setAlunoId] = useState("");
   const [tutorId, setTutorId] = useState("");
-  const [tutorEmailManual, setTutorEmailManual] = useState("");
 
   const [inviteTutorEmail, setInviteTutorEmail] = useState("");
   const [inviteTutorName, setInviteTutorName] = useState("");
@@ -115,7 +112,6 @@ export function InternshipManager() {
 
   const [editingEstagio, setEditingEstagio] = useState<Estagio | null>(null);
   const [editTutorId, setEditTutorId] = useState("");
-  const [editTutorEmailManual, setEditTutorEmailManual] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const [inviting, setInviting] = useState(false);
@@ -157,8 +153,6 @@ export function InternshipManager() {
   }, [schoolTutors, editTutorSearch]);
 
   const selectedStudent = students.find((student) => student.id === alunoId) || null;
-  const selectedTutor = schoolTutors.find((tutor) => tutor.id === tutorId) || null;
-  const selectedEditTutor = schoolTutors.find((tutor) => tutor.id === editTutorId) || null;
   const pendingInvites = tutorInvites.filter((invite) => invite.estado === "pendente");
   const pendingInvitesCount = pendingInvites.length;
 
@@ -216,6 +210,7 @@ export function InternshipManager() {
             where("schoolId", "==", userData.schoolId)
           )
         );
+        const estagiosToNormalize: string[] = [];
         const list: Estagio[] = estagiosSnap.docs.map((docSnap) => {
           const data = docSnap.data() as {
             titulo?: string;
@@ -231,23 +226,43 @@ export function InternshipManager() {
             estado?: string;
             createdAt?: { toDate: () => Date };
           };
+
+          if (
+            Object.prototype.hasOwnProperty.call(data, "alunoPhotoURL") ||
+            Object.prototype.hasOwnProperty.call(data, "tutorPhotoURL") ||
+            Object.prototype.hasOwnProperty.call(data, "tutorNome") ||
+            Object.prototype.hasOwnProperty.call(data, "tutorEmail")
+          ) {
+            estagiosToNormalize.push(docSnap.id);
+          }
+
           return {
             id: docSnap.id,
             titulo: data.titulo || "—",
             alunoId: data.alunoId || "",
             alunoNome: data.alunoNome || "—",
             alunoEmail: data.alunoEmail || "—",
-            alunoPhotoURL: data.alunoPhotoURL || "",
             tutorId: data.tutorId || "",
-            tutorNome: data.tutorNome || "—",
-            tutorEmail: data.tutorEmail || "",
-            tutorPhotoURL: data.tutorPhotoURL || "",
             empresa: data.empresa || "—",
             estado: data.estado || "ativo",
             createdAt: data.createdAt?.toDate?.()?.toLocaleDateString("pt-PT") || "—",
           };
         });
         setEstagios(list);
+
+        if (estagiosToNormalize.length > 0) {
+          const batch = writeBatch(db);
+          for (const estagioId of estagiosToNormalize) {
+            batch.update(doc(db, "estagios", estagioId), {
+              alunoPhotoURL: deleteField(),
+              tutorNome: deleteField(),
+              tutorEmail: deleteField(),
+              tutorPhotoURL: deleteField(),
+              updatedAt: serverTimestamp(),
+            });
+          }
+          await batch.commit();
+        }
       } catch {
         // ignore
       }
@@ -366,7 +381,6 @@ export function InternshipManager() {
     setEmpresa("");
     setAlunoId("");
     setTutorId("");
-    setTutorEmailManual("");
     setStudentSearch("");
     setTutorSearch("");
     setStudentListOpen(false);
@@ -383,7 +397,6 @@ export function InternshipManager() {
       if (!user) return;
 
       const selectedTutorById = schoolTutors.find((tutor) => tutor.id === tutorId) || null;
-      const resolvedTutorEmail = (selectedTutorById?.email || tutorEmailManual || "").trim();
 
       await addDoc(collection(db, "estagios"), {
         titulo: titulo.trim(),
@@ -393,8 +406,6 @@ export function InternshipManager() {
         alunoNome: selectedStudent?.nome || "",
         alunoEmail: selectedStudent?.email || "",
         tutorId: selectedTutorById?.id || "",
-        tutorNome: selectedTutorById?.nome || "",
-        tutorEmail: resolvedTutorEmail,
         empresa: empresa.trim(),
         estado: "ativo",
         createdAt: serverTimestamp(),
@@ -484,7 +495,6 @@ export function InternshipManager() {
   const openEditTutorDialog = (estagio: Estagio) => {
     setEditingEstagio(estagio);
     setEditTutorId(estagio.tutorId || "");
-    setEditTutorEmailManual(estagio.tutorEmail || "");
     setEditTutorSearch("");
     setEditTutorDialogOpen(true);
   };
@@ -496,12 +506,9 @@ export function InternshipManager() {
     try {
       const db = await getDbRuntime();
       const selectedTutorById = schoolTutors.find((tutor) => tutor.id === editTutorId) || null;
-      const resolvedTutorEmail = (selectedTutorById?.email || editTutorEmailManual || "").trim();
 
       await updateDoc(doc(db, "estagios", editingEstagio.id), {
         tutorId: selectedTutorById?.id || "",
-        tutorNome: selectedTutorById?.nome || "",
-        tutorEmail: resolvedTutorEmail,
         updatedAt: serverTimestamp(),
       });
 
@@ -663,7 +670,6 @@ export function InternshipManager() {
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => {
                               setTutorId(tutor.id);
-                              setTutorEmailManual(tutor.email);
                               setTutorListOpen(false);
                             }}
                             className={[
@@ -687,19 +693,6 @@ export function InternshipManager() {
                     </div>
                   )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="estagioTutorEmail">Ou email direto do tutor (opcional)</Label>
-                    <Input
-                      id="estagioTutorEmail"
-                      type="email"
-                      placeholder="tutor@empresa.com"
-                      value={tutorEmailManual}
-                      onChange={(event) => {
-                        setTutorEmailManual(event.target.value);
-                        if (tutorId) setTutorId("");
-                      }}
-                    />
-                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -862,7 +855,7 @@ export function InternshipManager() {
           <DialogHeader>
             <DialogTitle>Associar Tutor ao Estágio</DialogTitle>
             <DialogDescription>
-              Escolha um tutor do sistema da escola ou introduza email manualmente.
+              Escolha um tutor do sistema da escola.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -883,7 +876,6 @@ export function InternshipManager() {
                       type="button"
                       onClick={() => {
                         setEditTutorId(tutor.id);
-                        setEditTutorEmailManual(tutor.email);
                       }}
                       className={[
                         "flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors",
@@ -902,20 +894,6 @@ export function InternshipManager() {
                   ))
                 )}
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="editTutorEmail">Ou email direto do tutor</Label>
-              <Input
-                id="editTutorEmail"
-                type="email"
-                placeholder="tutor@empresa.com"
-                value={editTutorEmailManual}
-                onChange={(event) => {
-                  setEditTutorEmailManual(event.target.value);
-                  if (editTutorId) setEditTutorId("");
-                }}
-              />
             </div>
 
             <Button onClick={handleSaveTutorAssignment} disabled={updatingTutor} className="w-full">
@@ -950,6 +928,11 @@ export function InternshipManager() {
             <div className="space-y-4">
               {estagios.map((estagio) => (
                 <div key={estagio.id} className="rounded-lg border border-border p-4">
+                  {(() => {
+                    const linkedStudent = students.find((student) => student.id === estagio.alunoId) || null;
+                    const linkedTutor = schoolTutors.find((tutor) => estagio.tutorId && tutor.id === estagio.tutorId) || null;
+
+                    return (
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
@@ -961,20 +944,23 @@ export function InternshipManager() {
 
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Avatar className="h-6 w-6">
-                          <AvatarImage src={estagio.alunoPhotoURL || "/placeholder.svg"} alt={estagio.alunoNome} />
+                          <AvatarImage src={linkedStudent?.photoURL || "/placeholder.svg"} alt={estagio.alunoNome} />
                           <AvatarFallback>{estagio.alunoNome.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <span>Aluno: {estagio.alunoNome} ({estagio.alunoEmail})</span>
                       </div>
 
-                      {estagio.tutorEmail ? (
+                      {estagio.tutorId ? (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Avatar className="h-6 w-6">
-                            <AvatarImage src={estagio.tutorPhotoURL || "/placeholder.svg"} alt={estagio.tutorNome || estagio.tutorEmail} />
-                            <AvatarFallback>{(estagio.tutorNome || estagio.tutorEmail).charAt(0)}</AvatarFallback>
+                            <AvatarImage
+                              src={linkedTutor?.photoURL || "/placeholder.svg"}
+                              alt={linkedTutor?.nome || "Tutor"}
+                            />
+                            <AvatarFallback>{(linkedTutor?.nome || "Tutor").charAt(0)}</AvatarFallback>
                           </Avatar>
                           <span>
-                            Tutor: {estagio.tutorNome && estagio.tutorNome !== "—" ? `${estagio.tutorNome} (${estagio.tutorEmail})` : estagio.tutorEmail}
+                            Tutor: {linkedTutor ? `${linkedTutor.nome} (${linkedTutor.email})` : "Associado"}
                           </span>
                         </div>
                       ) : (
@@ -994,9 +980,11 @@ export function InternshipManager() {
                       onClick={() => openEditTutorDialog(estagio)}
                     >
                       <Pencil className="mr-2 h-4 w-4" />
-                      {estagio.tutorEmail ? "Alterar tutor" : "Associar tutor"}
+                      {estagio.tutorId ? "Alterar tutor" : "Associar tutor"}
                     </Button>
                   </div>
+                    );
+                  })()}
                 </div>
               ))}
             </div>

@@ -187,25 +187,27 @@ export async function ensureOrgMemberIndexByUserId(userId: string): Promise<void
 }
 
 export async function searchInternalMembers(
-  orgId: string,
+  orgId: string | null,
   queryText: string,
-  currentUserId: string
+  currentUserId: string,
+  currentUserRole?: ChatRole
 ): Promise<Array<ChatUserProfile>> {
   const term = queryText.trim().toLowerCase();
+  const merged = new Map<string, ChatUserProfile>();
 
-  try {
-    const fsDb = await getDbRuntime();
-    const [usersBySchoolId, usersByEscolaId] = await Promise.all([
-      getDocs(fsQuery(collection(fsDb, "users"), where("schoolId", "==", orgId))),
-      getDocs(fsQuery(collection(fsDb, "users"), where("escolaId", "==", orgId))),
-    ]);
+  if (orgId) {
+    try {
+      const fsDb = await getDbRuntime();
+      const [usersBySchoolId, usersByEscolaId] = await Promise.all([
+        getDocs(fsQuery(collection(fsDb, "users"), where("schoolId", "==", orgId))),
+        getDocs(fsQuery(collection(fsDb, "users"), where("escolaId", "==", orgId))),
+      ]);
 
-    const mergedDocs = new Map<string, (typeof usersBySchoolId.docs)[number]>();
-    for (const docSnap of usersBySchoolId.docs) mergedDocs.set(docSnap.id, docSnap);
-    for (const docSnap of usersByEscolaId.docs) mergedDocs.set(docSnap.id, docSnap);
+      const mergedDocs = new Map<string, (typeof usersBySchoolId.docs)[number]>();
+      for (const docSnap of usersBySchoolId.docs) mergedDocs.set(docSnap.id, docSnap);
+      for (const docSnap of usersByEscolaId.docs) mergedDocs.set(docSnap.id, docSnap);
 
-    const fromUsers = Array.from(mergedDocs.values())
-      .map((docSnap) => {
+      for (const docSnap of Array.from(mergedDocs.values())) {
         const data = docSnap.data() as {
           nome?: string;
           name?: string;
@@ -217,13 +219,13 @@ export async function searchInternalMembers(
           escolaId?: string;
         };
 
-        if (docSnap.id === currentUserId) return null;
+        if (docSnap.id === currentUserId) continue;
 
         const rawEstado = (data.estado || "").toLowerCase();
-        if (rawEstado && rawEstado !== "ativo") return null;
+        if (rawEstado && rawEstado !== "ativo") continue;
 
         const profileOrgId = getOrgIdFromUserData(data);
-        if (profileOrgId !== orgId) return null;
+        if (profileOrgId !== orgId) continue;
 
         const profile: ChatUserProfile = {
           uid: docSnap.id,
@@ -234,36 +236,94 @@ export async function searchInternalMembers(
           orgId: profileOrgId,
         };
 
-        if (!term) return profile;
-        const haystack = `${profile.name} ${profile.email}`.toLowerCase();
-        return haystack.includes(term) ? profile : null;
-      })
-      .filter((item): item is ChatUserProfile => Boolean(item))
-      .sort((a, b) => a.name.localeCompare(b.name, "pt-PT"));
-
-    if (fromUsers.length > 0 || !term) {
-      return fromUsers;
+        merged.set(profile.uid, profile);
+      }
+    } catch {
+      // Ignore Firestore search errors; fallback paths may still return useful candidates.
     }
-  } catch {
-    // Fall through to RTDB index fallback.
+
+    try {
+      const rtdb = await getRealtimeDb();
+      const membersSnap = await get(ref(rtdb, `orgMembers/${orgId}`));
+      if (membersSnap.exists()) {
+        const members = membersSnap.val() as Record<string, OrgMemberIndexEntry>;
+        for (const [uid, member] of Object.entries(members)) {
+          if (uid === currentUserId) continue;
+          if (merged.has(uid)) continue;
+
+          merged.set(uid, {
+            uid,
+            name: member.name || "Utilizador",
+            email: member.email || "",
+            photoURL: "",
+            role: member.role || "student",
+            orgId,
+          });
+        }
+      }
+    } catch {
+      // Keep best-effort results from previous sources.
+    }
   }
 
-  const rtdb = await getRealtimeDb();
-  const membersSnap = await get(ref(rtdb, `orgMembers/${orgId}`));
-  if (!membersSnap.exists()) return [];
+  if (currentUserRole === "student" || currentUserRole === "teacher") {
+    try {
+      const fsDb = await getDbRuntime();
+      const byAluno = currentUserRole === "student"
+        ? await getDocs(
+            fsQuery(
+              collection(fsDb, "estagios"),
+              where("alunoId", "==", currentUserId)
+            )
+          )
+        : null;
+      const byProfessor = currentUserRole === "teacher"
+        ? await getDocs(
+            fsQuery(
+              collection(fsDb, "estagios"),
+              where("professorId", "==", currentUserId)
+            )
+          )
+        : null;
 
-  const members = membersSnap.val() as Record<string, OrgMemberIndexEntry>;
+      const tutorIds = new Set<string>();
+      const estagiosDocs = [
+        ...(byAluno?.docs || []),
+        ...(byProfessor?.docs || []),
+      ];
 
-  return Object.entries(members)
-    .filter(([uid]) => uid !== currentUserId)
-    .map(([uid, member]) => ({
-      uid,
-      name: member.name || "Utilizador",
-      email: member.email || "",
-      photoURL: "",
-      role: member.role || "student",
-      orgId,
-    }))
+      for (const docSnap of estagiosDocs) {
+        const data = docSnap.data() as { tutorId?: string };
+        if (data.tutorId) tutorIds.add(data.tutorId);
+      }
+
+      if (currentUserRole === "student") {
+        try {
+          const rtdb = await getRealtimeDb();
+          const tutorsSnap = await get(ref(rtdb, `userTutors/${currentUserId}`));
+          if (tutorsSnap.exists()) {
+            Object.keys(tutorsSnap.val() as Record<string, true>).forEach((id) => tutorIds.add(id));
+          }
+        } catch {
+          // Ignore optional relation source.
+        }
+      }
+
+      if (tutorIds.size > 0) {
+        const tutorProfiles = await getChatProfilesByIds(Array.from(tutorIds));
+        for (const profile of tutorProfiles) {
+          if (profile.uid === currentUserId) continue;
+          if (profile.role !== "tutor") continue;
+          merged.set(profile.uid, profile);
+        }
+      }
+
+    } catch {
+      // Optional tutor enrichment should not block standard member search.
+    }
+  }
+
+  return Array.from(merged.values())
     .filter((member) => {
       if (!term) return true;
       return (

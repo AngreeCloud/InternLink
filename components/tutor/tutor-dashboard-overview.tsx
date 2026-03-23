@@ -61,9 +61,6 @@ export function TutorDashboardOverview() {
           ? (userSnap.data() as { nome?: string; empresa?: string; email?: string })
           : {};
 
-        const resolvedEmail = (userData.email || user.email || "").trim();
-        const normalizedEmail = resolvedEmail.toLowerCase();
-
         let estagios = 0;
         let documentos = 0;
         let schools: SchoolSummary[] = [];
@@ -71,19 +68,9 @@ export function TutorDashboardOverview() {
 
         try {
           const byTutorId = await getDocs(query(collection(db, "estagios"), where("tutorId", "==", user.uid)));
-          const byTutorEmail = resolvedEmail
-            ? await getDocs(query(collection(db, "estagios"), where("tutorEmail", "==", resolvedEmail)))
-            : null;
-          const byTutorEmailNormalized = normalizedEmail && normalizedEmail !== resolvedEmail
-            ? await getDocs(query(collection(db, "estagios"), where("tutorEmail", "==", normalizedEmail)))
-            : null;
 
           const estagioMap = new Map<string, string>();
-          const estagioDocs = [
-            ...byTutorId.docs,
-            ...(byTutorEmail?.docs || []),
-            ...(byTutorEmailNormalized?.docs || []),
-          ];
+          const estagioDocs = [...byTutorId.docs];
           for (const docSnap of estagioDocs) {
             estagioMap.set(docSnap.id, docSnap.id);
             const estagioData = docSnap.data() as { schoolId?: string };
@@ -108,18 +95,7 @@ export function TutorDashboardOverview() {
 
         try {
           const byTutorId = await getDocs(query(collectionGroup(db, "tutors"), where("tutorId", "==", user.uid)));
-          const byTutorEmail = resolvedEmail
-            ? await getDocs(query(collectionGroup(db, "tutors"), where("email", "==", resolvedEmail)))
-            : null;
-          const byTutorEmailNormalized = normalizedEmail && normalizedEmail !== resolvedEmail
-            ? await getDocs(query(collectionGroup(db, "tutors"), where("email", "==", normalizedEmail)))
-            : null;
-
-          const schoolsSnapDocs = [
-            ...byTutorId.docs,
-            ...(byTutorEmail?.docs || []),
-            ...(byTutorEmailNormalized?.docs || []),
-          ];
+          const schoolsSnapDocs = [...byTutorId.docs];
 
           const mapped = await Promise.all(
             schoolsSnapDocs.map(async (schoolTutorDoc) => {

@@ -404,7 +404,7 @@ export function InternalChatHub() {
   }, [mergedMessages.length, selectedConversationId]);
 
   useEffect(() => {
-    if (!isCreateDialogOpen || !profile?.orgId) return;
+    if (!isCreateDialogOpen || !profile) return;
 
     const normalized = memberQuery.trim();
     if (!normalized) {
@@ -414,7 +414,12 @@ export function InternalChatHub() {
 
     let canceled = false;
     const timeout = window.setTimeout(async () => {
-      const results = await searchInternalMembers(profile.orgId!, memberQuery, profile.uid);
+      const results = await searchInternalMembers(
+        profile.orgId ?? null,
+        memberQuery,
+        profile.uid,
+        profile.role
+      );
 
       if (canceled) return;
 

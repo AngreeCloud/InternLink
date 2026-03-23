@@ -36,7 +36,6 @@ type ReportState = {
   courseId: string;
   schoolId: string;
   tutorId: string;
-  tutorEmail: string;
   completedHours: number;
   reportMinHours: number;
   reportWaitDays: number;
@@ -63,7 +62,6 @@ export function StudentReportsManager() {
     courseId: "",
     schoolId: "",
     tutorId: "",
-    tutorEmail: "",
     completedHours: 0,
     reportMinHours: DEFAULT_MIN_HOURS,
     reportWaitDays: 0,
@@ -99,7 +97,6 @@ export function StudentReportsManager() {
       | {
           schoolId?: string;
           tutorId?: string;
-          tutorEmail?: string;
         }
       | undefined;
 
@@ -149,7 +146,6 @@ export function StudentReportsManager() {
       courseId: userData.courseId || "",
       schoolId: estagioData?.schoolId || "",
       tutorId: estagioData?.tutorId || "",
-      tutorEmail: estagioData?.tutorEmail || "",
       completedHours: internshipData?.serviceHoursCompleted ?? internshipData?.completedHours ?? 0,
       reportMinHours,
       reportWaitDays,
@@ -231,7 +227,6 @@ export function StudentReportsManager() {
           courseId: state.courseId || null,
           schoolId: state.schoolId || null,
           tutorId: state.tutorId || null,
-          tutorEmail: state.tutorEmail || null,
           title: state.title.trim(),
           summary: state.summary.trim(),
           status: "submetido",

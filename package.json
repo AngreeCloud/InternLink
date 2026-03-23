@@ -24,6 +24,8 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
+    "migrate:estagios:check": "node scripts/migrate-estagios-current-shape.js",
+    "migrate:estagios:apply": "node scripts/migrate-estagios-current-shape.js --apply",
     "start": "next start",
     "test:rules": "firebase emulators:exec --only firestore,database \"node tests/firestore/run-rules-tests.mjs\"",
     "test:unit": "vitest run tests/actions",

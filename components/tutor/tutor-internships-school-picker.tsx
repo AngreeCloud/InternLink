@@ -49,27 +49,12 @@ export function TutorInternshipsSchoolPicker() {
           return;
         }
 
-        const userSnap = await getDoc(doc(db, "users", user.uid));
-        const userData = userSnap.exists() ? (userSnap.data() as { email?: string }) : {};
-        const resolvedEmail = (userData.email || user.email || "").trim();
-        const normalizedEmail = resolvedEmail.toLowerCase();
-
         let estagiosDocs: Array<{ schoolId?: string }> = [];
         try {
           const byTutorId = await getDocs(query(collection(db, "estagios"), where("tutorId", "==", user.uid)));
-          const byTutorEmail = resolvedEmail
-            ? await getDocs(query(collection(db, "estagios"), where("tutorEmail", "==", resolvedEmail)))
-            : null;
-          const byTutorEmailNormalized = normalizedEmail && normalizedEmail !== resolvedEmail
-            ? await getDocs(query(collection(db, "estagios"), where("tutorEmail", "==", normalizedEmail)))
-            : null;
 
           const merged = new Map<string, { schoolId?: string }>();
-          const estagioDocs = [
-            ...byTutorId.docs,
-            ...(byTutorEmail?.docs || []),
-            ...(byTutorEmailNormalized?.docs || []),
-          ];
+          const estagioDocs = [...byTutorId.docs];
           for (const docSnap of estagioDocs) {
             merged.set(docSnap.id, docSnap.data() as { schoolId?: string });
           }
@@ -87,18 +72,7 @@ export function TutorInternshipsSchoolPicker() {
 
         try {
           const byTutorId = await getDocs(query(collectionGroup(db, "tutors"), where("tutorId", "==", user.uid)));
-          const byTutorEmail = resolvedEmail
-            ? await getDocs(query(collectionGroup(db, "tutors"), where("email", "==", resolvedEmail)))
-            : null;
-          const byTutorEmailNormalized = normalizedEmail && normalizedEmail !== resolvedEmail
-            ? await getDocs(query(collectionGroup(db, "tutors"), where("email", "==", normalizedEmail)))
-            : null;
-
-          const tutorDocs = [
-            ...byTutorId.docs,
-            ...(byTutorEmail?.docs || []),
-            ...(byTutorEmailNormalized?.docs || []),
-          ];
+          const tutorDocs = [...byTutorId.docs];
           for (const tutorDoc of tutorDocs) {
             const tutorData = tutorDoc.data() as { schoolId?: string };
             const schoolId = tutorData.schoolId || tutorDoc.ref.parent.parent?.id || "";

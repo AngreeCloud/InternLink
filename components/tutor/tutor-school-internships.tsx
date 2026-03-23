@@ -16,7 +16,6 @@ type Estagio = {
   titulo: string;
   alunoNome: string;
   alunoEmail: string;
-  alunoPhotoURL: string;
   empresa: string;
   estado: string;
 };
@@ -83,11 +82,6 @@ export function TutorSchoolInternships({ schoolId }: { schoolId: string }) {
           // ignore
         }
 
-        const userSnap = await getDoc(doc(db, "users", user.uid));
-        const userData = userSnap.exists() ? (userSnap.data() as { email?: string }) : {};
-        const resolvedEmail = (userData.email || user.email || "").trim();
-        const normalizedEmail = resolvedEmail.toLowerCase();
-
         let list: Estagio[] = [];
 
         try {
@@ -98,37 +92,14 @@ export function TutorSchoolInternships({ schoolId }: { schoolId: string }) {
               where("tutorId", "==", user.uid)
             )
           );
-          const byTutorEmail = resolvedEmail
-            ? await getDocs(
-                query(
-                  collection(db, "estagios"),
-                  where("schoolId", "==", schoolId),
-                  where("tutorEmail", "==", resolvedEmail)
-                )
-              )
-            : null;
-          const byTutorEmailNormalized = normalizedEmail && normalizedEmail !== resolvedEmail
-            ? await getDocs(
-                query(
-                  collection(db, "estagios"),
-                  where("schoolId", "==", schoolId),
-                  where("tutorEmail", "==", normalizedEmail)
-                )
-              )
-            : null;
 
           const map = new Map<string, Estagio>();
-          const estagioDocs = [
-            ...byTutorId.docs,
-            ...(byTutorEmail?.docs || []),
-            ...(byTutorEmailNormalized?.docs || []),
-          ];
+          const estagioDocs = [...byTutorId.docs];
           for (const docSnap of estagioDocs) {
             const data = docSnap.data() as {
               titulo?: string;
               alunoNome?: string;
               alunoEmail?: string;
-              alunoPhotoURL?: string;
               empresa?: string;
               estado?: string;
             };
@@ -137,7 +108,6 @@ export function TutorSchoolInternships({ schoolId }: { schoolId: string }) {
               titulo: data.titulo || "Estágio",
               alunoNome: data.alunoNome || "Aluno",
               alunoEmail: data.alunoEmail || "",
-              alunoPhotoURL: data.alunoPhotoURL || "",
               empresa: data.empresa || "—",
               estado: data.estado || "ativo",
             });
@@ -212,7 +182,7 @@ export function TutorSchoolInternships({ schoolId }: { schoolId: string }) {
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <Avatar className="h-7 w-7">
-                          <AvatarImage src={estagio.alunoPhotoURL || "/placeholder.svg"} alt={estagio.alunoNome} />
+                          <AvatarImage src="/placeholder.svg" alt={estagio.alunoNome} />
                           <AvatarFallback>{estagio.alunoNome.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <p className="text-sm font-medium">{estagio.alunoNome}</p>

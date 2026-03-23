@@ -214,18 +214,7 @@ export function TutorInbox() {
 
       try {
         const byTutorId = await getDocs(query(collectionGroup(db, "tutors"), where("tutorId", "==", userId)));
-        const byTutorEmail = resolvedEmail
-          ? await getDocs(query(collectionGroup(db, "tutors"), where("email", "==", resolvedEmail)))
-          : null;
-        const byTutorEmailNormalized = normalizedEmail && normalizedEmail !== resolvedEmail
-          ? await getDocs(query(collectionGroup(db, "tutors"), where("email", "==", normalizedEmail)))
-          : null;
-
-        const tutorDocs = [
-          ...byTutorId.docs,
-          ...(byTutorEmail?.docs || []),
-          ...(byTutorEmailNormalized?.docs || []),
-        ];
+        const tutorDocs = [...byTutorId.docs];
         for (const tutorDoc of tutorDocs) {
           const tutorData = tutorDoc.data() as {
             schoolId?: string;
@@ -335,9 +324,6 @@ export function TutorInbox() {
       await updateDoc(doc(db, "tutorInvites", invite.id), {
         estado: "aceite",
         tutorId: user.uid,
-        tutorNome: userData.nome || user.displayName || "Tutor",
-        tutorEmail: userData.email || user.email || invite.email,
-        tutorPhotoURL: userData.photoURL || "",
         acceptedAt: serverTimestamp(),
       });
 

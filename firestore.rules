@@ -273,10 +273,7 @@ service cloud.firestore {
       allow read: if isSignedIn()
         && (
           resource.data.studentId == request.auth.uid
-          || (isTutor() && (
-            resource.data.tutorId == request.auth.uid
-            || (resource.data.tutorEmail != null && resource.data.tutorEmail == currentUserData().email)
-          ))
+          || (isTutor() && resource.data.tutorId == request.auth.uid)
           || (resource.data.schoolId != null && isSchoolAdminFor(resource.data.schoolId))
         );
 
@@ -297,7 +294,6 @@ service cloud.firestore {
           resource.data.alunoId == request.auth.uid
           || resource.data.professorId == request.auth.uid
           || (isTutor() && resource.data.tutorId == request.auth.uid)
-          || tutorEmailMatches(resource.data.tutorEmail)
           || (resource.data.schoolId != null && isSchoolAdminFor(resource.data.schoolId))
         );
 
@@ -313,9 +309,9 @@ service cloud.firestore {
 
     // DOCUMENTOS (geridos pelo professor, lidos por professorId e school admins)
     match /documentos/{documentoId} {
-      // TODO: Add tutorEmail field to documents to enforce tutor access at the database layer.
+      // TODO: Add tutorId field to documents to enforce tutor access at the database layer.
       // Currently, tutors can read via client-side queries (estagioId), trusting the application layer.
-      // Should restrict to: resource.data.tutorEmail == currentUserData().email && visibilidade allows.
+      // Should restrict to: resource.data.tutorId == request.auth.uid && visibilidade allows.
       allow read: if isSignedIn()
         && (
           resource.data.professorId == request.auth.uid

@@ -48,10 +48,6 @@ export function TutorInternshipReportsView({ schoolId, estagioId }: { schoolId: 
           return;
         }
 
-        const userSnap = await getDoc(doc(db, "users", user.uid));
-        const userData = userSnap.exists() ? (userSnap.data() as { email?: string }) : {};
-        const resolvedEmail = (userData.email || user.email || "").trim();
-
         const estagioSnap = await getDoc(doc(db, "estagios", estagioId));
         if (!estagioSnap.exists()) {
           setState((prev) => ({ ...prev, loading: false }));
@@ -61,7 +57,6 @@ export function TutorInternshipReportsView({ schoolId, estagioId }: { schoolId: 
         const estagio = estagioSnap.data() as {
           schoolId?: string;
           tutorId?: string;
-          tutorEmail?: string;
           alunoId?: string;
           alunoNome?: string;
           titulo?: string;
@@ -69,7 +64,7 @@ export function TutorInternshipReportsView({ schoolId, estagioId }: { schoolId: 
 
         const allowed =
           estagio.schoolId === schoolId &&
-          (estagio.tutorId === user.uid || (!!resolvedEmail && estagio.tutorEmail === resolvedEmail));
+          estagio.tutorId === user.uid;
 
         if (!allowed) {
           setState((prev) => ({ ...prev, loading: false, allowed: false }));
