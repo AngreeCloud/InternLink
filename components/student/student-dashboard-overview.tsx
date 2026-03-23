@@ -6,6 +6,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { SchoolProfileCard } from "@/components/school/school-profile-card";
 
 type DashboardData = {
   loading: boolean;
@@ -16,6 +17,8 @@ type DashboardData = {
   reportWaitDays: number;
   completedHours: number;
   reportsCount: number;
+  schoolId: string;
+  hasInternship: boolean;
 };
 
 const DEFAULT_MIN_HOURS = 80;
@@ -30,6 +33,8 @@ export function StudentDashboardOverview() {
     reportWaitDays: 0,
     completedHours: 0,
     reportsCount: 0,
+    schoolId: "",
+    hasInternship: false,
   });
 
   useEffect(() => {
@@ -94,6 +99,8 @@ export function StudentDashboardOverview() {
           reportWaitDays,
           completedHours: internshipData?.serviceHoursCompleted ?? internshipData?.completedHours ?? 0,
           reportsCount: reportsSnap.size,
+          schoolId: (internshipSnap.docs[0]?.data() as { schoolId?: string } | undefined)?.schoolId || "",
+          hasInternship: internshipSnap.size > 0,
         });
       });
     })();
@@ -161,6 +168,14 @@ export function StudentDashboardOverview() {
               </CardContent>
             </Card>
           </div>
+
+          {state.hasInternship && state.schoolId ? (
+            <SchoolProfileCard
+              schoolId={state.schoolId}
+              title="Informação da Escola"
+              description="Disponível porque já existe estágio criado."
+            />
+          ) : null}
         </>
       )}
     </div>

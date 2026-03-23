@@ -24,7 +24,11 @@ async function cleanupFirebaseDebugLogs() {
 
 const testProcess = spawn(
   process.execPath,
-  ["--test", "tests/firestore/school-isolation.rules.test.mjs"],
+  [
+    "--test",
+    "tests/firestore/school-isolation.rules.test.mjs",
+    "tests/realtime/chat-creation.rules.test.mjs",
+  ],
   {
     stdio: "inherit",
   }

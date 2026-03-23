@@ -1,11 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, collectionGroup, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Briefcase, FileText } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Briefcase, Building2, FileText, School } from "lucide-react";
+
+type SchoolSummary = {
+  schoolId: string;
+  schoolName: string;
+  schoolShortName: string;
+  bannerUrl: string;
+  profileImageUrl: string;
+  bannerFocusX: number;
+  bannerFocusY: number;
+  address: string;
+  contact: string;
+  joinedAt: string;
+};
 
 type OverviewData = {
   loading: boolean;
@@ -13,6 +28,8 @@ type OverviewData = {
   empresa: string;
   estagios: number;
   documentos: number;
+  associatedSchools: number;
+  schools: SchoolSummary[];
 };
 
 export function TutorDashboardOverview() {
@@ -22,62 +39,203 @@ export function TutorDashboardOverview() {
     empresa: "",
     estagios: 0,
     documentos: 0,
+    associatedSchools: 0,
+    schools: [],
   });
 
   useEffect(() => {
     let unsubscribe = () => {};
-    let active = true;
 
     (async () => {
       const auth = await getAuthRuntime();
       const db = await getDbRuntime();
 
       unsubscribe = onAuthStateChanged(auth, async (user) => {
-        if (!user || !active) {
-          if (active) setState((prev) => ({ ...prev, loading: false }));
+        if (!user) {
+          setState((prev) => ({ ...prev, loading: false }));
           return;
         }
 
-        const { doc, getDoc } = await import("firebase/firestore");
         const userSnap = await getDoc(doc(db, "users", user.uid));
         const userData = userSnap.exists()
           ? (userSnap.data() as { nome?: string; empresa?: string; email?: string })
           : {};
 
-        let estagiosCount = 0;
-        let documentosCount = 0;
+        let estagios = 0;
+        let documentos = 0;
+        let schools: SchoolSummary[] = [];
+        const estagioSchoolIds = new Set<string>();
 
         try {
-          const estagiosSnap = await getDocs(
-            query(collection(db, "estagios"), where("tutorEmail", "==", userData.email || user.email))
-          );
-          estagiosCount = estagiosSnap.size;
+          const byTutorId = await getDocs(query(collection(db, "estagios"), where("tutorId", "==", user.uid)));
 
-          // Count documents visible to tutor
-          for (const estagioDoc of estagiosSnap.docs) {
-            try {
-              const docsSnap = await getDocs(
-                query(collection(db, "documentos"), where("estagioId", "==", estagioDoc.id))
-              );
-              documentosCount += docsSnap.size;
-            } catch { /* ignore */ }
+          const estagioMap = new Map<string, string>();
+          const estagioDocs = [...byTutorId.docs];
+          for (const docSnap of estagioDocs) {
+            estagioMap.set(docSnap.id, docSnap.id);
+            const estagioData = docSnap.data() as { schoolId?: string };
+            if (estagioData.schoolId) {
+              estagioSchoolIds.add(estagioData.schoolId);
+            }
           }
-        } catch { /* ignore permission errors */ }
+          const estagioIds = Array.from(estagioMap.keys());
+          estagios = estagioIds.length;
 
-        if (!active) return;
+          for (const estagioId of estagioIds) {
+            try {
+              const docsSnap = await getDocs(query(collection(db, "documentos"), where("estagioId", "==", estagioId)));
+              documentos += docsSnap.size;
+            } catch {
+              // ignore
+            }
+          }
+        } catch {
+          // ignore
+        }
+
+        try {
+          const byTutorId = await getDocs(query(collectionGroup(db, "tutors"), where("tutorId", "==", user.uid)));
+          const schoolsSnapDocs = [...byTutorId.docs];
+
+          const mapped = await Promise.all(
+            schoolsSnapDocs.map(async (schoolTutorDoc) => {
+              const data = schoolTutorDoc.data() as {
+                schoolId?: string;
+                schoolName?: string;
+                schoolShortName?: string;
+                joinedAt?: { toDate?: () => Date };
+              };
+              const schoolId = data.schoolId || schoolTutorDoc.ref.parent.parent?.id || "";
+              let schoolName = data.schoolName || "Escola";
+              let schoolShortName = data.schoolShortName || "";
+              let bannerUrl = "";
+              let profileImageUrl = "";
+              let bannerFocusX = 50;
+              let bannerFocusY = 50;
+              let address = "";
+              let contact = "";
+
+              if (schoolId) {
+                try {
+                  const schoolSnap = await getDoc(doc(db, "schools", schoolId));
+                  if (schoolSnap.exists()) {
+                    const schoolData = schoolSnap.data() as {
+                      name?: string;
+                      shortName?: string;
+                      bannerUrl?: string;
+                      profileImageUrl?: string;
+                      bannerFocusX?: number;
+                      bannerFocusY?: number;
+                      address?: string;
+                      contact?: string;
+                    };
+                    schoolName = schoolData.name || schoolName;
+                    schoolShortName = schoolData.shortName || schoolShortName;
+                    bannerUrl = schoolData.bannerUrl || "";
+                    profileImageUrl = schoolData.profileImageUrl || "";
+                    bannerFocusX = typeof schoolData.bannerFocusX === "number" ? schoolData.bannerFocusX : 50;
+                    bannerFocusY = typeof schoolData.bannerFocusY === "number" ? schoolData.bannerFocusY : 50;
+                    address = schoolData.address || "";
+                    contact = schoolData.contact || "";
+                  }
+                } catch {
+                  // ignore
+                }
+              }
+
+              return {
+                schoolId,
+                schoolName,
+                schoolShortName,
+                bannerUrl,
+                profileImageUrl,
+                bannerFocusX,
+                bannerFocusY,
+                address,
+                contact,
+                joinedAt: data.joinedAt?.toDate?.()?.toLocaleDateString("pt-PT") || "—",
+              } as SchoolSummary;
+            })
+          );
+
+          schools = mapped
+            .filter((item, index, self) => item.schoolId && self.findIndex((x) => x.schoolId === item.schoolId) === index)
+            .sort((a, b) => (a.schoolShortName || a.schoolName).localeCompare(b.schoolShortName || b.schoolName, "pt-PT"));
+        } catch {
+          schools = [];
+        }
+
+        if (schools.length === 0 && estagioSchoolIds.size > 0) {
+          try {
+            const fallbackSchools = await Promise.all(
+              Array.from(estagioSchoolIds).map(async (schoolId) => {
+                let schoolName = "Escola";
+                let schoolShortName = "";
+                let bannerUrl = "";
+                let profileImageUrl = "";
+                let bannerFocusX = 50;
+                let bannerFocusY = 50;
+                let address = "";
+                let contact = "";
+
+                const schoolSnap = await getDoc(doc(db, "schools", schoolId));
+                if (schoolSnap.exists()) {
+                  const schoolData = schoolSnap.data() as {
+                    name?: string;
+                    shortName?: string;
+                    bannerUrl?: string;
+                    profileImageUrl?: string;
+                    bannerFocusX?: number;
+                    bannerFocusY?: number;
+                    address?: string;
+                    contact?: string;
+                  };
+                  schoolName = schoolData.name || schoolName;
+                  schoolShortName = schoolData.shortName || schoolShortName;
+                  bannerUrl = schoolData.bannerUrl || "";
+                  profileImageUrl = schoolData.profileImageUrl || "";
+                  bannerFocusX = typeof schoolData.bannerFocusX === "number" ? schoolData.bannerFocusX : 50;
+                  bannerFocusY = typeof schoolData.bannerFocusY === "number" ? schoolData.bannerFocusY : 50;
+                  address = schoolData.address || "";
+                  contact = schoolData.contact || "";
+                }
+
+                return {
+                  schoolId,
+                  schoolName,
+                  schoolShortName,
+                  bannerUrl,
+                  profileImageUrl,
+                  bannerFocusX,
+                  bannerFocusY,
+                  address,
+                  contact,
+                  joinedAt: "—",
+                } as SchoolSummary;
+              })
+            );
+
+            schools = fallbackSchools
+              .filter((item) => item.schoolId)
+              .sort((a, b) => (a.schoolShortName || a.schoolName).localeCompare(b.schoolShortName || b.schoolName, "pt-PT"));
+          } catch {
+            // ignore
+          }
+        }
 
         setState({
           loading: false,
           tutorName: userData.nome || user.displayName || "Tutor",
           empresa: userData.empresa || "—",
-          estagios: estagiosCount,
-          documentos: documentosCount,
+          estagios,
+          documentos,
+          associatedSchools: schools.length,
+          schools,
         });
       });
     })();
 
     return () => {
-      active = false;
       unsubscribe();
     };
   }, []);
@@ -87,7 +245,7 @@ export function TutorDashboardOverview() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Dashboard do Tutor</h1>
         <p className="text-muted-foreground">
-          Acompanhe os estágios e documentos associados.
+          A caixa de entrada está sempre disponível para novos convites e os estágios podem ser geridos por escola.
         </p>
       </div>
 
@@ -104,7 +262,18 @@ export function TutorDashboardOverview() {
             </CardHeader>
           </Card>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Escolas Associadas</CardTitle>
+                <School className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">{state.associatedSchools}</p>
+                <p className="text-xs text-muted-foreground">Pode estar associado a várias escolas.</p>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Estágios Associados</CardTitle>
@@ -112,7 +281,7 @@ export function TutorDashboardOverview() {
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-bold">{state.estagios}</p>
-                <p className="text-xs text-muted-foreground">Total de estágios</p>
+                <p className="text-xs text-muted-foreground">Estágios em que está encarregado(a).</p>
               </CardContent>
             </Card>
 
@@ -123,10 +292,70 @@ export function TutorDashboardOverview() {
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-bold">{state.documentos}</p>
-                <p className="text-xs text-muted-foreground">Total de documentos disponíveis</p>
+                <Badge variant={state.associatedSchools > 0 ? "default" : "secondary"}>
+                  {state.associatedSchools > 0 ? "Chat desbloqueado" : "Aguardando associação"}
+                </Badge>
               </CardContent>
             </Card>
           </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Escolas associadas</CardTitle>
+              <CardDescription>
+                Cartões de informação da escola disponíveis assim que a associação é aprovada.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {state.schools.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Ainda não está associado ao sistema de nenhuma escola.</p>
+              ) : (
+                <div className="space-y-4">
+                  {state.schools.map((school) => {
+                    const schoolLabel = school.schoolShortName || school.schoolName;
+                    return (
+                      <div key={school.schoolId} className="overflow-hidden rounded-lg border border-border">
+                        {school.bannerUrl ? (
+                          <div className="h-32 w-full bg-muted">
+                            <img
+                              src={school.bannerUrl}
+                              alt={`Banner de ${school.schoolName}`}
+                              className="h-full w-full object-cover"
+                              style={{ objectPosition: `${school.bannerFocusX}% ${school.bannerFocusY}%` }}
+                            />
+                          </div>
+                        ) : null}
+                        <div className="flex flex-wrap items-start justify-between gap-3 p-4">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              {school.profileImageUrl ? (
+                                <Avatar className="h-8 w-8">
+                                  <AvatarImage src={school.profileImageUrl} alt={school.schoolName} />
+                                  <AvatarFallback>{schoolLabel.charAt(0)}</AvatarFallback>
+                                </Avatar>
+                              ) : (
+                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                                  <Building2 className="h-4 w-4" />
+                                </div>
+                              )}
+                              <p className="text-sm font-medium">{schoolLabel}</p>
+                              <Badge variant="default">Associado</Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground">Entrada no sistema: {school.joinedAt}</p>
+                            {(school.address || school.contact) && (
+                              <p className="text-xs text-muted-foreground">
+                                {[school.address, school.contact].filter(Boolean).join(" • ")}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

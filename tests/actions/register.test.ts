@@ -313,24 +313,49 @@ describe("registerProfessor action", () => {
 });
 
 describe("registerTutor action", () => {
-  it("creates auth account and stores pending registration with initial inactive state", async () => {
+  it("creates auth account and stores active tutor user document", async () => {
     mockCreateUserSuccess("tutor-1", "tutor@example.com");
     mockPendingRegistrationSuccess();
 
     const result: RegistrationResult = await registerTutor(makeTutorPayload());
 
     expect(mockCreateUser).toHaveBeenCalled();
-    expectPendingRegistration("tutor-1", {
-      role: "tutor",
-      empresa: "Empresa XPTO",
-      estado: "inativo",
-      emailVerified: false,
-    });
+    expect(mockSetDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ path: "users/tutor-1" }),
+      expect.objectContaining({
+        role: "tutor",
+        empresa: "Empresa XPTO",
+        estado: "ativo",
+      })
+    );
+    expect(mockSetDoc).not.toHaveBeenCalledWith(
+      expect.objectContaining({ path: "pendingRegistrations/tutor-1" }),
+      expect.anything()
+    );
     expect(mockSendEmailVerification).toHaveBeenCalled();
     expect(result.uid).toBe("tutor-1");
   });
 
-  it("rolls back auth user when tutor pending registration write fails", async () => {
+  it("stores auth email verification status on tutor user document", async () => {
+    mockCreateUser.mockResolvedValue({
+      user: {
+        ...makeAuthUser("tutor-verified", "tutor@example.com"),
+        emailVerified: true,
+      },
+    });
+    mockPendingRegistrationSuccess();
+
+    const result: RegistrationResult = await registerTutor(makeTutorPayload());
+
+    expect(mockSetDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ path: "users/tutor-verified" }),
+      expect.objectContaining({ emailVerified: true })
+    );
+    expect(mockSendEmailVerification).not.toHaveBeenCalled();
+    expect(result.uid).toBe("tutor-verified");
+  });
+
+  it("rolls back auth user when tutor user document write fails", async () => {
     mockCreateUserSuccess("tutor-2", "tutor@example.com");
     mockPendingRegistrationFailure();
 

@@ -5,12 +5,14 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SchoolProfileCard } from "@/components/school/school-profile-card";
 import { Users, Briefcase, FileText, Clock } from "lucide-react";
 
 type OverviewData = {
   loading: boolean;
   professorName: string;
   schoolName: string;
+  schoolId: string;
   pendingStudents: number;
   activeInternships: number;
   totalDocuments: number;
@@ -21,6 +23,7 @@ export function ProfessorDashboardOverview() {
     loading: true,
     professorName: "",
     schoolName: "",
+    schoolId: "",
     pendingStudents: 0,
     activeInternships: 0,
     totalDocuments: 0,
@@ -60,17 +63,21 @@ export function ProfessorDashboardOverview() {
 
           try {
             const internshipsSnap = await getDocs(
-              query(collection(db, "estagios"), where("schoolId", "==", userData.schoolId))
+              query(collection(db, "estagios"), where("professorId", "==", user.uid))
             );
             activeInternships = internshipsSnap.size;
-          } catch { /* ignore */ }
+          } catch {
+            // ignore permission errors
+          }
 
           try {
             const docsSnap = await getDocs(
-              query(collection(db, "documentos"), where("schoolId", "==", userData.schoolId))
+              query(collection(db, "documentos"), where("professorId", "==", user.uid))
             );
             totalDocuments = docsSnap.size;
-          } catch { /* ignore */ }
+          } catch {
+            // ignore permission errors
+          }
         }
 
         if (!active) return;
@@ -79,6 +86,7 @@ export function ProfessorDashboardOverview() {
           loading: false,
           professorName: userData.nome || user.displayName || "Professor",
           schoolName: userData.escola || "—",
+          schoolId: userData.schoolId || "",
           pendingStudents,
           activeInternships,
           totalDocuments,
@@ -148,6 +156,14 @@ export function ProfessorDashboardOverview() {
               </CardContent>
             </Card>
           </div>
+
+          {state.activeInternships > 0 && state.schoolId ? (
+            <SchoolProfileCard
+              schoolId={state.schoolId}
+              title="Informação da Escola"
+              description="Disponível porque já existe estágio criado nesta escola."
+            />
+          ) : null}
         </>
       )}
     </div>

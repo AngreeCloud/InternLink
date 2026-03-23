@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { collection, doc, getDocs, orderBy, query, serverTimestamp, where, writeBatch } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
+import { ensureOrgMemberIndexByUserId } from "@/lib/chat/realtime-chat";
 import { useSchoolAdmin } from "@/components/school-admin/school-admin-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -71,6 +72,14 @@ export function PendingTeachersSection({
       });
 
       await batch.commit();
+
+      if (decision === "aprovado") {
+        try {
+          await ensureOrgMemberIndexByUserId(teacher.id);
+        } catch (syncError) {
+          console.error("Falha ao sincronizar índice de chat do professor aprovado:", syncError);
+        }
+      }
 
       setTeachers((current) => current.filter((currentTeacher) => currentTeacher.id !== teacher.id));
       setActionSuccess(

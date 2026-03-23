@@ -50,7 +50,6 @@ type Estagio = {
   id: string;
   titulo: string;
   alunoNome: string;
-  tutorEmail: string;
 };
 
 export function DocumentManager() {
@@ -122,13 +121,11 @@ export function DocumentManager() {
             const data = d.data() as {
               titulo?: string;
               alunoNome?: string;
-              tutorEmail?: string;
             };
             return {
               id: d.id,
               titulo: data.titulo || "—",
               alunoNome: data.alunoNome || "—",
-              tutorEmail: data.tutorEmail || "—",
             };
           })
         );

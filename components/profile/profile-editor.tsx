@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ArrowLeft, Save, Camera } from "lucide-react";
+import { ArrowLeft, Save, Camera, Mail } from "lucide-react";
 import Link from "next/link";
 
 type ProfileData = {
@@ -44,6 +44,7 @@ export function ProfileEditor() {
   const [cropY, setCropY] = useState(50);
   const [processingCrop, setProcessingCrop] = useState(false);
   const [pendingPhotoDataUrl, setPendingPhotoDataUrl] = useState("");
+  const [emailVerified, setEmailVerified] = useState(true);
   const router = useRouter();
 
   const applyCropToImage = async (source: string, zoom: number, offsetX: number, offsetY: number) => {
@@ -117,6 +118,7 @@ export function ProfileEditor() {
           photoURL: data.photoURL || "",
           role: data.role || "",
         });
+        setEmailVerified(Boolean(user.emailVerified));
         setPhotoPreview(data.photoURL || "");
         setLoading(false);
       });
@@ -370,6 +372,19 @@ export function ProfileEditor() {
             <Label>Email</Label>
             <Input value={profile.email} disabled className="bg-muted" />
             <p className="text-xs text-muted-foreground">O email não pode ser alterado.</p>
+            {!emailVerified && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs text-amber-800 mb-2">
+                  O seu email ainda não está verificado.
+                </p>
+                <Button asChild type="button" variant="outline" size="sm" className="w-full bg-transparent">
+                  <Link href={`/verify-email?email=${encodeURIComponent(profile.email)}`}>
+                    <Mail className="mr-2 h-4 w-4" />
+                    Verificar email agora
+                  </Link>
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Name */}

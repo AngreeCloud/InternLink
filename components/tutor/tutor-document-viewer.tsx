@@ -38,19 +38,12 @@ export function TutorDocumentViewer() {
           return;
         }
 
-        const { doc, getDoc } = await import("firebase/firestore");
-        const userSnap = await getDoc(doc(db, "users", user.uid));
-        const userData = userSnap.exists()
-          ? (userSnap.data() as { email?: string })
-          : {};
-
-        const email = userData.email || user.email || "";
         const allDocs: Documento[] = [];
 
         try {
           // Find estágios associated with this tutor
           const estagiosSnap = await getDocs(
-            query(collection(db, "estagios"), where("tutorEmail", "==", email))
+            query(collection(db, "estagios"), where("tutorId", "==", user.uid))
           );
 
           for (const estagioDoc of estagiosSnap.docs) {

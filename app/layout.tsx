@@ -5,6 +5,7 @@ import { GeistMono } from "geist/font/mono"
 import { Analytics } from "@vercel/analytics/next"
 import { Suspense } from "react"
 import { RecaptchaBadgeController } from "@/components/layout/recaptcha-badge-controller"
+import { ChatOrgMemberSync } from "@/components/chat/chat-org-member-sync"
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -28,6 +29,7 @@ export default function RootLayout({
     <html lang="pt" className="dark">
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable} antialiased`}>
         <RecaptchaBadgeController />
+        <ChatOrgMemberSync />
         <Suspense fallback={null}>{children}</Suspense>
         <Analytics />
       </body>
