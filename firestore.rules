@@ -326,6 +326,22 @@ service cloud.firestore {
     }
 
     // CONVITES DE TUTOR
+    match /chatAccess/{conversationId} {
+      allow read: if isSignedIn()
+        && resource.data.participants[request.auth.uid] == true;
+
+      allow create: if isSignedIn()
+        && request.resource.data.participants[request.auth.uid] == true;
+
+      // Participants map is immutable after creation to prevent privilege escalation.
+      allow update: if isSignedIn()
+        && resource.data.participants[request.auth.uid] == true
+        && request.resource.data.participants == resource.data.participants;
+
+      allow delete: if false;
+    }
+
+    // CONVITES DE TUTOR
     match /tutorInvites/{inviteId} {
       allow read: if isSignedIn()
         && (

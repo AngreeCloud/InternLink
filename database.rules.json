@@ -1,0 +1,188 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "conversations": {
+      "$conversationId": {
+        ".read": "auth != null && data.child('participants').child(auth.uid).val() === true",
+        ".write": "auth != null && (( !data.exists() && newData.child('participants').child(auth.uid).val() === true && (newData.child('type').val() === 'direct' || newData.child('type').val() === 'group') ) || (data.exists() && data.child('participants').child(auth.uid).val() === true))",
+        "type": {
+          ".validate": "newData.val() === 'direct' || newData.val() === 'group'"
+        },
+        "orgId": {
+          ".validate": "newData.val() === null || newData.isString()"
+        },
+        "participants": {
+          "$uid": {
+            ".validate": "newData.val() === true"
+          }
+        },
+        "lastMessage": {
+          "text": {
+            ".validate": "newData.val() === null || (newData.isString() && newData.val().length <= 2000)"
+          },
+          "senderId": {
+            ".validate": "newData.isString()"
+          },
+          "createdAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "hasAttachments": {
+            ".validate": "newData.isBoolean()"
+          }
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "updatedAt": {
+          ".validate": "newData.isNumber()"
+        }
+      }
+    },
+
+    "messages": {
+      "$conversationId": {
+        ".read": "auth != null && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true",
+        "$messageId": {
+          ".write": "auth != null && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true",
+          "senderId": {
+            ".validate": "newData.isString()"
+          },
+          "text": {
+            ".validate": "newData.val() === null || (newData.isString() && newData.val().length <= 2000)"
+          },
+          "attachments": {
+            ".validate": "!newData.exists() || newData.hasChildren()",
+            "$attachmentId": {
+              "url": {
+                ".validate": "newData.isString()"
+              },
+              "storagePath": {
+                ".validate": "newData.isString()"
+              },
+              "size": {
+                ".validate": "newData.isNumber() && newData.val() <= 8388608"
+              },
+              "mimeType": {
+                ".validate": "newData.isString()"
+              },
+              "fileName": {
+                ".validate": "newData.isString()"
+              }
+            }
+          },
+          "createdAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "editedAt": {
+            ".validate": "newData.val() === null || newData.isNumber()"
+          },
+          "deleted": {
+            ".validate": "newData.isBoolean()"
+          },
+          "seenBy": {
+            "$uid": {
+              ".write": "auth != null && auth.uid === $uid && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true",
+              ".validate": "newData.isNumber()"
+            }
+          }
+        }
+      }
+    },
+
+    "typing": {
+      "$conversationId": {
+        "$uid": {
+          ".read": "auth != null && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true",
+          ".write": "auth != null && auth.uid === $uid && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true",
+          ".validate": "newData.isBoolean()"
+        }
+      }
+    },
+
+    "userConversations": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$conversationId": {
+          ".write": "auth != null && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true",
+          "lastMessageText": {
+            ".validate": "newData.val() === null || (newData.isString() && newData.val().length <= 2000)"
+          },
+          "lastMessageAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "unreadCount": {
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "isMuted": {
+            ".validate": "newData.isBoolean()"
+          }
+        }
+      }
+    },
+
+    "orgMembers": {
+      "$orgId": {
+        ".read": "auth != null && root.child('orgMembers').child($orgId).child(auth.uid).exists()",
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid",
+          "name": {
+            ".validate": "newData.isString()"
+          },
+          "email": {
+            ".validate": "newData.isString()"
+          },
+          "role": {
+            ".validate": "newData.val() === 'student' || newData.val() === 'teacher' || newData.val() === 'tutor' || newData.val() === 'admin'"
+          }
+        }
+      }
+    },
+
+    "userTutors": {
+      "$studentId": {
+        "$tutorId": {
+          ".read": "auth != null && (auth.uid === $studentId || auth.uid === $tutorId)",
+          ".write": "auth != null && (auth.uid === $studentId || auth.uid === $tutorId)",
+          ".validate": "newData.val() === true"
+        }
+      }
+    },
+
+    "userBlocks": {
+      "$userId": {
+        ".read": "auth != null && auth.uid === $userId",
+        "$blockedUserId": {
+          ".write": "auth != null && auth.uid === $userId",
+          ".validate": "newData.val() === true || newData.val() === null"
+        }
+      }
+    },
+
+    "reports": {
+      "$reportId": {
+        ".read": "auth != null && data.child('reportedBy').val() === auth.uid",
+        ".write": "auth != null && (!data.exists() && newData.child('reportedBy').val() === auth.uid)",
+        "reportedBy": {
+          ".validate": "newData.isString()"
+        },
+        "reportedUser": {
+          ".validate": "newData.isString()"
+        },
+        "conversationId": {
+          ".validate": "newData.isString()"
+        },
+        "messageId": {
+          ".validate": "newData.isString()"
+        },
+        "reason": {
+          ".validate": "newData.isString()"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        }
+      }
+    }
+  }
+}

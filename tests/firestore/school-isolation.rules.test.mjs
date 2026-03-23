@@ -81,6 +81,17 @@ test.beforeEach(async () => {
       name: "Professor Pendente A",
       email: "pending-a@school-a.pt",
     });
+
+    await setDoc(doc(db, "chatAccess", "convA"), {
+      participants: {
+        profA: true,
+        studentA: true,
+      },
+      orgId: "schoolA",
+      type: "direct",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
   });
 });
 
@@ -120,6 +131,32 @@ test("professor da mesma escola consegue aprovar aluno pendente da sua escola", 
   await assertSucceeds(
     updateDoc(doc(dbProfessorMesmaEscola, "users", "studentA"), {
       estado: "ativo",
+    })
+  );
+});
+
+test("participante da conversa consegue ler chatAccess", async () => {
+  const dbProfessorMesmaEscola = testEnv.authenticatedContext("profA").firestore();
+
+  await assertSucceeds(getDoc(doc(dbProfessorMesmaEscola, "chatAccess", "convA")));
+});
+
+test("não participante da conversa não consegue ler chatAccess", async () => {
+  const dbProfessorOutraEscola = testEnv.authenticatedContext("profB").firestore();
+
+  await assertFails(getDoc(doc(dbProfessorOutraEscola, "chatAccess", "convA")));
+});
+
+test("participante não consegue alterar participantes de chatAccess", async () => {
+  const dbProfessorMesmaEscola = testEnv.authenticatedContext("profA").firestore();
+
+  await assertFails(
+    updateDoc(doc(dbProfessorMesmaEscola, "chatAccess", "convA"), {
+      participants: {
+        profA: true,
+        studentA: true,
+        profB: true,
+      },
     })
   );
 });

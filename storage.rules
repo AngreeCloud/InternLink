@@ -20,6 +20,12 @@ service firebase.storage {
         && currentUserData().schoolId == schoolId;
     }
 
+    function isChatParticipant(conversationId) {
+      return isSignedIn()
+        && firestore.exists(/databases/(default)/documents/chatAccess/$(conversationId))
+        && firestore.get(/databases/(default)/documents/chatAccess/$(conversationId)).data.participants[request.auth.uid] == true;
+    }
+
     match /profile-photos/{userId}/{allPaths=**} {
       allow read: if isSignedIn();
       allow create, update: if isOwner(userId)
@@ -34,6 +40,13 @@ service firebase.storage {
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
       allow delete: if isSchoolAdminFor(schoolId);
+    }
+
+    match /chat-attachments/{conversationId}/{messageId}/{attachmentId}/{allPaths=**} {
+      allow read: if isChatParticipant(conversationId);
+      allow create, update: if isChatParticipant(conversationId)
+        && request.resource.size <= 8 * 1024 * 1024;
+      allow delete: if isChatParticipant(conversationId);
     }
 
     match /{allPaths=**} {
