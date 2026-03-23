@@ -130,11 +130,21 @@ function getDeliveryIcon(message: ChatMessageView, participantCount: number): JS
   if (message.deliveryState === "failed") return <span className="text-[10px] text-red-500">falhou</span>;
 
   const seenCount = Object.keys(message.seenBy || {}).length;
+  const statusLabel = participantCount > 1 && seenCount > 1 ? "Visto" : "Recebido";
+
   if (participantCount > 1 && seenCount > 1) {
-    return <CheckCheck className="h-3.5 w-3.5" />;
+    return (
+      <span title={statusLabel} aria-label={statusLabel}>
+        <CheckCheck className="h-3.5 w-3.5" />
+      </span>
+    );
   }
 
-  return <Check className="h-3.5 w-3.5" />;
+  return (
+    <span title={statusLabel} aria-label={statusLabel}>
+      <Check className="h-3.5 w-3.5" />
+    </span>
+  );
 }
 
 export function InternalChatHub() {
@@ -920,7 +930,6 @@ export function InternalChatHub() {
                     const prev = index > 0 ? mergedMessages[index - 1] : null;
                     const next = index < mergedMessages.length - 1 ? mergedMessages[index + 1] : null;
                     const showDivider = !prev || !isSameDay(prev.createdAt, message.createdAt);
-                    const showAvatar = !mine;
                     const sameSenderAsPrev = Boolean(
                       prev &&
                       prev.senderId === message.senderId &&
@@ -934,6 +943,7 @@ export function InternalChatHub() {
                       isSameDay(next.createdAt, message.createdAt)
                     );
                     const showMessageTimestamp = !sameSenderAsNext;
+                    const showAvatar = !mine && !sameSenderAsPrev;
 
                     return (
                       <div
@@ -955,11 +965,15 @@ export function InternalChatHub() {
                           "group flex gap-2",
                           mine ? "justify-end" : "justify-start",
                         ].join(" ")}>
-                          {showAvatar ? (
-                            <Avatar className="mt-1 h-8 w-8">
-                              <AvatarImage src={author?.photoURL || "/placeholder.svg"} alt={author?.name || "Utilizador"} />
-                              <AvatarFallback className="text-xs">{initials(author?.name || "U")}</AvatarFallback>
-                            </Avatar>
+                          {!mine ? (
+                            <div className="mt-1 h-8 w-8 shrink-0">
+                              {showAvatar ? (
+                                <Avatar className="h-8 w-8">
+                                  <AvatarImage src={author?.photoURL || "/placeholder.svg"} alt={author?.name || "Utilizador"} />
+                                  <AvatarFallback className="text-xs">{initials(author?.name || "U")}</AvatarFallback>
+                                </Avatar>
+                              ) : null}
+                            </div>
                           ) : null}
 
                           <div className={[
@@ -967,7 +981,7 @@ export function InternalChatHub() {
                             showMessageTimestamp ? "pb-2" : "pb-2 group-hover:pb-6",
                             mine ? "bg-primary text-primary-foreground" : "bg-muted",
                           ].join(" ")}>
-                            {!mine ? (
+                            {!mine && !sameSenderAsPrev ? (
                               <div className="mb-1 flex items-center gap-2">
                                 <p className="text-[11px] opacity-70">{author?.name || "Utilizador"}</p>
                                 {hasMixedRolesInConversation && shouldShowRole(author?.role || "student") ? (
