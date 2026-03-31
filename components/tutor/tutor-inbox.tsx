@@ -37,6 +37,7 @@ type TutorInvite = {
   professorPhotoURL: string;
   email: string;
   estado: string;
+  createdAtMillis: number;
   createdAt: string;
 };
 
@@ -179,12 +180,13 @@ export function TutorInbox() {
             professorPhotoURL: data.professorPhotoURL || "",
             email: data.email || resolvedEmail,
             estado: data.estado || "pendente",
+            createdAtMillis: data.createdAt?.toDate?.()?.getTime?.() ?? 0,
             createdAt: data.createdAt?.toDate?.()?.toLocaleDateString("pt-PT") || "—",
           });
         }
       }
 
-      inviteList = Array.from(inviteMap.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      inviteList = Array.from(inviteMap.values()).sort((a, b) => b.createdAtMillis - a.createdAtMillis);
       setInvites(inviteList);
     } catch {
       setInvites([]);

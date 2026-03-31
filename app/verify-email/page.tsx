@@ -14,6 +14,7 @@ import { finalizePendingRegistration, isVerificationBypassEnabled } from "@/lib/
 export default function EmailVerificationPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const verificationBypassEnabled = isVerificationBypassEnabled();
   const [state, setState] = useState({
     loading: true,
     email: "",
@@ -207,6 +208,11 @@ export default function EmailVerificationPage() {
   };
 
   const handleLoginWithoutVerification = async () => {
+    if (!verificationBypassEnabled) {
+      setState((s) => ({ ...s, error: "A entrada sem verificação não está disponível." }));
+      return;
+    }
+
     try {
       const auth = await getAuthRuntime();
       const db = await getDbRuntime();
@@ -315,7 +321,7 @@ export default function EmailVerificationPage() {
                   </Button>
                 </div>
 
-                {state.role === "tutor" && (
+                {state.role === "tutor" && verificationBypassEnabled && (
                   <div className="pt-1">
                     <Button
                       type="button"
