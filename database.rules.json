@@ -6,7 +6,7 @@
     "conversations": {
       "$conversationId": {
         ".read": "auth != null && data.child('participants').child(auth.uid).val() === true",
-        ".write": "auth != null && (( !data.exists() && newData.child('participants').child(auth.uid).val() === true && (newData.child('type').val() === 'direct' || newData.child('type').val() === 'group') ) || (data.exists() && data.child('participants').child(auth.uid).val() === true))",
+        ".write": "auth != null && (( !data.exists() && newData.child('participants').child(auth.uid).val() === true && (newData.child('type').val() === 'direct' || newData.child('type').val() === 'group') ) || (data.exists() && data.child('participants').child(auth.uid).val() === true && newData.child('participants').val() === data.child('participants').val()))",
         "type": {
           ".validate": "newData.val() === 'direct' || newData.val() === 'group'"
         },
@@ -45,9 +45,9 @@
       "$conversationId": {
         ".read": "auth != null && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true",
         "$messageId": {
-          ".write": "auth != null && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true",
+          ".write": "auth != null && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true && ((!data.exists() && newData.child('senderId').val() === auth.uid) || (data.exists() && data.child('senderId').val() === auth.uid && newData.child('senderId').val() === data.child('senderId').val()))",
           "senderId": {
-            ".validate": "newData.isString()"
+            ".validate": "newData.isString() && ((!data.exists() && newData.val() === auth.uid) || (data.exists() && newData.val() === data.val()))"
           },
           "text": {
             ".validate": "newData.val() === null || (newData.isString() && newData.val().length <= 2000)"
@@ -105,7 +105,7 @@
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
         "$conversationId": {
-          ".write": "auth != null && (root.child('conversations').child($conversationId).child('participants').hasChild(auth.uid) || newData.parent().parent().parent().child('conversations').child($conversationId).child('participants').hasChild(auth.uid))",
+          ".write": "auth != null && ((root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true && root.child('conversations').child($conversationId).child('participants').child($uid).val() === true) || (newData.parent().parent().parent().child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true && newData.parent().parent().parent().child('conversations').child($conversationId).child('participants').child($uid).val() === true))",
           "lastMessageText": {
             ".validate": "newData.val() === null || (newData.isString() && newData.val().length <= 2000)"
           },
