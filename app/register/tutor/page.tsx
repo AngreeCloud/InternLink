@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { getRecaptchaV3Token } from "@/lib/recaptcha-v3";
+import { isVerificationBypassEnabled } from "@/lib/verification";
 import { GoogleAuthProvider, sendEmailVerification, signInWithPopup, signOut } from "firebase/auth";
 import Link from "next/link";
 import { AlertCircle, ArrowLeft, Eye, EyeOff } from "lucide-react";
@@ -183,7 +184,11 @@ export default function TutorRegisterPage() {
           await sendEmailVerification(user);
         }
 
-        router.push("/tutor");
+        if (!user.emailVerified && !isVerificationBypassEnabled()) {
+          router.push(`/verify-email?email=${encodeURIComponent(user.email ?? values.email)}`);
+        } else {
+          router.push("/tutor");
+        }
       } else {
         let recaptchaToken = "";
         if (recaptchaSiteKey) {
@@ -200,7 +205,12 @@ export default function TutorRegisterPage() {
           telefone: values.telefone,
           recaptchaToken,
         });
-        router.push("/tutor");
+
+        if (isVerificationBypassEnabled()) {
+          router.push("/tutor");
+        } else {
+          router.push(`/verify-email?email=${encodeURIComponent(result.email ?? values.email)}`);
+        }
       }
     } catch (error) {
       console.error("Erro ao criar conta de tutor:", error);
