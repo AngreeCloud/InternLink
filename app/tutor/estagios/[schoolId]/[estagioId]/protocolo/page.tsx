@@ -4,9 +4,9 @@ import { TutorInternshipProtocolView } from "@/components/tutor/tutor-internship
 export default async function TutorInternshipProtocolPage({
   params,
 }: {
-  params: Promise<{ schoolId: string; estagioId: string }>;
+  params: { schoolId: string; estagioId: string };
 }) {
-  const { schoolId, estagioId } = await params;
+  const { schoolId, estagioId } = params;
 
   return (
     <TutorLayout>
