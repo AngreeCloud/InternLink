@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { onAuthStateChanged, sendEmailVerification, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, type Firestore } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -27,6 +27,18 @@ export default function EmailVerificationPage() {
   const cooldownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const email = searchParams.get("email") || state.email;
+
+  const resolveAndRedirectWithoutFinalizing = async (userId: string, db: Firestore) => {
+    const pendingSnap = await getDoc(doc(db, "pendingRegistrations", userId));
+
+    if (!pendingSnap.exists()) {
+      setState((s) => ({ ...s, error: "Dados de registo não encontrados" }));
+      return;
+    }
+
+    const pendingData = pendingSnap.data() as { role?: string; estado?: string };
+    redirectBasedOnRole(pendingData.role || "", pendingData.estado || "pendente");
+  };
 
   useEffect(() => {
     let unsubscribe = () => {};
@@ -59,6 +71,11 @@ export default function EmailVerificationPage() {
             setState((s) => ({ ...s, role: userData.role || "" }));
             redirectBasedOnRole(userData.role || "", userData.estado || "");
           } else {
+            if (!user.emailVerified && isVerificationBypassEnabled()) {
+              await resolveAndRedirectWithoutFinalizing(user.uid, db);
+              return;
+            }
+
             // User verified email but no document exists yet
             // Check pendingRegistrations and create user document
             await createUserDocumentFromPending(user.uid, db);
@@ -227,6 +244,11 @@ export default function EmailVerificationPage() {
       if (userDocSnap.exists()) {
         const userData = userDocSnap.data() as { role?: string; estado?: string };
         redirectBasedOnRole(userData.role || "", userData.estado || "");
+        return;
+      }
+
+      if (!user.emailVerified) {
+        await resolveAndRedirectWithoutFinalizing(user.uid, db);
         return;
       }
 

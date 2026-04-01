@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
+import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -136,7 +137,13 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
                   ].join(" ")}
                 >
                   <Icon className="mr-2 h-4 w-4" />
-                  {item.label}
+                  <span>{item.label}</span>
+                  {item.href === "/tutor/chat" && (
+                    <ChatNavUnreadBadge
+                      userId={state.userId}
+                      isActive={pathname === item.href || pathname.startsWith(`${item.href}/`)}
+                    />
+                  )}
                 </Link>
               );
             })}

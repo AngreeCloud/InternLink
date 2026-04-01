@@ -9,7 +9,7 @@ export default function SchoolAdminFoldersPage() {
         <p className="text-muted-foreground">Aprovação de utilizadores e criação de pastas/cursos.</p>
       </div>
 
-      <PendingTeachersSection />
+      <PendingTeachersSection showActions={true} />
       <FoldersManager />
     </div>
   );

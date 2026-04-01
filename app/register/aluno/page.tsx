@@ -101,6 +101,7 @@ export default function StudentRegisterPage() {
         return {
           id: docSnap.id,
           name: data.name || "—",
+          profileImageUrl: data.profileImageUrl || "",
           emailDomain: data.emailDomain || "",
           requireInstitutionalEmail: Boolean(data.requireInstitutionalEmail),
           allowGoogleLogin: Boolean(data.allowGoogleLogin),

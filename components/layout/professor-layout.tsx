@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
+import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -166,7 +167,10 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
                   onClick={() => setSidebarOpen(false)}
                 >
                   <item.icon className="h-4 w-4" />
-                  {item.name}
+                  <span>{item.name}</span>
+                  {item.href === "/professor/chat" && (
+                    <ChatNavUnreadBadge userId={state.userId} isActive={isActiveRoute(item.href)} />
+                  )}
                 </Link>
               ))}
             </nav>
@@ -201,7 +205,10 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
                         aria-current={isActiveRoute(item.href) ? "page" : undefined}
                       >
                         <item.icon className="h-4 w-4 shrink-0" />
-                        {item.name}
+                        <span>{item.name}</span>
+                        {item.href === "/professor/chat" && (
+                          <ChatNavUnreadBadge userId={state.userId} isActive={isActiveRoute(item.href)} />
+                        )}
                       </Link>
                     </li>
                   ))}

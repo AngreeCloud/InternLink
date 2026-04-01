@@ -25,10 +25,11 @@ import {
   User,
 } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { onAuthStateChanged, signOut } from "firebase/auth"
 import { doc, getDoc } from "firebase/firestore"
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime"
+import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
@@ -59,6 +60,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     photoURL: "",
   })
   const router = useRouter()
+  const pathname = usePathname()
+
+  const isActiveRoute = (href: string) => {
+    if (href === "/dashboard") {
+      return pathname === href
+    }
+
+    return pathname === href || pathname.startsWith(`${href}/`)
+  }
 
   useEffect(() => {
     let unsubscribe = () => {}
@@ -153,11 +163,20 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 <Link
                   key={item.name}
                   href={item.href}
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  className={[
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    isActiveRoute(item.href)
+                      ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                  ].join(" ")}
+                  aria-current={isActiveRoute(item.href) ? "page" : undefined}
                   onClick={() => setSidebarOpen(false)}
                 >
                   <item.icon className="h-4 w-4" />
-                  {item.name}
+                  <span>{item.name}</span>
+                  {item.href === "/dashboard/chat" && (
+                    <ChatNavUnreadBadge userId={state.userId} isActive={isActiveRoute(item.href)} />
+                  )}
                 </Link>
               ))}
             </nav>
@@ -180,10 +199,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     <li key={item.name}>
                       <Link
                         href={item.href}
-                        className="flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                        className={[
+                          "flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 transition-colors",
+                          isActiveRoute(item.href)
+                            ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                        ].join(" ")}
+                        aria-current={isActiveRoute(item.href) ? "page" : undefined}
                       >
                         <item.icon className="h-4 w-4 shrink-0" />
-                        {item.name}
+                        <span>{item.name}</span>
+                        {item.href === "/dashboard/chat" && (
+                          <ChatNavUnreadBadge userId={state.userId} isActive={isActiveRoute(item.href)} />
+                        )}
                       </Link>
                     </li>
                   ))}
