@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,8 +13,29 @@ import Link from "next/link"
 import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth"
 import { doc, getDoc } from "firebase/firestore"
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime"
+import { getRecaptchaV3Token } from "@/lib/recaptcha-v3"
 import { finalizePendingRegistration, isVerificationBypassEnabled } from "@/lib/verification"
 import { useRouter } from "next/navigation"
+
+async function verifyRecaptchaToken(token: string, action: "login_password" | "login_google") {
+  const response = await fetch("/api/recaptcha/verify", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ token, action }),
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    throw new Error("Falha ao validar CAPTCHA.")
+  }
+
+  const data = (await response.json()) as { success?: boolean }
+  if (!data.success) {
+    throw new Error("Verificação CAPTCHA falhou. Tente novamente.")
+  }
+}
 
 export function LoginForm() {
   const [email, setEmail] = useState("")
@@ -25,6 +46,12 @@ export function LoginForm() {
   const [error, setError] = useState("")
   const router = useRouter()
   const googleLockRef = useRef(false)
+  const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ""
+
+  useEffect(() => {
+    if (!recaptchaSiteKey) return
+    void getRecaptchaV3Token(recaptchaSiteKey, "login_pageview").catch(() => {})
+  }, [recaptchaSiteKey])
 
   const resetGoogleLoginState = () => {
     googleLockRef.current = false
@@ -55,6 +82,11 @@ export function LoginForm() {
     setError("")
 
     try {
+      if (recaptchaSiteKey) {
+        const recaptchaToken = await getRecaptchaV3Token(recaptchaSiteKey, "login_google")
+        await verifyRecaptchaToken(recaptchaToken, "login_google")
+      }
+
       const auth = await getAuthRuntime()
       const db = await getDbRuntime()
       const provider = new GoogleAuthProvider()
@@ -147,6 +179,11 @@ export function LoginForm() {
     setError("")
 
     try {
+      if (recaptchaSiteKey) {
+        const recaptchaToken = await getRecaptchaV3Token(recaptchaSiteKey, "login_password")
+        await verifyRecaptchaToken(recaptchaToken, "login_password")
+      }
+
       const auth = await getAuthRuntime()
       const db = await getDbRuntime()
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
@@ -303,6 +340,10 @@ export function LoginForm() {
               Registe-se
             </Link>
           </div>
+
+          {recaptchaSiteKey && (
+            <p className="text-center text-xs text-muted-foreground">Este formulário usa reCAPTCHA para proteção automática.</p>
+          )}
         </CardFooter>
       </form>
     </Card>
