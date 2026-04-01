@@ -169,6 +169,7 @@ export function InternalChatHub() {
   const [error, setError] = useState("");
 
   const [participantProfiles, setParticipantProfiles] = useState<Record<string, ChatUserProfile>>({});
+  const [unreadByConversation, setUnreadByConversation] = useState<Record<string, number>>({});
 
   const endRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -281,6 +282,20 @@ export function InternalChatHub() {
     );
   }, []);
 
+  const countUnreadForConversation = useCallback((
+    messagesRecord: Record<string, { senderId?: string; seenBy?: Record<string, unknown>; deleted?: boolean }>
+  ) => {
+    if (!profile) return 0;
+
+    return Object.values(messagesRecord).reduce((sum, message) => {
+      const isIncoming = Boolean(message.senderId && message.senderId !== profile.uid);
+      const seenByCurrentUser = Boolean(message.seenBy && message.seenBy[profile.uid]);
+      const isDeleted = Boolean(message.deleted);
+
+      return isIncoming && !seenByCurrentUser && !isDeleted ? sum + 1 : sum;
+    }, 0);
+  }, [profile]);
+
   useEffect(() => {
     let isActive = true;
 
@@ -320,8 +335,13 @@ export function InternalChatHub() {
                 setConversations(items);
                 await loadParticipantProfiles(items);
                 setSelectedConversationId((prev) => {
-                  if (prev && items.some((item) => item.conversation.id === prev)) return prev;
-                  return items[0]?.conversation.id || "";
+                  if (prev && items.some((item) => item.conversation.id === prev)) {
+                    return prev;
+                  }
+
+                  // Keep no active conversation by default. Unread should only clear
+                  // when the user explicitly opens the target conversation.
+                  return "";
                 });
                 setLoading(false);
               },
@@ -398,6 +418,46 @@ export function InternalChatHub() {
       setTypingByUserId({});
     };
   }, [selectedConversation, profile]);
+
+  useEffect(() => {
+    if (!profile || conversations.length === 0) {
+      setUnreadByConversation({});
+      return;
+    }
+
+    let active = true;
+    const unsubscribers: Array<() => void> = [];
+
+    (async () => {
+      const rtdb = await getRealtimeDb();
+
+      for (const item of conversations) {
+        const conversationId = item.conversation.id;
+        const conversationMessagesRef = ref(rtdb, `messages/${conversationId}`);
+
+        const off = onValue(conversationMessagesRef, (snap) => {
+          if (!active) return;
+
+          const unread = snap.exists()
+            ? countUnreadForConversation(
+                snap.val() as Record<string, { senderId?: string; seenBy?: Record<string, unknown>; deleted?: boolean }>
+              )
+            : 0;
+
+          setUnreadByConversation((prev) => ({ ...prev, [conversationId]: unread }));
+        });
+
+        unsubscribers.push(off);
+      }
+    })();
+
+    return () => {
+      active = false;
+      for (const off of unsubscribers) {
+        off();
+      }
+    };
+  }, [conversations, countUnreadForConversation, profile]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -871,8 +931,10 @@ export function InternalChatHub() {
                         </div>
                         <p className="truncate text-xs text-muted-foreground">{getMessagePreview(item.meta)}</p>
                       </div>
-                      {item.meta.unreadCount > 0 ? (
-                        <Badge className="h-5 min-w-5 justify-center px-1 text-[10px]">{item.meta.unreadCount}</Badge>
+                      {(unreadByConversation[conv.id] || 0) > 0 ? (
+                        <Badge className="h-5 min-w-5 justify-center px-1 text-[10px]">
+                          {unreadByConversation[conv.id] >= 10 ? "9+" : unreadByConversation[conv.id]}
+                        </Badge>
                       ) : null}
                     </div>
                   </button>

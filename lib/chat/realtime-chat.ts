@@ -689,11 +689,31 @@ export async function markConversationSeen(
   if (!newestMessage) return;
 
   const rtdb = await getRealtimeDb();
-  await update(ref(rtdb), {
-    [`messages/${conversationId}/${newestMessage.id}/seenBy/${userId}`]: nowTs(),
+  const updates: Record<string, unknown> = {
     [`userConversations/${userId}/${conversationId}/unreadCount`]: 0,
     [`userConversations/${userId}/${conversationId}/lastMessageAt`]: newestMessage.createdAt,
-  });
+  };
+
+  const messagesSnap = await get(ref(rtdb, `messages/${conversationId}`));
+  if (messagesSnap.exists()) {
+    const messages = messagesSnap.val() as Record<
+      string,
+      { senderId?: string; seenBy?: Record<string, unknown>; deleted?: boolean }
+    >;
+    const seenAt = nowTs();
+
+    for (const [messageId, message] of Object.entries(messages)) {
+      const isIncoming = Boolean(message.senderId && message.senderId !== userId);
+      const seenByCurrentUser = Boolean(message.seenBy && message.seenBy[userId]);
+      const isDeleted = Boolean(message.deleted);
+
+      if (isIncoming && !seenByCurrentUser && !isDeleted) {
+        updates[`messages/${conversationId}/${messageId}/seenBy/${userId}`] = seenAt;
+      }
+    }
+  }
+
+  await update(ref(rtdb), updates);
 }
 
 async function uploadAttachments(
