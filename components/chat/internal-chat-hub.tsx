@@ -283,16 +283,20 @@ export function InternalChatHub() {
   }, []);
 
   const countUnreadForConversation = useCallback((
-    messagesRecord: Record<string, { senderId?: string; seenBy?: Record<string, unknown>; deleted?: boolean }>
+    messagesRecord: Record<
+      string,
+      { senderId?: string; seenBy?: Record<string, unknown>; deleted?: boolean; createdAt?: number }
+    >
   ) => {
     if (!profile) return 0;
 
     return Object.values(messagesRecord).reduce((sum, message) => {
+      const hasValidTimestamp = typeof message.createdAt === "number";
       const isIncoming = Boolean(message.senderId && message.senderId !== profile.uid);
       const seenByCurrentUser = Boolean(message.seenBy && message.seenBy[profile.uid]);
       const isDeleted = Boolean(message.deleted);
 
-      return isIncoming && !seenByCurrentUser && !isDeleted ? sum + 1 : sum;
+      return hasValidTimestamp && isIncoming && !seenByCurrentUser && !isDeleted ? sum + 1 : sum;
     }, 0);
   }, [profile]);
 
@@ -440,7 +444,10 @@ export function InternalChatHub() {
 
           const unread = snap.exists()
             ? countUnreadForConversation(
-                snap.val() as Record<string, { senderId?: string; seenBy?: Record<string, unknown>; deleted?: boolean }>
+                snap.val() as Record<
+                  string,
+                  { senderId?: string; seenBy?: Record<string, unknown>; deleted?: boolean; createdAt?: number }
+                >
               )
             : 0;
 

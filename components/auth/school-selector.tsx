@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { School } from "@/lib/types/school";
 
 type SchoolSelectorProps = {
@@ -143,6 +144,15 @@ export function SchoolSelector({
   return (
     <div className={className} ref={rootRef}>
       {label && <Label htmlFor="school-selector">{label}</Label>}
+      {selectedSchool && (
+        <div className="mt-2 flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1.5">
+          <Avatar className="h-6 w-6">
+            <AvatarImage src={selectedSchool.profileImageUrl || ""} alt={selectedSchool.name} />
+            <AvatarFallback>{selectedSchool.name.charAt(0)}</AvatarFallback>
+          </Avatar>
+          <span className="text-sm font-medium text-foreground">{selectedSchool.name}</span>
+        </div>
+      )}
       <div className="relative mt-2">
         <Input
           id="school-selector"
@@ -177,7 +187,7 @@ export function SchoolSelector({
                   <button
                     key={school.id}
                     type="button"
-                    className={`w-full rounded px-3 py-2 text-left text-sm transition-colors ${
+                    className={`flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm transition-colors ${
                       isHighlighted || isSelected ? "bg-muted" : "hover:bg-muted"
                     }`}
                     onMouseDown={(event) => event.preventDefault()}
@@ -185,7 +195,11 @@ export function SchoolSelector({
                     role="option"
                     aria-selected={isSelected}
                   >
-                    {school.name}
+                    <Avatar className="h-5 w-5">
+                      <AvatarImage src={school.profileImageUrl || ""} alt={school.name} />
+                      <AvatarFallback>{school.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <span>{school.name}</span>
                   </button>
                 );
               })

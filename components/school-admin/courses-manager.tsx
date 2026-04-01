@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,6 +52,8 @@ type Course = {
   folderId?: string | null;
   enrolledCount?: number | null;
   teacherIds?: string[];
+  courseDirectorId?: string | null;
+  supportingTeacherIds?: string[];
   internshipDurationMonths?: number | null;
   internshipStartDate?: string | null;
   internshipEndDate?: string | null;
@@ -63,6 +66,7 @@ type Teacher = {
   id: string;
   name: string;
   email: string;
+  photoURL: string;
 };
 
 type SchoolInfo = {
@@ -113,7 +117,8 @@ export function CoursesManager() {
     year: "",
     maxStudents: "",
     folderId: "",
-    teacherIds: [] as string[],
+    courseDirectorId: "",
+    supportingTeacherIds: [] as string[],
     internshipDurationMonths: "",
     internshipStartDate: "",
     internshipEndDate: "",
@@ -194,6 +199,8 @@ export function CoursesManager() {
               folderId?: string | null;
               enrolledCount?: number;
               teacherIds?: string[];
+              courseDirectorId?: string | null;
+              supportingTeacherIds?: string[];
               internshipDurationMonths?: number;
               internshipStartDate?: string | null;
               internshipEndDate?: string | null;
@@ -201,6 +208,18 @@ export function CoursesManager() {
               reportWaitDays?: number;
               createdAt?: { toDate?: () => Date };
             };
+            const legacyTeacherIds = Array.isArray(data.teacherIds) ? data.teacherIds : [];
+            const rawSupportingTeacherIds = Array.isArray(data.supportingTeacherIds)
+              ? data.supportingTeacherIds
+              : [];
+            const courseDirectorId =
+              typeof data.courseDirectorId === "string" && data.courseDirectorId
+                ? data.courseDirectorId
+                : legacyTeacherIds[0] || null;
+            const supportingTeacherIds = rawSupportingTeacherIds.length
+              ? rawSupportingTeacherIds
+              : legacyTeacherIds.filter((id) => id !== courseDirectorId);
+
             return {
               id: docSnap.id,
               name: data.name || "—",
@@ -208,7 +227,9 @@ export function CoursesManager() {
               maxStudents: data.maxStudents ?? null,
               folderId: data.folderId ?? null,
               enrolledCount: data.enrolledCount ?? 0,
-              teacherIds: Array.isArray(data.teacherIds) ? data.teacherIds : [],
+              teacherIds: legacyTeacherIds,
+              courseDirectorId,
+              supportingTeacherIds,
               internshipDurationMonths: data.internshipDurationMonths ?? null,
               internshipStartDate: data.internshipStartDate ?? null,
               internshipEndDate: data.internshipEndDate ?? null,
@@ -242,6 +263,7 @@ export function CoursesManager() {
               id: docSnap.id,
               name: data.nome || "—",
               email: data.email || "—",
+              photoURL: (docSnap.data() as { photoURL?: string }).photoURL || "",
             };
           })
         );
@@ -284,6 +306,8 @@ export function CoursesManager() {
           folderId?: string | null;
           enrolledCount?: number;
           teacherIds?: string[];
+          courseDirectorId?: string | null;
+          supportingTeacherIds?: string[];
           internshipDurationMonths?: number;
           internshipStartDate?: string | null;
           internshipEndDate?: string | null;
@@ -291,6 +315,18 @@ export function CoursesManager() {
           reportWaitDays?: number;
           createdAt?: { toDate?: () => Date };
         };
+        const legacyTeacherIds = Array.isArray(data.teacherIds) ? data.teacherIds : [];
+        const rawSupportingTeacherIds = Array.isArray(data.supportingTeacherIds)
+          ? data.supportingTeacherIds
+          : [];
+        const courseDirectorId =
+          typeof data.courseDirectorId === "string" && data.courseDirectorId
+            ? data.courseDirectorId
+            : legacyTeacherIds[0] || null;
+        const supportingTeacherIds = rawSupportingTeacherIds.length
+          ? rawSupportingTeacherIds
+          : legacyTeacherIds.filter((id) => id !== courseDirectorId);
+
         return {
           id: docSnap.id,
           name: data.name || "—",
@@ -298,7 +334,9 @@ export function CoursesManager() {
           maxStudents: data.maxStudents ?? null,
           folderId: data.folderId ?? null,
           enrolledCount: data.enrolledCount ?? 0,
-          teacherIds: Array.isArray(data.teacherIds) ? data.teacherIds : [],
+          teacherIds: legacyTeacherIds,
+          courseDirectorId,
+          supportingTeacherIds,
           internshipDurationMonths: data.internshipDurationMonths ?? null,
           internshipStartDate: data.internshipStartDate ?? null,
           internshipEndDate: data.internshipEndDate ?? null,
@@ -358,13 +396,19 @@ export function CoursesManager() {
     }
 
     const db = await getDbRuntime();
+    const mergedTeacherIds = Array.from(
+      new Set([newCourse.courseDirectorId, ...newCourse.supportingTeacherIds].filter(Boolean))
+    );
+
     await addDoc(collection(db, "courses"), {
       name: newCourse.name.trim(),
       year: requiresYear && newCourse.year ? Number(newCourse.year) : null,
       maxStudents: newCourse.maxStudents ? Number(newCourse.maxStudents) : null,
       schoolId,
       folderId: newCourse.folderId && newCourse.folderId !== NO_FOLDER_VALUE ? newCourse.folderId : null,
-      teacherIds: newCourse.teacherIds,
+      teacherIds: mergedTeacherIds,
+      courseDirectorId: newCourse.courseDirectorId || null,
+      supportingTeacherIds: newCourse.supportingTeacherIds,
       internshipDurationMonths: durationMonths,
       internshipStartDate: startDate,
       internshipEndDate: endDate,
@@ -379,7 +423,8 @@ export function CoursesManager() {
       year: "",
       maxStudents: "",
       folderId: "",
-      teacherIds: [],
+      courseDirectorId: "",
+      supportingTeacherIds: [],
       internshipDurationMonths: "",
       internshipStartDate: "",
       internshipEndDate: "",
@@ -422,13 +467,19 @@ export function CoursesManager() {
     }
 
     const db = await getDbRuntime();
+    const mergedTeacherIds = Array.from(
+      new Set([editCourse.courseDirectorId, ...(editCourse.supportingTeacherIds || [])].filter(Boolean))
+    );
+
     await updateDoc(doc(db, "courses", editCourse.id), {
       name: editCourse.name.trim(),
       year: requiresYear && editCourse.year ? Number(editCourse.year) : null,
       maxStudents: editCourse.maxStudents ? Number(editCourse.maxStudents) : null,
       folderId:
         editCourse.folderId && editCourse.folderId !== NO_FOLDER_VALUE ? editCourse.folderId : null,
-      teacherIds: editCourse.teacherIds || [],
+      teacherIds: mergedTeacherIds,
+      courseDirectorId: editCourse.courseDirectorId || null,
+      supportingTeacherIds: editCourse.supportingTeacherIds || [],
       internshipDurationMonths: durationMonths,
       internshipStartDate: startDate,
       internshipEndDate: endDate,
@@ -493,6 +544,26 @@ export function CoursesManager() {
       }))
       .filter((group) => filterFolderId !== ALL_FOLDERS_VALUE || group.courses.length > 0);
   }, [filterFolderId, filteredCourses, folderOptions]);
+
+  const teacherById = useMemo(
+    () => new Map(teachers.map((teacher) => [teacher.id, teacher])),
+    [teachers]
+  );
+
+  const getTeacherName = (teacherId?: string | null) => {
+    if (!teacherId) return "Sem diretor definido";
+    return teacherById.get(teacherId)?.name || "Professor removido";
+  };
+
+  const getTeacherAvatarFallback = (name: string) => {
+    const parts = name
+      .split(" ")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (parts.length === 0) return "PR";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return `${parts[0][0] || "P"}${parts[1][0] || "R"}`.toUpperCase();
+  };
 
   return (
     <div className="space-y-6">
@@ -689,32 +760,85 @@ export function CoursesManager() {
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Professores responsáveis</Label>
+            <div className="space-y-3">
+              <Label>Diretor do Curso</Label>
               {teachers.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Sem professores registados.</p>
               ) : (
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {teachers.map((teacher) => (
-                    <label key={teacher.id} className="flex items-center gap-2 text-sm text-foreground">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4"
-                        checked={newCourse.teacherIds.includes(teacher.id)}
-                        onChange={(event) => {
-                          const checked = event.target.checked;
+                  {teachers.map((teacher) => {
+                    const selected = newCourse.courseDirectorId === teacher.id;
+                    return (
+                      <button
+                        key={teacher.id}
+                        type="button"
+                        onClick={() =>
                           setNewCourse((prev) => ({
                             ...prev,
-                            teacherIds: checked
-                              ? [...prev.teacherIds, teacher.id]
-                              : prev.teacherIds.filter((id) => id !== teacher.id),
-                          }));
-                        }}
-                      />
-                      <span>{teacher.name}</span>
-                      <span className="text-xs text-muted-foreground">{teacher.email}</span>
-                    </label>
-                  ))}
+                            courseDirectorId: selected ? "" : teacher.id,
+                            supportingTeacherIds: prev.supportingTeacherIds.filter((id) => id !== teacher.id),
+                          }))
+                        }
+                        className={`flex items-center gap-3 rounded-lg border p-2 text-left transition ${
+                          selected ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                        }`}
+                      >
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={teacher.photoURL} alt={teacher.name} />
+                          <AvatarFallback>{getTeacherAvatarFallback(teacher.name)}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">{teacher.name}</p>
+                          <p className="truncate text-xs text-muted-foreground">{teacher.email}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Outros professores</Label>
+              {teachers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Sem professores registados.</p>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {teachers.map((teacher) => {
+                    const isDirector = newCourse.courseDirectorId === teacher.id;
+                    const selected = newCourse.supportingTeacherIds.includes(teacher.id);
+                    return (
+                      <label
+                        key={teacher.id}
+                        className={`flex items-center gap-3 rounded-lg border p-2 text-sm ${
+                          isDirector ? "border-border/50 opacity-60" : "border-border"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          disabled={isDirector}
+                          checked={selected}
+                          onChange={(event) => {
+                            const checked = event.target.checked;
+                            setNewCourse((prev) => ({
+                              ...prev,
+                              supportingTeacherIds: checked
+                                ? [...prev.supportingTeacherIds, teacher.id]
+                                : prev.supportingTeacherIds.filter((id) => id !== teacher.id),
+                            }));
+                          }}
+                        />
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={teacher.photoURL} alt={teacher.name} />
+                          <AvatarFallback>{getTeacherAvatarFallback(teacher.name)}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">{teacher.name}</p>
+                          <p className="truncate text-xs text-muted-foreground">{teacher.email}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1023,39 +1147,105 @@ export function CoursesManager() {
                                     />
                                   </div>
                                 </div>
-                                <div className="space-y-2">
-                                  <Label>Professores responsáveis</Label>
+                                <div className="space-y-3">
+                                  <Label>Diretor do Curso</Label>
                                   {teachers.length === 0 ? (
                                     <p className="text-sm text-muted-foreground">Sem professores registados.</p>
                                   ) : (
                                     <div className="grid gap-2 sm:grid-cols-2">
-                                      {teachers.map((teacher) => (
-                                        <label
-                                          key={teacher.id}
-                                          className="flex items-center gap-2 text-sm text-foreground"
-                                        >
-                                          <input
-                                            type="checkbox"
-                                            className="h-4 w-4"
-                                            checked={(draft.teacherIds || []).includes(teacher.id)}
-                                            onChange={(event) => {
-                                              const checked = event.target.checked;
-                                              setEditCourse((prev) => {
-                                                if (!prev) return prev;
-                                                const ids = prev.teacherIds || [];
-                                                return {
-                                                  ...prev,
-                                                  teacherIds: checked
-                                                    ? [...ids, teacher.id]
-                                                    : ids.filter((id) => id !== teacher.id),
-                                                };
-                                              });
-                                            }}
-                                          />
-                                          <span>{teacher.name}</span>
-                                          <span className="text-xs text-muted-foreground">{teacher.email}</span>
-                                        </label>
-                                      ))}
+                                      {teachers.map((teacher) => {
+                                        const selected = draft.courseDirectorId === teacher.id;
+                                        return (
+                                          <button
+                                            key={teacher.id}
+                                            type="button"
+                                            onClick={() =>
+                                              setEditCourse((prev) =>
+                                                prev
+                                                  ? {
+                                                      ...prev,
+                                                      courseDirectorId: selected ? null : teacher.id,
+                                                      supportingTeacherIds: (prev.supportingTeacherIds || []).filter(
+                                                        (id) => id !== teacher.id
+                                                      ),
+                                                    }
+                                                  : prev
+                                              )
+                                            }
+                                            className={`flex items-center gap-3 rounded-lg border p-2 text-left transition ${
+                                              selected
+                                                ? "border-primary bg-primary/5"
+                                                : "border-border hover:border-primary/50"
+                                            }`}
+                                          >
+                                            <Avatar className="h-8 w-8">
+                                              <AvatarImage src={teacher.photoURL} alt={teacher.name} />
+                                              <AvatarFallback>{getTeacherAvatarFallback(teacher.name)}</AvatarFallback>
+                                            </Avatar>
+                                            <div className="min-w-0">
+                                              <p className="truncate text-sm font-medium text-foreground">
+                                                {teacher.name}
+                                              </p>
+                                              <p className="truncate text-xs text-muted-foreground">
+                                                {teacher.email}
+                                              </p>
+                                            </div>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="space-y-2">
+                                  <Label>Outros professores</Label>
+                                  {teachers.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground">Sem professores registados.</p>
+                                  ) : (
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                      {teachers.map((teacher) => {
+                                        const isDirector = draft.courseDirectorId === teacher.id;
+                                        const selected = (draft.supportingTeacherIds || []).includes(teacher.id);
+                                        return (
+                                          <label
+                                            key={teacher.id}
+                                            className={`flex items-center gap-3 rounded-lg border p-2 text-sm ${
+                                              isDirector ? "border-border/50 opacity-60" : "border-border"
+                                            }`}
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              className="h-4 w-4"
+                                              disabled={isDirector}
+                                              checked={selected}
+                                              onChange={(event) => {
+                                                const checked = event.target.checked;
+                                                setEditCourse((prev) => {
+                                                  if (!prev) return prev;
+                                                  const ids = prev.supportingTeacherIds || [];
+                                                  return {
+                                                    ...prev,
+                                                    supportingTeacherIds: checked
+                                                      ? [...ids, teacher.id]
+                                                      : ids.filter((id) => id !== teacher.id),
+                                                  };
+                                                });
+                                              }}
+                                            />
+                                            <Avatar className="h-8 w-8">
+                                              <AvatarImage src={teacher.photoURL} alt={teacher.name} />
+                                              <AvatarFallback>{getTeacherAvatarFallback(teacher.name)}</AvatarFallback>
+                                            </Avatar>
+                                            <div className="min-w-0">
+                                              <p className="truncate text-sm font-medium text-foreground">
+                                                {teacher.name}
+                                              </p>
+                                              <p className="truncate text-xs text-muted-foreground">
+                                                {teacher.email}
+                                              </p>
+                                            </div>
+                                          </label>
+                                        );
+                                      })}
                                     </div>
                                   )}
                                 </div>
@@ -1081,6 +1271,13 @@ export function CoursesManager() {
                                   <p>Data de conclusão: {course.internshipEndDate || "—"}</p>
                                   <p>Horas mínimas para relatório: {course.reportMinHours ?? 80}h</p>
                                   <p>Espera para relatório: {course.reportWaitDays ?? 0} dia(s)</p>
+                                  <p>Diretor do Curso: {getTeacherName(course.courseDirectorId)}</p>
+                                  <p>
+                                    Outros professores:{" "}
+                                    {(course.supportingTeacherIds || [])
+                                      .map((teacherId) => getTeacherName(teacherId))
+                                      .join(", ") || "—"}
+                                  </p>
                                 </div>
                               </div>
                             )}

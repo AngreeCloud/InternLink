@@ -10,15 +10,19 @@ type UserConversationMeta = {
 };
 
 function countUnreadMessagesForUser(
-  messagesRecord: Record<string, { senderId?: string; seenBy?: Record<string, unknown>; deleted?: boolean }>,
+  messagesRecord: Record<
+    string,
+    { senderId?: string; seenBy?: Record<string, unknown>; deleted?: boolean; createdAt?: number }
+  >,
   userId: string
 ) {
   return Object.values(messagesRecord).reduce((sum, message) => {
+    const hasValidTimestamp = typeof message.createdAt === "number";
     const isIncoming = Boolean(message.senderId && message.senderId !== userId);
     const seenByCurrentUser = Boolean(message.seenBy && message.seenBy[userId]);
     const isDeleted = Boolean(message.deleted);
 
-    return isIncoming && !seenByCurrentUser && !isDeleted ? sum + 1 : sum;
+    return hasValidTimestamp && isIncoming && !seenByCurrentUser && !isDeleted ? sum + 1 : sum;
   }, 0);
 }
 
@@ -83,7 +87,7 @@ export function ChatNavUnreadBadge({ userId, isActive = false }: { userId: strin
 
               const messagesRecord = messagesSnap.val() as Record<
                 string,
-                { senderId?: string; seenBy?: Record<string, unknown>; deleted?: boolean }
+                { senderId?: string; seenBy?: Record<string, unknown>; deleted?: boolean; createdAt?: number }
               >;
               unreadByConversation[conversationId] = countUnreadMessagesForUser(messagesRecord, userId);
               recomputeTotal();

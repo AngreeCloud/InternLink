@@ -13,6 +13,7 @@ export type School = {
    * Nota: Se requireInstitutionalEmail for true, Google Login é automaticamente bloqueado.
    */
   allowGoogleLogin?: boolean;
+  profileImageUrl?: string;
   /**
    * Backwards-compatible flag. Original field used `requiresPhone`.
    * New fields split responsibilities:

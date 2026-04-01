@@ -8,6 +8,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { SchoolAdminProvider } from "@/components/school-admin/school-admin-context";
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
+import { SchoolAdminApprovalsBadge } from "@/components/school-admin/school-admin-approvals-badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -152,6 +153,9 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
                     {item.href === "/school-admin/chat" && (
                       <ChatNavUnreadBadge userId={state.userId} isActive={isActiveRoute(item.href)} />
                     )}
+                    {item.href === "/school-admin/aprovacoes" && (
+                      <SchoolAdminApprovalsBadge schoolId={state.schoolId} isActive={isActiveRoute(item.href)} />
+                    )}
                   </Link>
                 ))}
               </nav>
@@ -188,6 +192,9 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
                           <span>{item.name}</span>
                           {item.href === "/school-admin/chat" && (
                             <ChatNavUnreadBadge userId={state.userId} isActive={isActiveRoute(item.href)} />
+                          )}
+                          {item.href === "/school-admin/aprovacoes" && (
+                            <SchoolAdminApprovalsBadge schoolId={state.schoolId} isActive={isActiveRoute(item.href)} />
                           )}
                         </Link>
                       </li>

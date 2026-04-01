@@ -698,16 +698,17 @@ export async function markConversationSeen(
   if (messagesSnap.exists()) {
     const messages = messagesSnap.val() as Record<
       string,
-      { senderId?: string; seenBy?: Record<string, unknown>; deleted?: boolean }
+      { senderId?: string; seenBy?: Record<string, unknown>; deleted?: boolean; createdAt?: number }
     >;
     const seenAt = nowTs();
 
     for (const [messageId, message] of Object.entries(messages)) {
+      const hasValidTimestamp = typeof message.createdAt === "number";
       const isIncoming = Boolean(message.senderId && message.senderId !== userId);
       const seenByCurrentUser = Boolean(message.seenBy && message.seenBy[userId]);
       const isDeleted = Boolean(message.deleted);
 
-      if (isIncoming && !seenByCurrentUser && !isDeleted) {
+      if (hasValidTimestamp && isIncoming && !seenByCurrentUser && !isDeleted) {
         updates[`messages/${conversationId}/${messageId}/seenBy/${userId}`] = seenAt;
       }
     }
