@@ -8,7 +8,6 @@ import { ensureOrgMemberIndexByUserId } from "@/lib/chat/realtime-chat";
 import { useSchoolAdmin } from "@/components/school-admin/school-admin-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 type PendingTeacher = {
   id: string;
@@ -19,12 +18,7 @@ type PendingTeacher = {
   source: "pendingTeacherDoc" | "userDoc" | "pendingRegistration";
 };
 
-type ActiveProfessor = {
-  id: string;
-  name: string;
-  email: string;
-  photoURL: string;
-};
+
 
 export function PendingTeachersSection({
   showSearch = true,
@@ -47,67 +41,6 @@ export function PendingTeachersSection({
   const [actionSuccess, setActionSuccess] = useState("");
   const [actingTeacherId, setActingTeacherId] = useState("");
   const [queryText, setQueryText] = useState("");
-  const [activeProfessors, setActiveProfessors] = useState<ActiveProfessor[]>([]);
-
-  const removeProfessorFromSchool = async (teacher: ActiveProfessor) => {
-    if (!window.confirm(`Remover ${teacher.name} do sistema da escola?`)) return;
-
-    setActionError("");
-    setActionSuccess("");
-    setActingTeacherId(teacher.id);
-
-    try {
-      const db = await getDbRuntime();
-
-      await updateDoc(doc(db, "users", teacher.id), {
-        estado: "removido",
-        schoolId: null,
-        courseId: null,
-        reviewedAt: serverTimestamp(),
-        reviewedBy: userId,
-      });
-
-      const coursesSnap = await getDocs(query(collection(db, "courses"), where("schoolId", "==", schoolId)));
-      for (const courseDoc of coursesSnap.docs) {
-        const courseData = courseDoc.data() as {
-          teacherIds?: string[];
-          courseDirectorId?: string | null;
-          supportingTeacherIds?: string[];
-        };
-
-        const teacherIds = Array.isArray(courseData.teacherIds) ? courseData.teacherIds : [];
-        const supportingTeacherIds = Array.isArray(courseData.supportingTeacherIds)
-          ? courseData.supportingTeacherIds
-          : [];
-        const courseDirectorId = typeof courseData.courseDirectorId === "string" ? courseData.courseDirectorId : null;
-
-        const nextTeacherIds = teacherIds.filter((id) => id !== teacher.id);
-        const nextSupportingTeacherIds = supportingTeacherIds.filter((id) => id !== teacher.id);
-        const nextCourseDirectorId = courseDirectorId === teacher.id ? null : courseDirectorId;
-
-        if (
-          nextTeacherIds.length !== teacherIds.length ||
-          nextSupportingTeacherIds.length !== supportingTeacherIds.length ||
-          nextCourseDirectorId !== courseDirectorId
-        ) {
-          await updateDoc(doc(db, "courses", courseDoc.id), {
-            teacherIds: nextTeacherIds,
-            supportingTeacherIds: nextSupportingTeacherIds,
-            courseDirectorId: nextCourseDirectorId,
-            updatedAt: serverTimestamp(),
-          });
-        }
-      }
-
-      setActiveProfessors((current) => current.filter((item) => item.id !== teacher.id));
-      setActionSuccess("Professor removido do sistema da escola.");
-    } catch (error) {
-      console.error("Erro ao remover professor da escola:", error);
-      setActionError("Não foi possível remover o professor. Tente novamente.");
-    } finally {
-      setActingTeacherId("");
-    }
-  };
 
   const handleTeacherDecision = async (teacher: PendingTeacher, decision: "aprovado" | "recusado") => {
     if (!teacher.hasUserDoc) {
@@ -255,31 +188,6 @@ export function PendingTeachersSection({
           } satisfies PendingTeacher;
         });
 
-        const usersActiveProfessors = usersSnapshot.docs
-          .map((docSnap) => {
-            const docData = docSnap.data() as {
-              role?: string;
-              estado?: string;
-              nome?: string;
-              name?: string;
-              email?: string;
-              photoURL?: string;
-            };
-
-            if (docData.role !== "professor" || docData.estado !== "ativo") {
-              return null;
-            }
-
-            return {
-              id: docSnap.id,
-              name: docData.nome || docData.name || "—",
-              email: docData.email || "—",
-              photoURL: docData.photoURL || "",
-            } satisfies ActiveProfessor;
-          })
-          .filter((teacher): teacher is Exclude<typeof teacher, null> => teacher !== null)
-          .sort((a, b) => a.name.localeCompare(b.name, "pt-PT"));
-
         if (!active) return;
 
         const usersById = new Set(usersPendingTeachers.map((teacher) => teacher.id));
@@ -303,12 +211,10 @@ export function PendingTeachersSection({
         });
 
         setTeachers(merged);
-        setActiveProfessors(usersActiveProfessors);
       } catch (error) {
         console.error("Erro ao carregar professores pendentes:", error);
         if (!active) return;
         setTeachers([]);
-        setActiveProfessors([]);
         setLoadError("Não foi possível carregar os professores pendentes.");
       } finally {
         if (!active) return;
