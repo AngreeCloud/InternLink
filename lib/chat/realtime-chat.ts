@@ -883,12 +883,21 @@ export async function sendMessage(params: {
     [`conversations/${conversationId}/updatedAt`]: createdAt,
   };
 
-  for (const participantId of participantIds) {
-    updates[`userConversations/${participantId}/${conversationId}/lastMessageText`] = lastMessageText;
-    updates[`userConversations/${participantId}/${conversationId}/lastMessageAt`] = createdAt;
-  }
-
   await update(ref(rtdb), updates);
+
+  await Promise.all(
+    participantIds.map(async (participantId) => {
+      try {
+        await update(ref(rtdb, `userConversations/${participantId}/${conversationId}`), {
+          lastMessageText,
+          lastMessageAt: createdAt,
+        });
+      } catch {
+        // Keep message delivery successful even if userConversations metadata sync fails.
+      }
+    })
+  );
+
   await incrementUnreadForParticipants(conversationId, participantIds, sender.uid);
 
   return message;

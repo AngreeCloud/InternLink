@@ -282,24 +282,6 @@ export function InternalChatHub() {
     );
   }, []);
 
-  const countUnreadForConversation = useCallback((
-    messagesRecord: Record<
-      string,
-      { senderId?: string; seenBy?: Record<string, unknown>; deleted?: boolean; createdAt?: number }
-    >
-  ) => {
-    if (!profile) return 0;
-
-    return Object.values(messagesRecord).reduce((sum, message) => {
-      const hasValidTimestamp = typeof message.createdAt === "number";
-      const isIncoming = Boolean(message.senderId && message.senderId !== profile.uid);
-      const seenByCurrentUser = Boolean(message.seenBy && message.seenBy[profile.uid]);
-      const isDeleted = Boolean(message.deleted);
-
-      return hasValidTimestamp && isIncoming && !seenByCurrentUser && !isDeleted ? sum + 1 : sum;
-    }, 0);
-  }, [profile]);
-
   useEffect(() => {
     let isActive = true;
 
@@ -429,42 +411,15 @@ export function InternalChatHub() {
       return;
     }
 
-    let active = true;
-    const unsubscribers: Array<() => void> = [];
+    const nextUnreadByConversation: Record<string, number> = {};
+    for (const item of conversations) {
+      const conversationId = item.conversation.id;
+      const unreadCount = typeof item.meta.unreadCount === "number" ? item.meta.unreadCount : 0;
+      nextUnreadByConversation[conversationId] = unreadCount > 0 ? unreadCount : 0;
+    }
 
-    (async () => {
-      const rtdb = await getRealtimeDb();
-
-      for (const item of conversations) {
-        const conversationId = item.conversation.id;
-        const conversationMessagesRef = ref(rtdb, `messages/${conversationId}`);
-
-        const off = onValue(conversationMessagesRef, (snap) => {
-          if (!active) return;
-
-          const unread = snap.exists()
-            ? countUnreadForConversation(
-                snap.val() as Record<
-                  string,
-                  { senderId?: string; seenBy?: Record<string, unknown>; deleted?: boolean; createdAt?: number }
-                >
-              )
-            : 0;
-
-          setUnreadByConversation((prev) => ({ ...prev, [conversationId]: unread }));
-        });
-
-        unsubscribers.push(off);
-      }
-    })();
-
-    return () => {
-      active = false;
-      for (const off of unsubscribers) {
-        off();
-      }
-    };
-  }, [conversations, countUnreadForConversation, profile]);
+    setUnreadByConversation(nextUnreadByConversation);
+  }, [conversations, profile]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });

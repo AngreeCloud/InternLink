@@ -9,30 +9,12 @@ type UserConversationMeta = {
   unreadCount?: number;
 };
 
-function countUnreadMessagesForUser(
-  messagesRecord: Record<
-    string,
-    { senderId?: string; seenBy?: Record<string, unknown>; deleted?: boolean; createdAt?: number }
-  >,
-  userId: string
-) {
-  return Object.values(messagesRecord).reduce((sum, message) => {
-    const hasValidTimestamp = typeof message.createdAt === "number";
-    const isIncoming = Boolean(message.senderId && message.senderId !== userId);
-    const seenByCurrentUser = Boolean(message.seenBy && message.seenBy[userId]);
-    const isDeleted = Boolean(message.deleted);
-
-    return hasValidTimestamp && isIncoming && !seenByCurrentUser && !isDeleted ? sum + 1 : sum;
-  }, 0);
-}
-
 export function ChatNavUnreadBadge({ userId, isActive = false }: { userId: string; isActive?: boolean }) {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     let active = true;
     let unsubscribeUserConversations = () => {};
-    let messageUnsubscribers: Array<() => void> = [];
 
     (async () => {
       if (!userId) {
@@ -43,74 +25,35 @@ export function ChatNavUnreadBadge({ userId, isActive = false }: { userId: strin
       const rtdb = await getRealtimeDb();
       const userConversationsRef = ref(rtdb, `userConversations/${userId}`);
 
-      unsubscribeUserConversations = onValue(userConversationsRef, (snap) => {
-        if (!active) return;
-
-        for (const off of messageUnsubscribers) {
-          off();
-        }
-        messageUnsubscribers = [];
-
-        if (!snap.exists()) {
-          setUnreadCount(0);
-          return;
-        }
-
-        const data = snap.val() as Record<string, UserConversationMeta>;
-        const conversationIds = Object.keys(data);
-        if (conversationIds.length === 0) {
-          setUnreadCount(0);
-          return;
-        }
-
-        const unreadByConversation: Record<string, number> = {};
-        const recomputeTotal = () => {
+      unsubscribeUserConversations = onValue(
+        userConversationsRef,
+        (snap) => {
           if (!active) return;
-          const total = Object.values(unreadByConversation).reduce((sum, value) => sum + value, 0);
+
+          if (!snap.exists()) {
+            setUnreadCount(0);
+            return;
+          }
+
+          const data = snap.val() as Record<string, UserConversationMeta>;
+
+          const total = Object.values(data).reduce((sum, meta) => {
+            const unread = typeof meta?.unreadCount === "number" ? meta.unreadCount : 0;
+            return sum + (unread > 0 ? unread : 0);
+          }, 0);
+
           setUnreadCount(total);
-        };
-
-        for (const conversationId of conversationIds) {
-          unreadByConversation[conversationId] = 0;
-          const conversationMessagesRef = ref(rtdb, `messages/${conversationId}`);
-
-          const offMessages = onValue(
-            conversationMessagesRef,
-            (messagesSnap) => {
-              if (!active) return;
-
-              if (!messagesSnap.exists()) {
-                unreadByConversation[conversationId] = 0;
-                recomputeTotal();
-                return;
-              }
-
-              const messagesRecord = messagesSnap.val() as Record<
-                string,
-                { senderId?: string; seenBy?: Record<string, unknown>; deleted?: boolean; createdAt?: number }
-              >;
-              unreadByConversation[conversationId] = countUnreadMessagesForUser(messagesRecord, userId);
-              recomputeTotal();
-            },
-            () => {
-              unreadByConversation[conversationId] = 0;
-              recomputeTotal();
-            }
-          );
-
-          messageUnsubscribers.push(offMessages);
+        },
+        () => {
+          if (!active) return;
+          setUnreadCount(0);
         }
-
-        recomputeTotal();
-      });
+      );
     })();
 
     return () => {
       active = false;
       unsubscribeUserConversations();
-      for (const off of messageUnsubscribers) {
-        off();
-      }
     };
   }, [userId]);
 
