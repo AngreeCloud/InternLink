@@ -57,10 +57,11 @@ export default function EmailVerificationPage() {
         const userEmail = user.email || email;
         setState((s) => ({ ...s, email: userEmail, loading: false }));
 
-        // Check if email is already verified
+        // Allow progress when verified or bypass is enabled.
+        // Only mark the UI as verified when email is actually verified.
         if (user.emailVerified || isVerificationBypassEnabled()) {
           await user.getIdToken(true);
-          setState((s) => ({ ...s, verified: true }));
+          setState((s) => ({ ...s, verified: user.emailVerified }));
 
           // Check if user document exists
           const userDocSnap = await getDoc(doc(db, "users", user.uid));
