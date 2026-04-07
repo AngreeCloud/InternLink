@@ -107,6 +107,7 @@ function mapMessage(snapshot: DataSnapshot): ChatMessage {
     createdAt: value.createdAt,
     editedAt: value.editedAt ?? null,
     deleted: Boolean(value.deleted),
+    deletedAt: value.deletedAt ?? null,
     seenBy: value.seenBy || {},
   };
 }
@@ -847,6 +848,7 @@ export async function sendMessage(params: {
     createdAt,
     editedAt: null,
     deleted: false,
+    deletedAt: null,
     seenBy: {
       [sender.uid]: createdAt,
     },
@@ -863,6 +865,7 @@ export async function sendMessage(params: {
       createdAt: message.createdAt,
       editedAt: message.editedAt,
       deleted: message.deleted,
+      deletedAt: message.deletedAt,
       seenBy: message.seenBy,
     },
     [`conversations/${conversationId}/lastMessage`]: {
@@ -940,12 +943,43 @@ export async function deleteMessage(params: {
     throw new Error("Só o autor pode apagar esta mensagem.");
   }
 
+  if (msg.deleted) return;
+
+  const deletedAt = nowTs();
+
   await update(ref(rtdb), {
     [`messages/${params.conversationId}/${params.messageId}/deleted`]: true,
-    [`messages/${params.conversationId}/${params.messageId}/text`]: null,
-    [`messages/${params.conversationId}/${params.messageId}/editedAt`]: nowTs(),
+    [`messages/${params.conversationId}/${params.messageId}/deletedAt`]: deletedAt,
     [`conversations/${params.conversationId}/lastMessage/text`]: "A mensagem foi apagada",
-    [`conversations/${params.conversationId}/updatedAt`]: nowTs(),
+    [`conversations/${params.conversationId}/updatedAt`]: deletedAt,
+  });
+}
+
+export async function restoreDeletedMessage(params: {
+  conversationId: string;
+  messageId: string;
+  actorId: string;
+}): Promise<void> {
+  const rtdb = await getRealtimeDb();
+  const msgSnap = await get(ref(rtdb, `messages/${params.conversationId}/${params.messageId}`));
+  if (!msgSnap.exists()) throw new Error("Mensagem não encontrada.");
+
+  const msg = msgSnap.val() as ChatMessage;
+  if (msg.senderId !== params.actorId) {
+    throw new Error("Só o autor pode anular a eliminação desta mensagem.");
+  }
+
+  if (!msg.deleted) return;
+
+  const hasAttachments = Object.keys(msg.attachments || {}).length > 0;
+  const restoredText = msg.text || (hasAttachments ? "[Anexo]" : null);
+  const updatedAt = nowTs();
+
+  await update(ref(rtdb), {
+    [`messages/${params.conversationId}/${params.messageId}/deleted`]: false,
+    [`messages/${params.conversationId}/${params.messageId}/deletedAt`]: null,
+    [`conversations/${params.conversationId}/lastMessage/text`]: restoredText,
+    [`conversations/${params.conversationId}/updatedAt`]: updatedAt,
   });
 }
 

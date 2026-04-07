@@ -28,6 +28,7 @@ export type ChatMessage = {
   createdAt: number;
   editedAt: number | null;
   deleted: boolean;
+  deletedAt: number | null;
   seenBy: Record<string, number>;
 };
 

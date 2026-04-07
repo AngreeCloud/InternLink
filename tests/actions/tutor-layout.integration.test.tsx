@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockUsePathname = vi.fn();
 const mockRouterReplace = vi.fn();
-const mockRouter = { replace: mockRouterReplace };
+const mockRouterPush = vi.fn();
+const mockRouter = { replace: mockRouterReplace, push: mockRouterPush };
 const mockGetAuthRuntime = vi.fn();
 const mockGetDbRuntime = vi.fn();
 const mockOnAuthStateChanged = vi.fn();
@@ -53,23 +54,17 @@ vi.mock("@/lib/chat/use-chat-notifications", () => ({
     mockUseChatNotifications(args);
     return {
       notifications: [],
-      dismissNotification: vi.fn(),
       handleOpenConversation: vi.fn(),
     };
   },
 }));
 
 vi.mock("@/components/chat/notifications-inbox", () => ({
-  NotificationsInbox: () => <div data-testid="notifications-inbox" />,
+  NotificationsInbox: () => <span data-testid="notifications-inbox" />,
 }));
 
 vi.mock("@/components/ui/button", () => ({
   Button: ({ children, ...props }: { children: React.ReactNode }) => <button {...props}>{children}</button>,
-}));
-
-vi.mock("@/components/ui/sheet", () => ({
-  Sheet: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SheetContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
 vi.mock("@/components/ui/avatar", () => ({
@@ -90,20 +85,17 @@ vi.mock("@/components/ui/dropdown-menu", () => ({
 vi.mock("lucide-react", () => {
   const Icon = () => <svg />;
   return {
-    GraduationCap: Icon,
-    Home: Icon,
-    Users: Icon,
-    UserCheck: Icon,
     Briefcase: Icon,
-    FileText: Icon,
+    GraduationCap: Icon,
+    Inbox: Icon,
+    LayoutDashboard: Icon,
     LogOut: Icon,
-    Menu: Icon,
     MessageSquare: Icon,
     User: Icon,
   };
 });
 
-import { ProfessorLayout } from "../../components/layout/professor-layout";
+import { TutorLayout } from "../../components/layout/tutor-layout";
 
 function makeUserSnap(data: Record<string, unknown>) {
   return {
@@ -122,62 +114,34 @@ async function flush() {
 beforeEach(() => {
   vi.clearAllMocks();
 
-  mockUsePathname.mockReturnValue("/professor/chat");
+  mockUsePathname.mockReturnValue("/tutor/chat");
   mockGetAuthRuntime.mockResolvedValue({ app: "auth" });
   mockGetDbRuntime.mockResolvedValue({ app: "db" });
-  mockDoc.mockReturnValue({ path: "users/profA" });
+  mockDoc.mockReturnValue({ path: "users/tutorA" });
   mockGetDoc.mockResolvedValue(
     makeUserSnap({
-      role: "professor",
+      role: "tutor",
       estado: "ativo",
-      schoolId: "schoolA",
-      nome: "Professor A",
-      email: "prof@school.pt",
+      nome: "Tutor A",
+      email: "tutor@empresa.pt",
+      empresa: "Empresa",
       photoURL: "",
     })
   );
 
   mockOnAuthStateChanged.mockImplementation((_auth: unknown, cb: (u: unknown) => void) => {
-    void cb({ uid: "profA", displayName: "Professor A", email: "prof@school.pt" });
+    void cb({ uid: "tutorA", displayName: "Tutor A", email: "tutor@empresa.pt" });
     return vi.fn();
   });
 });
 
-describe("ProfessorLayout integration", () => {
-  it("ativa notificações apenas na página principal /professor", async () => {
-    mockUsePathname.mockReturnValue("/professor");
-
+describe("TutorLayout integration", () => {
+  it("desativa notificações na rota /tutor/chat", async () => {
     await act(async () => {
       TestRenderer.create(
-        <ProfessorLayout>
+        <TutorLayout>
           <div>Conteudo</div>
-        </ProfessorLayout>
-      );
-    });
-
-    await flush();
-
-    expect(mockUseChatNotifications).toHaveBeenCalled();
-    const lastCallIndex = mockUseChatNotifications.mock.calls.length - 1;
-    const props = mockUseChatNotifications.mock.calls[lastCallIndex]?.[0] as {
-      enabled: boolean;
-      isChatOpen: boolean;
-      userId: string;
-    };
-
-    expect(props.userId).toBe("profA");
-    expect(props.enabled).toBe(true);
-    expect(props.isChatOpen).toBe(false);
-  });
-
-  it("desativa notificações na rota /professor/chat", async () => {
-    mockUsePathname.mockReturnValue("/professor/chat");
-
-    await act(async () => {
-      TestRenderer.create(
-        <ProfessorLayout>
-          <div>Conteudo</div>
-        </ProfessorLayout>
+        </TutorLayout>
       );
     });
 
@@ -192,66 +156,41 @@ describe("ProfessorLayout integration", () => {
     expect(props.isChatOpen).toBe(true);
   });
 
-  it("monta ChatNavUnreadBadge no item Chat em desktop e mobile com rota ativa", async () => {
+  it("ativa notificações fora da rota de chat", async () => {
+    mockUsePathname.mockReturnValue("/tutor");
+
     await act(async () => {
       TestRenderer.create(
-        <ProfessorLayout>
+        <TutorLayout>
           <div>Conteudo</div>
-        </ProfessorLayout>
+        </TutorLayout>
       );
     });
 
     await flush();
 
-    // Desktop + mobile both include the Chat nav item.
-    expect(mockChatBadge).toHaveBeenCalledTimes(2);
-
-    const calls = mockChatBadge.mock.calls.map((args) => args[0] as { userId: string; isActive?: boolean });
-    for (const props of calls) {
-      expect(props.userId).toBe("profA");
-      expect(props.isActive).toBe(true);
-    }
+    const lastCallIndex = mockUseChatNotifications.mock.calls.length - 1;
+    const props = mockUseChatNotifications.mock.calls[lastCallIndex]?.[0] as {
+      enabled: boolean;
+      isChatOpen: boolean;
+    };
+    expect(props.enabled).toBe(true);
+    expect(props.isChatOpen).toBe(false);
   });
 
-  it("passa isActive=false ao badge fora da rota de chat", async () => {
-    mockUsePathname.mockReturnValue("/professor");
-
+  it("monta unread badge no item de chat", async () => {
     await act(async () => {
       TestRenderer.create(
-        <ProfessorLayout>
+        <TutorLayout>
           <div>Conteudo</div>
-        </ProfessorLayout>
+        </TutorLayout>
       );
     });
 
     await flush();
 
-    expect(mockChatBadge).toHaveBeenCalledTimes(2);
-    const calls = mockChatBadge.mock.calls.map((args) => args[0] as { isActive?: boolean });
-    for (const props of calls) {
-      expect(props.isActive).toBe(false);
-    }
-  });
-
-  it("não monta badge quando utilizador não é professor ativo", async () => {
-    mockGetDoc.mockResolvedValue(
-      makeUserSnap({
-        role: "aluno",
-        estado: "ativo",
-      })
-    );
-
-    await act(async () => {
-      TestRenderer.create(
-        <ProfessorLayout>
-          <div>Conteudo</div>
-        </ProfessorLayout>
-      );
-    });
-
-    await flush();
-
-    expect(mockRouterReplace).toHaveBeenCalledWith("/login");
-    expect(mockChatBadge).not.toHaveBeenCalled();
+    expect(mockChatBadge).toHaveBeenCalled();
+    const props = mockChatBadge.mock.calls[0]?.[0] as { userId: string };
+    expect(props.userId).toBe("tutorA");
   });
 });

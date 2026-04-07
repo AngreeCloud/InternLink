@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { onValue, ref, set } from "firebase/database";
 import {
@@ -20,6 +21,7 @@ import {
   loadOlderMessages,
   markConversationSeen,
   reportUserBySpam,
+  restoreDeletedMessage,
   searchInternalMembers,
   sendMessage,
   subscribeConversationMessages,
@@ -48,15 +50,23 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Check,
-  CheckCheck,
-  Loader2,
+  Eye,
   MessageSquare,
+  MoreHorizontal,
   Paperclip,
+  Pencil,
   Plus,
   Search,
   Send,
@@ -88,6 +98,20 @@ function initials(name: string): string {
 
 function formatMessageTime(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString("pt-PT", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatEditedMeta(editedAt: number | null): string | null {
+  if (!editedAt) return null;
+  return `editada às ${formatMessageTime(editedAt)}`;
+}
+
+function formatMessageDateTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleString("pt-PT", {
+    day: "2-digit",
+    month: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -125,25 +149,21 @@ function shouldShowRole(role: ChatRole): boolean {
   return role !== "admin";
 }
 
-function getDeliveryIcon(message: ChatMessageView, seenByOthers: boolean): JSX.Element {
-  if (message.deliveryState === "sending") return <Loader2 className="h-3.5 w-3.5 animate-spin" />;
-  if (message.deliveryState === "failed") return <span className="text-[10px] text-red-500">falhou</span>;
-
-  const statusLabel = seenByOthers ? "Visto" : "Recebido";
-
+function getDeliveryMeta(
+  message: ChatMessageView,
+  seenByOthers: boolean
+): { label: string; icon: JSX.Element; className?: string } {
   if (seenByOthers) {
-    return (
-      <span title={statusLabel} aria-label={statusLabel}>
-        <CheckCheck className="h-3.5 w-3.5" />
-      </span>
-    );
+    return {
+      label: "Visto",
+      icon: <Eye className="h-3.5 w-3.5" />,
+    };
   }
 
-  return (
-    <span title={statusLabel} aria-label={statusLabel}>
-      <Check className="h-3.5 w-3.5" />
-    </span>
-  );
+  return {
+    label: "Recebido",
+    icon: <Check className="h-3.5 w-3.5" />,
+  };
 }
 
 export function InternalChatHub() {
@@ -169,6 +189,7 @@ export function InternalChatHub() {
 
   const [participantProfiles, setParticipantProfiles] = useState<Record<string, ChatUserProfile>>({});
   const [unreadByConversation, setUnreadByConversation] = useState<Record<string, number>>({});
+  const searchParams = useSearchParams();
 
   const endRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -183,6 +204,11 @@ export function InternalChatHub() {
   const selectedConversation = useMemo(
     () => conversations.find((item) => item.conversation.id === selectedConversationId) || null,
     [conversations, selectedConversationId]
+  );
+
+  const requestedConversationId = useMemo(
+    () => searchParams.get("conversationId")?.trim() || "",
+    [searchParams]
   );
 
   const selectedParticipantIds = useMemo(() => {
@@ -261,6 +287,7 @@ export function InternalChatHub() {
       createdAt: pendingMessage.createdAt,
       editedAt: null,
       deleted: false,
+      deletedAt: null,
       seenBy: profile ? { [profile.uid]: pendingMessage.createdAt } : {},
       deliveryState: pendingMessage.deliveryState,
       tempId: pendingMessage.tempId,
@@ -268,6 +295,20 @@ export function InternalChatHub() {
 
     return [...sent, ...pending].sort((a, b) => a.createdAt - b.createdAt);
   }, [messages, pendingMessages, profile]);
+
+  const lastOwnSentMessageId = useMemo(() => {
+    if (!profile) return "";
+
+    for (let index = mergedMessages.length - 1; index >= 0; index -= 1) {
+      const message = mergedMessages[index];
+      if (message.senderId !== profile.uid) continue;
+      if (message.deliveryState !== "sent") continue;
+      if (message.deleted) continue;
+      return message.id;
+    }
+
+    return "";
+  }, [mergedMessages, profile]);
 
   const conversationTitle = useMemo(() => {
     if (!selectedConversation) return "Conversa";
@@ -344,6 +385,13 @@ export function InternalChatHub() {
                 setConversations(items);
                 await loadParticipantProfiles(items);
                 setSelectedConversationId((prev) => {
+                  if (
+                    requestedConversationId &&
+                    items.some((item) => item.conversation.id === requestedConversationId)
+                  ) {
+                    return requestedConversationId;
+                  }
+
                   if (prev && items.some((item) => item.conversation.id === prev)) {
                     return prev;
                   }
@@ -379,7 +427,7 @@ export function InternalChatHub() {
       unsubscribeMessagesRef.current?.();
       unsubscribeTypingRef.current?.();
     };
-  }, [loadParticipantProfiles]);
+  }, [loadParticipantProfiles, requestedConversationId]);
 
   useEffect(() => {
     if (!selectedConversation || !profile) {
@@ -693,6 +741,19 @@ export function InternalChatHub() {
     }
   }, [selectedConversation, profile]);
 
+  const handleRestoreMessage = useCallback(async (messageId: string) => {
+    if (!selectedConversation || !profile) return;
+    try {
+      await restoreDeletedMessage({
+        conversationId: selectedConversation.conversation.id,
+        messageId,
+        actorId: profile.uid,
+      });
+    } catch (err) {
+      setError((err as Error).message || "Falha ao anular eliminação da mensagem.");
+    }
+  }, [selectedConversation, profile]);
+
   const handleBlockDirectPeer = useCallback(async () => {
     if (!profile || !directPeer) return;
 
@@ -980,7 +1041,6 @@ export function InternalChatHub() {
                     const author = participantProfiles[message.senderId];
                     const mine = message.senderId === profile.uid;
                     const prev = index > 0 ? mergedMessages[index - 1] : null;
-                    const next = index < mergedMessages.length - 1 ? mergedMessages[index + 1] : null;
                     const showDivider = !prev || !isSameDay(prev.createdAt, message.createdAt);
                     const sameSenderAsPrev = Boolean(
                       prev &&
@@ -988,15 +1048,11 @@ export function InternalChatHub() {
                       message.createdAt - prev.createdAt <= MESSAGE_SEQUENCE_WINDOW_MS &&
                       isSameDay(prev.createdAt, message.createdAt)
                     );
-                    const sameSenderAsNext = Boolean(
-                      next &&
-                      next.senderId === message.senderId &&
-                      next.createdAt - message.createdAt <= MESSAGE_SEQUENCE_WINDOW_MS &&
-                      isSameDay(next.createdAt, message.createdAt)
-                    );
-                    const showMessageTimestamp = !sameSenderAsNext;
                     const showAvatar = !mine && !sameSenderAsPrev;
                     const seenByOthers = mine ? hasMessageBeenSeenByOthers(message) : false;
+                    const editedMeta = message.deleted ? null : formatEditedMeta(message.editedAt);
+                    const showReadReceipt = mine && message.id === lastOwnSentMessageId;
+                    const deliveryMeta = showReadReceipt ? getDeliveryMeta(message, seenByOthers) : null;
 
                     return (
                       <div
@@ -1014,8 +1070,31 @@ export function InternalChatHub() {
                           </div>
                         ) : null}
 
+                        <div
+                          className={[
+                            "flex items-center gap-2 px-1 text-[11px] text-muted-foreground",
+                            mine ? "justify-end" : "pl-10 justify-start",
+                          ].join(" ")}
+                        >
+                          {!mine && !sameSenderAsPrev ? (
+                            <>
+                              <p className="truncate">{author?.name || "Utilizador"}</p>
+                              {hasMixedRolesInConversation && shouldShowRole(author?.role || "student") ? (
+                                <Badge variant="secondary" className="h-5 px-2 text-[10px]">
+                                  {getRoleLabel(author?.role || "student")}
+                                </Badge>
+                              ) : null}
+                            </>
+                          ) : null}
+
+                          <div className="shrink-0">
+                            <span>{formatMessageDateTime(message.createdAt)}</span>
+                            {editedMeta ? <span className="ml-2 italic">{editedMeta}</span> : null}
+                          </div>
+                        </div>
+
                         <div className={[
-                          "group flex gap-2",
+                          "group/message flex items-end gap-2",
                           mine ? "justify-end" : "justify-start",
                         ].join(" ")}>
                           {!mine ? (
@@ -1029,92 +1108,142 @@ export function InternalChatHub() {
                             </div>
                           ) : null}
 
-                          <div className={[
-                            "relative max-w-[82%] rounded-2xl px-3 py-2 text-sm transition-[padding]",
-                            showMessageTimestamp ? "pb-2" : "pb-2 group-hover:pb-6",
-                            mine ? "bg-primary text-primary-foreground" : "bg-muted",
-                          ].join(" ")}>
-                            {!mine && !sameSenderAsPrev ? (
-                              <div className="mb-1 flex items-center gap-2">
-                                <p className="text-[11px] opacity-70">{author?.name || "Utilizador"}</p>
-                                {hasMixedRolesInConversation && shouldShowRole(author?.role || "student") ? (
-                                  <Badge variant="secondary" className="h-5 px-2 text-[10px]">
-                                    {getRoleLabel(author?.role || "student")}
-                                  </Badge>
-                                ) : null}
-                              </div>
-                            ) : null}
-
-                            {message.deleted ? (
-                              <p className="italic opacity-80">A mensagem foi apagada</p>
-                            ) : editingMessageId === message.id ? (
-                              <div className="space-y-2">
-                                <Input value={editingText} onChange={(event) => setEditingText(event.target.value)} />
-                                <div className="flex items-center justify-end gap-2">
-                                  <Button size="sm" variant="outline" onClick={() => setEditingMessageId("")}>Cancelar</Button>
-                                  <Button size="sm" onClick={() => handleEditMessage(message.id)}>Guardar</Button>
-                                </div>
-                              </div>
-                            ) : (
-                              <>
-                                <p className="whitespace-pre-wrap break-words">{message.text || "[Anexo]"}</p>
-                                {Object.values(message.attachments || {}).length > 0 ? (
-                                  <div className="mt-2 space-y-1">
-                                    {Object.values(message.attachments || {}).map((attachment) => (
-                                      <a
-                                        key={attachment.id}
-                                        href={attachment.url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="block rounded-md bg-background/20 px-2 py-1 text-xs underline"
-                                      >
-                                        {attachment.fileName} ({Math.ceil(attachment.size / 1024)} KB)
-                                      </a>
-                                    ))}
+                          {mine ? (
+                            <div className="relative flex max-w-[82%] flex-col items-end">
+                              <div className="rounded-2xl bg-primary px-3 py-2 text-sm text-primary-foreground">
+                                {message.deleted ? (
+                                  <p className="italic text-primary-foreground/80">
+                                    Mensagem eliminada. {" "}
+                                    <button
+                                      type="button"
+                                      className="font-medium underline underline-offset-2"
+                                      onClick={() => handleRestoreMessage(message.id)}
+                                    >
+                                      Anular
+                                    </button>
+                                  </p>
+                                ) : editingMessageId === message.id ? (
+                                  <div className="space-y-2">
+                                    <Textarea
+                                      value={editingText}
+                                      onChange={(event) => setEditingText(event.target.value.slice(0, CHAT_MESSAGE_MAX_CHARS))}
+                                      onKeyDown={(event) => {
+                                        if (event.key === "Enter" && !event.shiftKey) {
+                                          event.preventDefault();
+                                          void handleEditMessage(message.id);
+                                        }
+                                      }}
+                                      maxLength={CHAT_MESSAGE_MAX_CHARS}
+                                      rows={3}
+                                    />
+                                    <p className="text-xs text-primary-foreground/75">
+                                      Enter guarda. Shift + Enter insere nova linha.
+                                    </p>
+                                    <div className="flex items-center justify-end gap-2">
+                                      <Button size="sm" variant="outline" onClick={() => setEditingMessageId("")}>Cancelar</Button>
+                                      <Button size="sm" onClick={() => handleEditMessage(message.id)}>Guardar</Button>
+                                    </div>
                                   </div>
-                                ) : null}
-                              </>
-                            )}
+                                ) : (
+                                  <>
+                                    <p className="whitespace-pre-wrap break-words">{message.text || "[Anexo]"}</p>
+                                    {Object.values(message.attachments || {}).length > 0 ? (
+                                      <div className="mt-2 space-y-1">
+                                        {Object.values(message.attachments || {}).map((attachment) => (
+                                          <a
+                                            key={attachment.id}
+                                            href={attachment.url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="block rounded-md bg-background/20 px-2 py-1 text-xs underline"
+                                          >
+                                            {attachment.fileName} ({Math.ceil(attachment.size / 1024)} KB)
+                                          </a>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                  </>
+                                )}
+                              </div>
 
-                            {showMessageTimestamp ? (
-                              <div className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-80">
-                                <span>{formatMessageTime(message.createdAt)}</span>
-                                {message.editedAt ? <span>(editada)</span> : null}
-                                {mine ? getDeliveryIcon(message, seenByOthers) : null}
-                              </div>
-                            ) : (
-                              <div className="pointer-events-none absolute bottom-2 right-3 flex items-center justify-end gap-1 text-[10px] opacity-0 transition-opacity group-hover:opacity-80">
-                                <span>{formatMessageTime(message.createdAt)}</span>
-                                {message.editedAt ? <span>(editada)</span> : null}
-                                {mine ? getDeliveryIcon(message, seenByOthers) : null}
-                              </div>
-                            )}
-                          </div>
+                              {showReadReceipt ? (
+                                <div className="mt-1 flex translate-y-1 items-center gap-1 text-[11px] text-muted-foreground">
+                                  <span className={deliveryMeta?.className}>{deliveryMeta?.icon}</span>
+                                  <span className={deliveryMeta?.className}>{deliveryMeta?.label}</span>
+                                </div>
+                              ) : null}
+
+                              {message.deliveryState === "sent" && !message.deleted ? (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <div className="absolute right-1 -top-8 rounded-md border bg-background/95 p-0.5 shadow-sm opacity-0 transition-opacity group-hover/message:opacity-100 data-[state=open]:opacity-100">
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        aria-label="Mais opções da mensagem"
+                                      >
+                                        <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" side="top">
+                                    <DropdownMenuItem
+                                      onSelect={() => {
+                                        setEditingMessageId(message.id);
+                                        setEditingText(message.text || "");
+                                      }}
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                      Editar
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      variant="destructive"
+                                      onSelect={() => handleDeleteMessage(message.id)}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      Eliminar
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              ) : null}
+
+                              {message.deliveryState === "failed" ? (
+                                <div className="mt-2">
+                                  <Button size="sm" variant="outline" onClick={() => handleRetryPending(message.id)}>
+                                    Reenviar
+                                  </Button>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <div className="max-w-[82%] rounded-2xl bg-muted px-3 py-2 text-sm">
+                              {message.deleted ? (
+                                <p className="italic text-foreground/70">Mensagem eliminada</p>
+                              ) : (
+                                <>
+                                  <p className="whitespace-pre-wrap break-words">{message.text || "[Anexo]"}</p>
+                                  {Object.values(message.attachments || {}).length > 0 ? (
+                                    <div className="mt-2 space-y-1">
+                                      {Object.values(message.attachments || {}).map((attachment) => (
+                                        <a
+                                          key={attachment.id}
+                                          href={attachment.url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="block rounded-md bg-background/20 px-2 py-1 text-xs underline"
+                                        >
+                                          {attachment.fileName} ({Math.ceil(attachment.size / 1024)} KB)
+                                        </a>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
-
-                        {mine && message.deliveryState !== "sending" && !message.deleted ? (
-                          <div className="hidden justify-end gap-2 group-hover:flex">
-                            {message.deliveryState === "failed" ? (
-                              <Button size="sm" variant="outline" onClick={() => handleRetryPending(message.id)}>Reenviar</Button>
-                            ) : (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setEditingMessageId(message.id);
-                                    setEditingText(message.text || "");
-                                  }}
-                                >
-                                  Editar
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={() => handleDeleteMessage(message.id)}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        ) : null}
                       </div>
                     );
                   })}
