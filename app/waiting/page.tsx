@@ -47,6 +47,7 @@ export default function WaitingPage() {
         const schoolsList: School[] = schoolsSnap.docs.map((schoolDoc) => {
           const data = schoolDoc.data() as {
             name?: string
+            profileImageUrl?: string
             emailDomain?: string
             requireInstitutionalEmail?: boolean
             allowGoogleLogin?: boolean
@@ -56,6 +57,7 @@ export default function WaitingPage() {
           return {
             id: schoolDoc.id,
             name: data.name || "—",
+            profileImageUrl: data.profileImageUrl || "",
             emailDomain: data.emailDomain || "",
             requireInstitutionalEmail: Boolean(data.requireInstitutionalEmail),
             allowGoogleLogin: Boolean(data.allowGoogleLogin),
