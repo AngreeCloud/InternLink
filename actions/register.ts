@@ -169,6 +169,7 @@ export async function registerProfessor(data: z.input<typeof professorRegisterAc
     email,
     escola: escolaNome,
     schoolId: escolaId,
+    courseId: null,
     dataNascimento: dataNascimento || "",
     localidade: localidade || "",
     telefone: telefone || "",

@@ -277,6 +277,7 @@ describe("registerProfessor action", () => {
     expectPendingRegistration("prof-1", {
       role: "professor",
       schoolId: "school123",
+      courseId: null,
       estado: "pendente",
       emailVerified: false,
     });

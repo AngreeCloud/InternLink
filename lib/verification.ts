@@ -37,9 +37,11 @@ export async function finalizePendingRegistration(
   const role = pendingData.role ?? "";
   const estado = pendingData.estado ?? "";
   const schoolId = pendingData.schoolId ?? "";
+  const normalizedCourseId = pendingData.courseId ?? null;
 
   await setDoc(doc(db, "users", userId), {
     ...pendingData,
+    courseId: normalizedCourseId,
     emailVerified: options?.markEmailVerified ?? true,
     updatedAt: serverTimestamp(),
   });

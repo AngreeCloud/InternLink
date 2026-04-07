@@ -68,6 +68,52 @@ test.beforeEach(async () => {
       email: "prof-b@school-b.pt",
     });
 
+    await setDoc(doc(db, "users", "adminSchoolA"), {
+      role: "admin_escolar",
+      estado: "ativo",
+      schoolId: "schoolA",
+      nome: "Admin Escola A",
+      email: "admin-a@school-a.pt",
+    });
+
+    await setDoc(doc(db, "users", "adminSchoolB"), {
+      role: "admin_escolar",
+      estado: "ativo",
+      schoolId: "schoolB",
+      nome: "Admin Escola B",
+      email: "admin-b@school-b.pt",
+    });
+
+    await setDoc(doc(db, "users", "profRejected"), {
+      role: "professor",
+      estado: "recusado",
+      schoolId: "schoolA",
+      courseId: null,
+      nome: "Professor Recusado",
+      email: "prof-rejected@school-a.pt",
+      reviewedAt: 1735689600000,
+      reviewedBy: "adminSchoolA",
+    });
+
+    await setDoc(doc(db, "users", "profRemoved"), {
+      role: "professor",
+      estado: "removido",
+      schoolId: "schoolA",
+      courseId: null,
+      nome: "Professor Removido",
+      email: "prof-removed@school-a.pt",
+      reviewedAt: 1735689600000,
+      reviewedBy: "adminSchoolA",
+    });
+
+    await setDoc(doc(db, "users", "profPendingSelf"), {
+      role: "professor",
+      estado: "pendente",
+      schoolId: "schoolA",
+      nome: "Professor Pendente Self",
+      email: "prof-pending-self@school-a.pt",
+    });
+
     await setDoc(doc(db, "users", "studentA"), {
       role: "aluno",
       estado: "pendente",
@@ -80,6 +126,34 @@ test.beforeEach(async () => {
       role: "teacher",
       name: "Professor Pendente A",
       email: "pending-a@school-a.pt",
+    });
+
+    await setDoc(doc(db, "pendingRegistrations", "pendingProfSchoolA"), {
+      role: "professor",
+      estado: "pendente",
+      schoolId: "schoolA",
+      email: "pending-prof-a@school-a.pt",
+      emailVerified: false,
+      escola: "Escola A",
+    });
+
+    await setDoc(doc(db, "pendingRegistrations", "pendingProfSchoolB"), {
+      role: "professor",
+      estado: "pendente",
+      schoolId: "schoolB",
+      email: "pending-prof-b@school-b.pt",
+      emailVerified: false,
+      escola: "Escola B",
+    });
+
+    await setDoc(doc(db, "pendingRegistrations", "profPendingSelf"), {
+      role: "professor",
+      estado: "pendente",
+      schoolId: "schoolA",
+      email: "prof-pending-self@school-a.pt",
+      emailVerified: false,
+      escola: "Escola A",
+      updatedAt: 1735689600000,
     });
 
     await setDoc(doc(db, "chatAccess", "convA"), {
@@ -157,6 +231,54 @@ test("participante não consegue alterar participantes de chatAccess", async () 
         studentA: true,
         profB: true,
       },
+    })
+  );
+});
+
+test("professor recusado/removido consegue re-solicitar acesso mudando schoolId e limpando reviewed*", async () => {
+  const dbProfRejected = testEnv.authenticatedContext("profRejected").firestore();
+  const dbProfRemoved = testEnv.authenticatedContext("profRemoved").firestore();
+
+  await assertSucceeds(
+    updateDoc(doc(dbProfRejected, "users", "profRejected"), {
+      estado: "pendente",
+      schoolId: "schoolB",
+      reviewedAt: null,
+      reviewedBy: null,
+    })
+  );
+
+  await assertSucceeds(
+    updateDoc(doc(dbProfRemoved, "users", "profRemoved"), {
+      estado: "pendente",
+      schoolId: "schoolB",
+      reviewedAt: null,
+      reviewedBy: null,
+    })
+  );
+});
+
+test("admin escolar só consegue ler pendingRegistrations da sua escola", async () => {
+  const dbAdminSchoolA = testEnv.authenticatedContext("adminSchoolA").firestore();
+
+  await assertSucceeds(getDoc(doc(dbAdminSchoolA, "pendingRegistrations", "pendingProfSchoolA")));
+  await assertFails(getDoc(doc(dbAdminSchoolA, "pendingRegistrations", "pendingProfSchoolB")));
+});
+
+test("professor pendente só pode alterar schoolId/escola/updatedAt em pendingRegistrations", async () => {
+  const dbProfPendingSelf = testEnv.authenticatedContext("profPendingSelf").firestore();
+
+  await assertSucceeds(
+    updateDoc(doc(dbProfPendingSelf, "pendingRegistrations", "profPendingSelf"), {
+      schoolId: "schoolB",
+      escola: "Escola B",
+      updatedAt: 1735776000000,
+    })
+  );
+
+  await assertFails(
+    updateDoc(doc(dbProfPendingSelf, "pendingRegistrations", "profPendingSelf"), {
+      estado: "ativo",
     })
   );
 });
