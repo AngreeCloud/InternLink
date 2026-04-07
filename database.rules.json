@@ -6,7 +6,7 @@
     "conversations": {
       "$conversationId": {
         ".read": "auth != null && data.child('participants').child(auth.uid).val() === true",
-        ".write": "auth != null && (( !data.exists() && newData.child('participants').child(auth.uid).val() === true && (newData.child('type').val() === 'direct' || newData.child('type').val() === 'group') ) || (data.exists() && data.child('participants').child(auth.uid).val() === true && newData.child('participants').val() === data.child('participants').val()))",
+        ".write": "auth != null && ((!data.exists() && newData.child('participants').child(auth.uid).val() === true && (newData.child('type').val() === 'direct' || newData.child('type').val() === 'group')) || (data.exists() && data.child('participants').child(auth.uid).val() === true))",
         "type": {
           ".validate": "newData.val() === 'direct' || newData.val() === 'group'"
         },
@@ -14,6 +14,7 @@
           ".validate": "newData.val() === null || newData.isString()"
         },
         "participants": {
+          ".validate": "!data.exists() || newData.val() === data.val()",
           "$uid": {
             ".validate": "newData.val() === true"
           }
@@ -119,6 +120,7 @@
             ".validate": "newData.isNumber()"
           },
           "unreadCount": {
+            ".read": "auth != null && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true && root.child('conversations').child($conversationId).child('participants').child($uid).val() === true",
             ".validate": "newData.isNumber() && newData.val() >= 0"
           },
           "isMuted": {

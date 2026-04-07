@@ -9,6 +9,13 @@ type UserConversationMeta = {
   unreadCount?: number;
 };
 
+export function getTotalUnreadCount(data: Record<string, UserConversationMeta>): number {
+  return Object.values(data).reduce((sum, meta) => {
+    const unread = typeof meta?.unreadCount === "number" ? meta.unreadCount : 0;
+    return sum + (unread > 0 ? unread : 0);
+  }, 0);
+}
+
 export function ChatNavUnreadBadge({ userId, isActive = false }: { userId: string; isActive?: boolean }) {
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -36,11 +43,7 @@ export function ChatNavUnreadBadge({ userId, isActive = false }: { userId: strin
           }
 
           const data = snap.val() as Record<string, UserConversationMeta>;
-
-          const total = Object.values(data).reduce((sum, meta) => {
-            const unread = typeof meta?.unreadCount === "number" ? meta.unreadCount : 0;
-            return sum + (unread > 0 ? unread : 0);
-          }, 0);
+          const total = getTotalUnreadCount(data);
 
           setUnreadCount(total);
         },

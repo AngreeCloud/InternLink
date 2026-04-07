@@ -11,7 +11,7 @@
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
-import { get, ref, set, update } from "firebase/database";
+import { get, ref, set, update, runTransaction } from "firebase/database";
 
 let testEnv;
 
@@ -84,6 +84,39 @@ test.beforeEach(async () => {
     });
 
     await set(ref(db, "messages/convExisting"), {});
+
+    await set(ref(db, "conversations/convProfAdmin"), {
+      type: "direct",
+      orgId: "schoolA",
+      participants: {
+        profA: true,
+        adminA: true,
+      },
+      lastMessage: {
+        text: null,
+        senderId: "profA",
+        createdAt: now,
+        hasAttachments: false,
+      },
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await set(ref(db, "userConversations/profA/convProfAdmin"), {
+      lastMessageText: null,
+      lastMessageAt: now,
+      unreadCount: 0,
+      isMuted: false,
+    });
+
+    await set(ref(db, "userConversations/adminA/convProfAdmin"), {
+      lastMessageText: null,
+      lastMessageAt: now,
+      unreadCount: 0,
+      isMuted: false,
+    });
+
+    await set(ref(db, "messages/convProfAdmin"), {});
   });
 });
 
@@ -197,4 +230,87 @@ test("participante consegue enviar mensagem com anexos validos", async () => {
       },
     })
   );
+});
+
+test("participante consegue enviar mensagem via update atomico (sendMessage flow)", async () => {
+  const db = testEnv.authenticatedContext("studentA").database();
+  const now = Date.now();
+
+  await assertSucceeds(
+    update(ref(db), {
+      "messages/convExisting/msgAtomic": {
+        senderId: "studentA",
+        text: "Mensagem atomica",
+        attachments: null,
+        createdAt: now,
+        editedAt: null,
+        deleted: false,
+        seenBy: {
+          studentA: now,
+        },
+      },
+      "conversations/convExisting/lastMessage": {
+        text: "Mensagem atomica",
+        senderId: "studentA",
+        createdAt: now,
+        hasAttachments: false,
+      },
+      "conversations/convExisting/updatedAt": now,
+    })
+  );
+});
+
+test("participante consegue marcar conversa como vista com readState + seenBy parcial", async () => {
+  const db = testEnv.authenticatedContext("studentA").database();
+  const dbProf = testEnv.authenticatedContext("profA").database();
+  const now = Date.now();
+
+  await set(ref(dbProf, "messages/convExisting/msgFromProf"), {
+    senderId: "profA",
+    text: "Mensagem recebida",
+    createdAt: now - 1000,
+    editedAt: null,
+    deleted: false,
+    seenBy: {
+      profA: now - 1000,
+    },
+  });
+
+  await assertSucceeds(
+    update(ref(db), {
+      "userConversations/studentA/convExisting/unreadCount": 0,
+      "userConversations/studentA/convExisting/lastMessageAt": now - 1000,
+      "userConversations/studentA/convExisting/lastSeenAt": now,
+      "conversations/convExisting/readState/studentA": now,
+      "messages/convExisting/msgFromProf/seenBy/studentA": now,
+    })
+  );
+});
+
+test("professor consegue atualizar metadata da conversa do admin (base do badge)", async () => {
+  const dbProf = testEnv.authenticatedContext("profA").database();
+  const now = Date.now();
+
+  await assertSucceeds(
+    update(ref(dbProf, "userConversations/adminA/convProfAdmin"), {
+      lastMessageText: "Mensagem do professor",
+      lastMessageAt: now,
+    })
+  );
+});
+
+test("professor consegue incrementar unreadCount do admin via transaction", async () => {
+  const dbProf = testEnv.authenticatedContext("profA").database();
+
+  await assertSucceeds(
+    runTransaction(ref(dbProf, "userConversations/adminA/convProfAdmin/unreadCount"), (current) => {
+      const value = Number(current || 0);
+      return value + 1;
+    })
+  );
+
+  const snap = await get(ref(dbProf, "userConversations/adminA/convProfAdmin/unreadCount"));
+  if (!snap.exists()) {
+    throw new Error("unreadCount não foi escrito no destinatário");
+  }
 });
