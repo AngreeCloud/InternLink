@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { collection, doc, getDocs, orderBy, query, serverTimestamp, updateDoc, where, writeBatch } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 import { ensureOrgMemberIndexByUserId } from "@/lib/chat/realtime-chat";
-import { isVerificationBypassEnabled } from "@/lib/verification";
 import { useSchoolAdmin } from "@/components/school-admin/school-admin-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -111,7 +110,7 @@ export function PendingTeachersSection({
   };
 
   const handleTeacherDecision = async (teacher: PendingTeacher, decision: "aprovado" | "recusado") => {
-    if (!teacher.hasUserDoc && !isVerificationBypassEnabled()) {
+    if (!teacher.hasUserDoc) {
       setActionError("Este pedido ainda não tem perfil finalizado. O professor deve concluir o registo para poder ser aprovado.");
       return;
     }
@@ -375,8 +374,8 @@ export function PendingTeachersSection({
                       <Button
                         size="sm"
                         onClick={() => handleTeacherDecision(teacher, "aprovado")}
-                        disabled={actingTeacherId === teacher.id || (!teacher.hasUserDoc && !isVerificationBypassEnabled())}
-                        title={!teacher.hasUserDoc && !isVerificationBypassEnabled() ? "Aguardar finalização do registo do professor" : ""}
+                        disabled={actingTeacherId === teacher.id || !teacher.hasUserDoc}
+                        title={!teacher.hasUserDoc ? "Aguardar finalização do registo do professor" : ""}
                       >
                         Aprovar
                       </Button>
@@ -384,15 +383,15 @@ export function PendingTeachersSection({
                         size="sm"
                         variant="outline"
                         onClick={() => handleTeacherDecision(teacher, "recusado")}
-                        disabled={actingTeacherId === teacher.id || (!teacher.hasUserDoc && !isVerificationBypassEnabled())}
-                        title={!teacher.hasUserDoc && !isVerificationBypassEnabled() ? "Aguardar finalização do registo do professor" : ""}
+                        disabled={actingTeacherId === teacher.id || !teacher.hasUserDoc}
+                        title={!teacher.hasUserDoc ? "Aguardar finalização do registo do professor" : ""}
                       >
                         Recusar
                       </Button>
                     </div>
                   ) : null}
                 </div>
-                {!teacher.hasUserDoc && !isVerificationBypassEnabled() && (
+                {!teacher.hasUserDoc && (
                   <p className="mt-1 text-xs text-amber-700">
                     Pedido recebido. A aprovação fica disponível após finalização do perfil do professor.
                   </p>
