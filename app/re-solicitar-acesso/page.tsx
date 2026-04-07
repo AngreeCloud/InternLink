@@ -72,6 +72,7 @@ export default function ReRequestSchoolAccessPage() {
         const list = schoolsSnap.docs.map((schoolDoc) => {
           const data = schoolDoc.data() as {
             name?: string;
+            profileImageUrl?: string;
             emailDomain?: string;
             requireInstitutionalEmail?: boolean;
             allowGoogleLogin?: boolean;
@@ -81,6 +82,7 @@ export default function ReRequestSchoolAccessPage() {
           return {
             id: schoolDoc.id,
             name: data.name || "—",
+            profileImageUrl: data.profileImageUrl || "",
             emailDomain: data.emailDomain || "",
             requireInstitutionalEmail: Boolean(data.requireInstitutionalEmail),
             allowGoogleLogin: Boolean(data.allowGoogleLogin),
