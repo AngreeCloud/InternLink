@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { collection, doc, getDocs, orderBy, query, serverTimestamp, where, writeBatch } from "firebase/firestore";
+import { collection, doc, getDocs, orderBy, query, serverTimestamp, updateDoc, where, writeBatch } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 import { ensureOrgMemberIndexByUserId } from "@/lib/chat/realtime-chat";
 import { useSchoolAdmin } from "@/components/school-admin/school-admin-context";
@@ -14,7 +14,11 @@ type PendingTeacher = {
   name: string;
   email: string;
   createdAt: Date | null;
+  hasUserDoc: boolean;
+  source: "pendingTeacherDoc" | "userDoc" | "pendingRegistration";
 };
+
+
 
 export function PendingTeachersSection({
   showSearch = true,
@@ -39,6 +43,11 @@ export function PendingTeachersSection({
   const [queryText, setQueryText] = useState("");
 
   const handleTeacherDecision = async (teacher: PendingTeacher, decision: "aprovado" | "recusado") => {
+    if (!teacher.hasUserDoc) {
+      setActionError("Este pedido ainda não tem perfil finalizado. O professor deve concluir o registo para poder ser aprovado.");
+      return;
+    }
+
     setActionError("");
     setActionSuccess("");
     setActingTeacherId(teacher.id);
@@ -120,6 +129,8 @@ export function PendingTeachersSection({
             name: docData.name || docData.nome || "—",
             email: docData.email || "—",
             createdAt: docData.createdAt?.toDate ? docData.createdAt.toDate() : null,
+            hasUserDoc: false,
+            source: "pendingTeacherDoc" as const,
           };
         });
 
@@ -132,6 +143,7 @@ export function PendingTeachersSection({
               nome?: string;
               name?: string;
               email?: string;
+              photoURL?: string;
               createdAt?: { toDate?: () => Date };
             };
 
@@ -144,15 +156,52 @@ export function PendingTeachersSection({
               name: docData.nome || docData.name || "—",
               email: docData.email || "—",
               createdAt: docData.createdAt?.toDate ? docData.createdAt.toDate() : null,
+              hasUserDoc: true,
+              source: "userDoc" as const,
             };
           })
           .filter((teacher): teacher is Exclude<typeof teacher, null> => teacher !== null);
 
+        const pendingRegistrationsSnapshot = await getDocs(
+          query(
+            collection(db, "pendingRegistrations"),
+            where("role", "==", "professor"),
+            where("estado", "==", "pendente"),
+            where("schoolId", "==", schoolId)
+          )
+        );
+
+        const pendingRegistrationsTeachers = pendingRegistrationsSnapshot.docs.map((docSnap) => {
+          const docData = docSnap.data() as {
+            nome?: string;
+            email?: string;
+            createdAt?: { toDate?: () => Date };
+          };
+
+          return {
+            id: docSnap.id,
+            name: docData.nome || "—",
+            email: docData.email || "—",
+            createdAt: docData.createdAt?.toDate ? docData.createdAt.toDate() : null,
+            hasUserDoc: false,
+            source: "pendingRegistration" as const,
+          } satisfies PendingTeacher;
+        });
+
         if (!active) return;
 
+        const usersById = new Set(usersPendingTeachers.map((teacher) => teacher.id));
         const mergedById = new Map<string, PendingTeacher>();
-        for (const teacher of [...pendingTeachers, ...usersPendingTeachers]) {
-          mergedById.set(teacher.id, teacher);
+
+        for (const teacher of [...pendingTeachers, ...pendingRegistrationsTeachers, ...usersPendingTeachers]) {
+          const nextTeacher = usersById.has(teacher.id)
+            ? { ...teacher, hasUserDoc: true }
+            : teacher;
+
+          const existing = mergedById.get(teacher.id);
+          if (!existing || (!existing.hasUserDoc && nextTeacher.hasUserDoc)) {
+            mergedById.set(teacher.id, nextTeacher);
+          }
         }
 
         const merged = [...mergedById.values()].sort((a, b) => {
@@ -231,7 +280,8 @@ export function PendingTeachersSection({
                       <Button
                         size="sm"
                         onClick={() => handleTeacherDecision(teacher, "aprovado")}
-                        disabled={actingTeacherId === teacher.id}
+                        disabled={actingTeacherId === teacher.id || !teacher.hasUserDoc}
+                        title={!teacher.hasUserDoc ? "Aguardar finalização do registo do professor" : ""}
                       >
                         Aprovar
                       </Button>
@@ -239,13 +289,19 @@ export function PendingTeachersSection({
                         size="sm"
                         variant="outline"
                         onClick={() => handleTeacherDecision(teacher, "recusado")}
-                        disabled={actingTeacherId === teacher.id}
+                        disabled={actingTeacherId === teacher.id || !teacher.hasUserDoc}
+                        title={!teacher.hasUserDoc ? "Aguardar finalização do registo do professor" : ""}
                       >
                         Recusar
                       </Button>
                     </div>
                   ) : null}
                 </div>
+                {!teacher.hasUserDoc && (
+                  <p className="mt-1 text-xs text-amber-700">
+                    Pedido recebido. A aprovação fica disponível após finalização do perfil do professor.
+                  </p>
+                )}
               </div>
             ))}
           </div>

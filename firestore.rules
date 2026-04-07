@@ -124,11 +124,50 @@ service cloud.firestore {
         .hasAny(["role", "estado", "schoolId", "courseId"]);
     }
 
+    function isProfessorSchoolReRequestUpdate() {
+      return resource.data.role == "professor"
+        && request.resource.data.role == "professor"
+        && resource.data.estado in ["pendente", "recusado", "removido"]
+        && request.resource.data.estado == "pendente"
+        && request.resource.data.schoolId is string
+        && request.resource.data.schoolId.size() > 0
+        && request.resource.data.courseId == null
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly(["estado", "schoolId", "courseId", "reviewedAt", "reviewedBy"])
+        && (!request.resource.data.keys().hasAny(["reviewedAt"]) || request.resource.data.reviewedAt == null)
+        && (!request.resource.data.keys().hasAny(["reviewedBy"]) || request.resource.data.reviewedBy == null);
+    }
+
     function professorCanUpdateStudentFields() {
       return !request.resource.data
         .diff(resource.data)
         .affectedKeys()
         .hasAny(["role", "schoolId", "courseId"]);
+    }
+
+    function isSchoolAdminViewingProfessorPendingRegistration() {
+      return isSchoolAdmin()
+        && resource.data.role == "professor"
+        && resource.data.estado == "pendente"
+        && resource.data.schoolId == currentUserData().schoolId;
+    }
+
+    function isProfessorPendingRegistrationSchoolChange(userId) {
+      return isSelf(userId)
+        && resource.data.role == "professor"
+        && request.resource.data.role == "professor"
+        && resource.data.estado == "pendente"
+        && request.resource.data.estado == "pendente"
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.emailVerified == resource.data.emailVerified
+        && request.resource.data.schoolId is string
+        && request.resource.data.schoolId.size() > 0
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly(["schoolId", "escola", "updatedAt"]);
     }
 
     // USERS
@@ -170,8 +209,9 @@ service cloud.firestore {
         && request.resource.data.emailVerified == request.auth.token.email_verified
       );
 
-      // Permite ao próprio editar apenas campos de perfil, sem escalar permissões/estado.
-      allow update: if isSelf(userId) && isSelfUserDocImmutable();
+      // Permite ao próprio editar campos de perfil e re-solicitar acesso (professor removido/recusado).
+      allow update: if isSelf(userId)
+        && (isSelfUserDocImmutable() || isProfessorSchoolReRequestUpdate());
 
       // Admin escolar gere utilizadores da própria escola.
       allow update, delete: if isSchoolAdmin()
@@ -192,10 +232,13 @@ service cloud.firestore {
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.emailVerified == request.auth.token.email_verified;
 
-      allow read, delete: if isSelf(userId);
+      allow read: if isSelf(userId)
+        || isSchoolAdminViewingProfessorPendingRegistration();
 
-      // Não permitir updates parciais para evitar manipulação de role/estado fora do fluxo.
-      allow update: if false;
+      allow delete: if isSelf(userId);
+
+      // Professor pendente pode alterar escola de associação mantendo os restantes campos imutáveis.
+      allow update: if isProfessorPendingRegistrationSchoolChange(userId);
     }
 
     // SCHOOLS + FOLDERS + PENDING TEACHERS

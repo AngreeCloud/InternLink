@@ -689,11 +689,23 @@ export async function markConversationSeen(
   if (!newestMessage) return;
 
   const rtdb = await getRealtimeDb();
-  await update(ref(rtdb), {
-    [`messages/${conversationId}/${newestMessage.id}/seenBy/${userId}`]: nowTs(),
+  const seenAt = nowTs();
+  const updates: Record<string, unknown> = {
     [`userConversations/${userId}/${conversationId}/unreadCount`]: 0,
     [`userConversations/${userId}/${conversationId}/lastMessageAt`]: newestMessage.createdAt,
-  });
+    [`userConversations/${userId}/${conversationId}/lastSeenAt`]: seenAt,
+    [`conversations/${conversationId}/readState/${userId}`]: seenAt,
+  };
+
+  // Avoid scanning entire message history on every open/scroll.
+  // Keep a conversation-level marker and only stamp seenBy on the newest incoming message.
+  const newestIsIncoming = newestMessage.senderId !== userId;
+  const newestSeenByCurrentUser = Boolean(newestMessage.seenBy?.[userId]);
+  if (newestIsIncoming && !newestMessage.deleted && !newestSeenByCurrentUser) {
+    updates[`messages/${conversationId}/${newestMessage.id}/seenBy/${userId}`] = seenAt;
+  }
+
+  await update(ref(rtdb), updates);
 }
 
 async function uploadAttachments(
@@ -862,12 +874,21 @@ export async function sendMessage(params: {
     [`conversations/${conversationId}/updatedAt`]: createdAt,
   };
 
-  for (const participantId of participantIds) {
-    updates[`userConversations/${participantId}/${conversationId}/lastMessageText`] = lastMessageText;
-    updates[`userConversations/${participantId}/${conversationId}/lastMessageAt`] = createdAt;
-  }
-
   await update(ref(rtdb), updates);
+
+  await Promise.all(
+    participantIds.map(async (participantId) => {
+      try {
+        await update(ref(rtdb, `userConversations/${participantId}/${conversationId}`), {
+          lastMessageText,
+          lastMessageAt: createdAt,
+        });
+      } catch {
+        // Keep message delivery successful even if userConversations metadata sync fails.
+      }
+    })
+  );
+
   await incrementUnreadForParticipants(conversationId, participantIds, sender.uid);
 
   return message;
