@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -64,7 +64,6 @@ export function ActiveProfessorsSection() {
   const [removingProfessor, setRemovingProfessor] = useState<Professor | null>(null);
   const [removingCourseId, setRemovingCourseId] = useState("");
 
-  const [showRemoveFromSystem, setShowRemoveFromSystem] = useState(false);
   const [systemRemovalProfessor, setSystemRemovalProfessor] = useState<Professor | null>(null);
 
   const selectedCourseData = useMemo(
@@ -85,71 +84,77 @@ export function ActiveProfessorsSection() {
   const canProfessorAddMoreCourses = (professor: Professor) =>
     courses.some((course) => !professor.courses.includes(course.id));
 
+  const loadProfessorsAndCourses = useCallback(async () => {
+    const db = await getDbRuntime();
+
+    // Carregar professores ativos
+    const usersSnap = await getDocs(
+      query(
+        collection(db, "users"),
+        where("schoolId", "==", schoolId),
+        where("role", "==", "professor"),
+        where("estado", "==", "ativo")
+      )
+    );
+
+    const professorsMap = new Map<string, Professor>();
+    usersSnap.docs.forEach((doc) => {
+      const data = doc.data() as {
+        nome?: string;
+        email?: string;
+        photoURL?: string;
+      };
+      professorsMap.set(doc.id, {
+        id: doc.id,
+        name: data.nome || "—",
+        email: data.email || "—",
+        photoURL: data.photoURL || "",
+        courses: [],
+      });
+    });
+
+    // Carregar cursos e associar professores
+    const coursesSnap = await getDocs(
+      query(collection(db, "courses"), where("schoolId", "==", schoolId))
+    );
+
+    const coursesList: Course[] = [];
+    coursesSnap.docs.forEach((doc) => {
+      const data = doc.data() as {
+        name?: string;
+        courseDirectorId?: string | null;
+        supportingTeacherIds?: string[];
+        teacherIds?: string[];
+      };
+
+      const teacherIds = Array.isArray(data.teacherIds) ? data.teacherIds : [];
+      coursesList.push({
+        id: doc.id,
+        name: data.name || "—",
+        courseDirectorId: data.courseDirectorId || null,
+        supportingTeacherIds: data.supportingTeacherIds || [],
+        teacherIds,
+      });
+
+      // Associar cursos aos professores
+      teacherIds.forEach((teacherId) => {
+        if (professorsMap.has(teacherId)) {
+          const prof = professorsMap.get(teacherId)!;
+          prof.courses.push(doc.id);
+        }
+      });
+    });
+
+    const updatedProfessors = Array.from(professorsMap.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, "pt-PT")
+    );
+
+    return { professors: updatedProfessors, courses: coursesList };
+  }, [schoolId]);
+
   const refreshData = async () => {
     try {
-      const db = await getDbRuntime();
-
-      // Carregar professores ativos
-      const usersSnap = await getDocs(
-        query(
-          collection(db, "users"),
-          where("schoolId", "==", schoolId),
-          where("role", "==", "professor"),
-          where("estado", "==", "ativo")
-        )
-      );
-
-      const professorsMap = new Map<string, Professor>();
-      usersSnap.docs.forEach((doc) => {
-        const data = doc.data() as {
-          nome?: string;
-          email?: string;
-          photoURL?: string;
-        };
-        professorsMap.set(doc.id, {
-          id: doc.id,
-          name: data.nome || "—",
-          email: data.email || "—",
-          photoURL: data.photoURL || "",
-          courses: [],
-        });
-      });
-
-      // Carregar cursos e associar professores
-      const coursesSnap = await getDocs(
-        query(collection(db, "courses"), where("schoolId", "==", schoolId))
-      );
-
-      const coursesList: Course[] = [];
-      coursesSnap.docs.forEach((doc) => {
-        const data = doc.data() as {
-          name?: string;
-          courseDirectorId?: string | null;
-          supportingTeacherIds?: string[];
-          teacherIds?: string[];
-        };
-
-        const teacherIds = Array.isArray(data.teacherIds) ? data.teacherIds : [];
-        coursesList.push({
-          id: doc.id,
-          name: data.name || "—",
-          courseDirectorId: data.courseDirectorId || null,
-          supportingTeacherIds: data.supportingTeacherIds || [],
-          teacherIds,
-        });
-
-        // Associar cursos aos professores
-        teacherIds.forEach((teacherId) => {
-          if (professorsMap.has(teacherId)) {
-            const prof = professorsMap.get(teacherId)!;
-            prof.courses.push(doc.id);
-          }
-        });
-      });
-
-      const updatedProfessors = Array.from(professorsMap.values()).sort((a, b) =>
-        a.name.localeCompare(b.name, "pt-PT")
-      );
+      const { professors: updatedProfessors, courses: coursesList } = await loadProfessorsAndCourses();
 
       setProfessors(updatedProfessors);
       setCourses(coursesList);
@@ -169,75 +174,17 @@ export function ActiveProfessorsSection() {
         setSelectedProfessor(updated);
       }
     }
-  }, [professors]);
+  }, [professors, selectedProfessor]);
 
   useEffect(() => {
     let active = true;
 
     (async () => {
       try {
-        const db = await getDbRuntime();
-
-        // Carregar professores ativos
-        const usersSnap = await getDocs(
-          query(
-            collection(db, "users"),
-            where("schoolId", "==", schoolId),
-            where("role", "==", "professor"),
-            where("estado", "==", "ativo")
-          )
-        );
-
-        const professorsMap = new Map<string, Professor>();
-        usersSnap.docs.forEach((doc) => {
-          const data = doc.data() as {
-            nome?: string;
-            email?: string;
-            photoURL?: string;
-          };
-          professorsMap.set(doc.id, {
-            id: doc.id,
-            name: data.nome || "—",
-            email: data.email || "—",
-            photoURL: data.photoURL || "",
-            courses: [],
-          });
-        });
-
-        // Carregar cursos e associar professores
-        const coursesSnap = await getDocs(
-          query(collection(db, "courses"), where("schoolId", "==", schoolId))
-        );
-
-        const coursesList: Course[] = [];
-        coursesSnap.docs.forEach((doc) => {
-          const data = doc.data() as {
-            name?: string;
-            courseDirectorId?: string | null;
-            supportingTeacherIds?: string[];
-            teacherIds?: string[];
-          };
-
-          const teacherIds = Array.isArray(data.teacherIds) ? data.teacherIds : [];
-          coursesList.push({
-            id: doc.id,
-            name: data.name || "—",
-            courseDirectorId: data.courseDirectorId || null,
-            supportingTeacherIds: data.supportingTeacherIds || [],
-            teacherIds,
-          });
-
-          // Associar cursos aos professores
-          teacherIds.forEach((teacherId) => {
-            if (professorsMap.has(teacherId)) {
-              const prof = professorsMap.get(teacherId)!;
-              prof.courses.push(doc.id);
-            }
-          });
-        });
+        const { professors: updatedProfessors, courses: coursesList } = await loadProfessorsAndCourses();
 
         if (!active) return;
-        setProfessors(Array.from(professorsMap.values()).sort((a, b) => a.name.localeCompare(b.name, "pt-PT")));
+        setProfessors(updatedProfessors);
         setCourses(coursesList);
         setLoading(false);
       } catch (error) {
@@ -252,7 +199,7 @@ export function ActiveProfessorsSection() {
     return () => {
       active = false;
     };
-  }, [schoolId]);
+  }, [loadProfessorsAndCourses]);
 
   const handleAssignToCourse = async () => {
     if (!selectedProfessor || !selectedCourse) {
@@ -470,7 +417,6 @@ export function ActiveProfessorsSection() {
       });
 
       setActionSuccess(`${systemRemovalProfessor.name} removido do sistema da escola.`);
-      setShowRemoveFromSystem(false);
       setSystemRemovalProfessor(null);
       await refreshData();
     } catch (error) {
