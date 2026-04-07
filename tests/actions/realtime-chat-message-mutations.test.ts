@@ -64,25 +64,41 @@ function makeMessageSnapshot(data: MessageSnapshotData | null) {
   };
 }
 
+function makeConversationSnapshot(participants: Record<string, true> | null) {
+  return {
+    exists: () => Boolean(participants),
+    val: () => ({ participants: participants || {} }),
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 
   mockGetDatabase.mockReturnValue({ app: "rtdb" });
   mockRef.mockImplementation((_db: unknown, path?: string) => ({ path: path || "" }));
   mockUpdate.mockResolvedValue(undefined);
+  mockGet.mockImplementation((refArg: { path: string }) => {
+    if (refArg.path === "messages/conv-1/msg-1") {
+      return Promise.resolve(
+        makeMessageSnapshot({
+          senderId: "author-1",
+          text: "texto original",
+          attachments: {},
+          createdAt: 1710000000000,
+          editedAt: null,
+          deleted: false,
+          deletedAt: null,
+          seenBy: {},
+        })
+      );
+    }
 
-  mockGet.mockResolvedValue(
-    makeMessageSnapshot({
-      senderId: "author-1",
-      text: "texto original",
-      attachments: {},
-      createdAt: 1710000000000,
-      editedAt: null,
-      deleted: false,
-      deletedAt: null,
-      seenBy: {},
-    })
-  );
+    if (refArg.path === "conversations/conv-1") {
+      return Promise.resolve(makeConversationSnapshot({ "author-1": true, "peer-1": true }));
+    }
+
+    return Promise.resolve(makeMessageSnapshot(null));
+  });
 });
 
 describe("message mutations", () => {
@@ -104,6 +120,8 @@ describe("message mutations", () => {
       "messages/conv-1/msg-1/editedAt": 1710000005000,
       "conversations/conv-1/lastMessage/text": "mensagem editada",
       "conversations/conv-1/updatedAt": 1710000005000,
+      "userConversations/author-1/conv-1/lastMessageText": "mensagem editada",
+      "userConversations/peer-1/conv-1/lastMessageText": "mensagem editada",
     });
   });
 
@@ -162,8 +180,10 @@ describe("message mutations", () => {
     expect(payload).toMatchObject({
       "messages/conv-1/msg-1/deleted": true,
       "messages/conv-1/msg-1/deletedAt": 1710000009000,
-      "conversations/conv-1/lastMessage/text": "A mensagem foi apagada",
+      "conversations/conv-1/lastMessage/text": "Mensagem eliminada",
       "conversations/conv-1/updatedAt": 1710000009000,
+      "userConversations/author-1/conv-1/lastMessageText": "Mensagem eliminada",
+      "userConversations/peer-1/conv-1/lastMessageText": "Mensagem eliminada",
     });
     expect(payload).not.toHaveProperty("messages/conv-1/msg-1/text");
     expect(payload).not.toHaveProperty("messages/conv-1/msg-1/editedAt");
@@ -211,6 +231,8 @@ describe("message mutations", () => {
       "messages/conv-1/msg-1/deletedAt": null,
       "conversations/conv-1/lastMessage/text": "texto antigo",
       "conversations/conv-1/updatedAt": 1710000010000,
+      "userConversations/author-1/conv-1/lastMessageText": "texto antigo",
+      "userConversations/peer-1/conv-1/lastMessageText": "texto antigo",
     });
   });
 

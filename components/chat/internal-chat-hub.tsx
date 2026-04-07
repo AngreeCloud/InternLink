@@ -27,6 +27,7 @@ import {
   subscribeConversationMessages,
   subscribeUserConversations,
 } from "@/lib/chat/realtime-chat";
+import { resolveConversationPreview } from "@/lib/chat/chat-preview";
 import type {
   ChatConversation,
   ChatMessage,
@@ -123,11 +124,6 @@ function formatDayDivider(timestamp: number): string {
     month: "long",
     year: "numeric",
   });
-}
-
-function getMessagePreview(meta: UserConversationMeta): string {
-  if (!meta.lastMessageText) return "Sem mensagens";
-  return meta.lastMessageText;
 }
 
 function getRoleLabel(role: ChatRole): string {
@@ -975,7 +971,9 @@ export function InternalChatHub() {
                             {formatChatRelativeTime(item.meta.lastMessageAt)}
                           </span>
                         </div>
-                        <p className="truncate text-xs text-muted-foreground">{getMessagePreview(item.meta)}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {resolveConversationPreview(item.meta, conv.lastMessage)}
+                        </p>
                       </div>
                       {(unreadByConversation[conv.id] || 0) > 0 ? (
                         <Badge className="h-5 min-w-5 justify-center px-1 text-[10px]">
