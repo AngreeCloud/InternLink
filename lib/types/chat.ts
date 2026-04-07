@@ -36,6 +36,7 @@ export type ChatConversation = {
   type: ChatConversationType;
   orgId: string | null;
   participants: Record<string, true>;
+  readState?: Record<string, number>;
   lastMessage: {
     text: string | null;
     senderId: string;
@@ -49,6 +50,7 @@ export type ChatConversation = {
 export type UserConversationMeta = {
   lastMessageText: string | null;
   lastMessageAt: number;
+  lastSeenAt?: number;
   unreadCount: number;
   isMuted: boolean;
 };

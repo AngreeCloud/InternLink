@@ -125,14 +125,13 @@ function shouldShowRole(role: ChatRole): boolean {
   return role !== "admin";
 }
 
-function getDeliveryIcon(message: ChatMessageView, participantCount: number): JSX.Element {
+function getDeliveryIcon(message: ChatMessageView, seenByOthers: boolean): JSX.Element {
   if (message.deliveryState === "sending") return <Loader2 className="h-3.5 w-3.5 animate-spin" />;
   if (message.deliveryState === "failed") return <span className="text-[10px] text-red-500">falhou</span>;
 
-  const seenCount = Object.keys(message.seenBy || {}).length;
-  const statusLabel = participantCount > 1 && seenCount > 1 ? "Visto" : "Recebido";
+  const statusLabel = seenByOthers ? "Visto" : "Recebido";
 
-  if (participantCount > 1 && seenCount > 1) {
+  if (seenByOthers) {
     return (
       <span title={statusLabel} aria-label={statusLabel}>
         <CheckCheck className="h-3.5 w-3.5" />
@@ -194,6 +193,30 @@ export function InternalChatHub() {
   const selectedParticipants = useMemo(
     () => selectedParticipantIds.map((uid) => participantProfiles[uid]).filter(Boolean),
     [selectedParticipantIds, participantProfiles]
+  );
+
+  const hasMessageBeenSeenByOthers = useCallback(
+    (message: ChatMessageView): boolean => {
+      if (!profile || !selectedConversation) return false;
+
+      const participantIds = Object.keys(selectedConversation.conversation.participants || {});
+      if (participantIds.length <= 1) return false;
+
+      const readState = selectedConversation.conversation.readState || {};
+      const seenViaReadState = participantIds.some((uid) => {
+        if (uid === profile.uid) return false;
+        const seenAt = readState[uid];
+        return typeof seenAt === "number" && seenAt >= message.createdAt;
+      });
+      if (seenViaReadState) return true;
+
+      // Backward compatibility for messages that still carry seenBy receipts.
+      return Object.entries(message.seenBy || {}).some(([uid, seenAt]) => {
+        if (uid === profile.uid) return false;
+        return typeof seenAt === "number";
+      });
+    },
+    [profile, selectedConversation]
   );
 
   const otherParticipants = useMemo(() => {
@@ -973,6 +996,7 @@ export function InternalChatHub() {
                     );
                     const showMessageTimestamp = !sameSenderAsNext;
                     const showAvatar = !mine && !sameSenderAsPrev;
+                    const seenByOthers = mine ? hasMessageBeenSeenByOthers(message) : false;
 
                     return (
                       <div
@@ -1056,13 +1080,13 @@ export function InternalChatHub() {
                               <div className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-80">
                                 <span>{formatMessageTime(message.createdAt)}</span>
                                 {message.editedAt ? <span>(editada)</span> : null}
-                                {mine ? getDeliveryIcon(message, selectedParticipantIds.length) : null}
+                                {mine ? getDeliveryIcon(message, seenByOthers) : null}
                               </div>
                             ) : (
                               <div className="pointer-events-none absolute bottom-2 right-3 flex items-center justify-end gap-1 text-[10px] opacity-0 transition-opacity group-hover:opacity-80">
                                 <span>{formatMessageTime(message.createdAt)}</span>
                                 {message.editedAt ? <span>(editada)</span> : null}
-                                {mine ? getDeliveryIcon(message, selectedParticipantIds.length) : null}
+                                {mine ? getDeliveryIcon(message, seenByOthers) : null}
                               </div>
                             )}
                           </div>

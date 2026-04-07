@@ -689,29 +689,20 @@ export async function markConversationSeen(
   if (!newestMessage) return;
 
   const rtdb = await getRealtimeDb();
+  const seenAt = nowTs();
   const updates: Record<string, unknown> = {
     [`userConversations/${userId}/${conversationId}/unreadCount`]: 0,
     [`userConversations/${userId}/${conversationId}/lastMessageAt`]: newestMessage.createdAt,
+    [`userConversations/${userId}/${conversationId}/lastSeenAt`]: seenAt,
+    [`conversations/${conversationId}/readState/${userId}`]: seenAt,
   };
 
-  const messagesSnap = await get(ref(rtdb, `messages/${conversationId}`));
-  if (messagesSnap.exists()) {
-    const messages = messagesSnap.val() as Record<
-      string,
-      { senderId?: string; seenBy?: Record<string, unknown>; deleted?: boolean; createdAt?: number }
-    >;
-    const seenAt = nowTs();
-
-    for (const [messageId, message] of Object.entries(messages)) {
-      const hasValidTimestamp = typeof message.createdAt === "number";
-      const isIncoming = Boolean(message.senderId && message.senderId !== userId);
-      const seenByCurrentUser = Boolean(message.seenBy && message.seenBy[userId]);
-      const isDeleted = Boolean(message.deleted);
-
-      if (hasValidTimestamp && isIncoming && !seenByCurrentUser && !isDeleted) {
-        updates[`messages/${conversationId}/${messageId}/seenBy/${userId}`] = seenAt;
-      }
-    }
+  // Avoid scanning entire message history on every open/scroll.
+  // Keep a conversation-level marker and only stamp seenBy on the newest incoming message.
+  const newestIsIncoming = newestMessage.senderId !== userId;
+  const newestSeenByCurrentUser = Boolean(newestMessage.seenBy?.[userId]);
+  if (newestIsIncoming && !newestMessage.deleted && !newestSeenByCurrentUser) {
+    updates[`messages/${conversationId}/${newestMessage.id}/seenBy/${userId}`] = seenAt;
   }
 
   await update(ref(rtdb), updates);

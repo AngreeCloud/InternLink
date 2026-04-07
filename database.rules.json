@@ -18,6 +18,12 @@
             ".validate": "newData.val() === true"
           }
         },
+        "readState": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true",
+            ".validate": "newData.isNumber()"
+          }
+        },
         "lastMessage": {
           "text": {
             ".validate": "newData.val() === null || (newData.isString() && newData.val().length <= 2000)"
