@@ -192,8 +192,8 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={async () => {
-                    await logoutWithServerSession();
                     router.replace("/login");
+                    void logoutWithServerSession({ deferClientSignOutMs: 150 });
                   }}
                 >
                   <LogOut className="mr-2 h-4 w-4" />

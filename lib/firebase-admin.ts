@@ -1,5 +1,6 @@
 import { getApps, initializeApp, cert, applicationDefault, type App } from "firebase-admin/app";
 import { getAuth, type Auth } from "firebase-admin/auth";
+import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
 type ServiceAccountShape = {
   project_id?: string;
@@ -72,4 +73,8 @@ function getFirebaseAdminApp(): App {
 
 export function getFirebaseAdminAuth(): Auth {
   return getAuth(getFirebaseAdminApp());
+}
+
+export function getFirebaseAdminDb(): Firestore {
+  return getFirestore(getFirebaseAdminApp());
 }

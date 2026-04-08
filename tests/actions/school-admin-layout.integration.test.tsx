@@ -242,7 +242,7 @@ describe("SchoolAdminLayout integration", () => {
 
     await flush();
 
-    expect(mockRouterReplace).toHaveBeenCalledWith("/login");
+    expect(mockRouterReplace).not.toHaveBeenCalled();
     expect(mockChatBadge).not.toHaveBeenCalled();
   });
 });

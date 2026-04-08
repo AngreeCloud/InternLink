@@ -45,13 +45,28 @@ export async function clearServerSession(): Promise<void> {
   await ensureOk(response, "Nao foi possivel terminar a sessao no servidor.");
 }
 
-export async function logoutWithServerSession(): Promise<void> {
+type LogoutOptions = {
+  deferClientSignOutMs?: number;
+};
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+export async function logoutWithServerSession(options: LogoutOptions = {}): Promise<void> {
   const auth = await getAuthRuntime();
+  const deferClientSignOutMs = options.deferClientSignOutMs ?? 0;
 
   try {
     await clearServerSession();
   } catch {
     // Continue with client sign-out even if cookie cleanup fails server-side.
+  }
+
+  if (deferClientSignOutMs > 0) {
+    await wait(deferClientSignOutMs);
   }
 
   await auth.signOut();

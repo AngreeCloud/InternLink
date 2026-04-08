@@ -239,8 +239,8 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
                 variant="outline"
                 size="sm"
                 onClick={async () => {
-                  await logoutWithServerSession();
                   router.replace("/login");
+                  void logoutWithServerSession({ deferClientSignOutMs: 150 });
                 }}
               >
                 <LogOut className="mr-2 h-4 w-4" />

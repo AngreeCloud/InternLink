@@ -4,10 +4,13 @@ import {
   SESSION_COOKIE_NAME,
   SESSION_VERIFY_CACHE_TTL_MS,
   isProtectedPath,
+  isRoleAllowedForPath,
 } from "@/lib/auth/session";
 
 type CacheEntry = {
   expiresAt: number;
+  role?: string;
+  estado?: string;
 };
 
 const sessionVerificationCache = new Map<string, CacheEntry>();
@@ -26,13 +29,40 @@ function getCachedSessionValidity(sessionCookie: string): boolean {
   return true;
 }
 
-function setCachedSessionValidity(sessionCookie: string, tokenExpUnix?: number): void {
-  const tokenExpiryMs = tokenExpUnix ? tokenExpUnix * 1000 : Date.now() + SESSION_VERIFY_CACHE_TTL_MS;
-  const expiresAt = Math.min(tokenExpiryMs, Date.now() + SESSION_VERIFY_CACHE_TTL_MS);
-  sessionVerificationCache.set(sessionCookie, { expiresAt });
+function getCachedSessionProfile(sessionCookie: string): { role?: string; estado?: string } | undefined {
+  const entry = sessionVerificationCache.get(sessionCookie);
+  if (!entry) {
+    return undefined;
+  }
+
+  if (entry.expiresAt <= Date.now()) {
+    sessionVerificationCache.delete(sessionCookie);
+    return undefined;
+  }
+
+  return {
+    role: entry.role,
+    estado: entry.estado,
+  };
 }
 
-async function verifySessionCookie(request: NextRequest): Promise<{ valid: boolean; exp?: number }> {
+function setCachedSessionValidity(
+  sessionCookie: string,
+  tokenExpUnix?: number,
+  profile?: { role?: string; estado?: string }
+): void {
+  const tokenExpiryMs = tokenExpUnix ? tokenExpUnix * 1000 : Date.now() + SESSION_VERIFY_CACHE_TTL_MS;
+  const expiresAt = Math.min(tokenExpiryMs, Date.now() + SESSION_VERIFY_CACHE_TTL_MS);
+  sessionVerificationCache.set(sessionCookie, {
+    expiresAt,
+    role: profile?.role,
+    estado: profile?.estado,
+  });
+}
+
+async function verifySessionCookie(
+  request: NextRequest
+): Promise<{ valid: boolean; exp?: number; role?: string; estado?: string }> {
   const verifyUrl = new URL("/api/auth/session/verify", request.url);
 
   const response = await fetch(verifyUrl, {
@@ -47,12 +77,22 @@ async function verifySessionCookie(request: NextRequest): Promise<{ valid: boole
     return { valid: false };
   }
 
-  const data = (await response.json()) as { valid?: boolean; exp?: number };
+  const data = (await response.json()) as {
+    valid?: boolean;
+    exp?: number;
+    role?: string;
+    estado?: string;
+  };
   if (!data.valid) {
     return { valid: false };
   }
 
-  return { valid: true, exp: data.exp };
+  return {
+    valid: true,
+    exp: data.exp,
+    role: data.role,
+    estado: data.estado,
+  };
 }
 
 export async function proxy(request: NextRequest) {
@@ -68,7 +108,12 @@ export async function proxy(request: NextRequest) {
   }
 
   if (getCachedSessionValidity(sessionCookie)) {
-    return NextResponse.next();
+    const cachedProfile = getCachedSessionProfile(sessionCookie);
+    if (cachedProfile && isRoleAllowedForPath(pathname, cachedProfile)) {
+      return NextResponse.next();
+    }
+
+    return NextResponse.redirect(new URL("/account-status", request.url));
   }
 
   try {
@@ -77,7 +122,16 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
 
-    setCachedSessionValidity(sessionCookie, verification.exp);
+    const profile = {
+      role: verification.role,
+      estado: verification.estado,
+    };
+
+    setCachedSessionValidity(sessionCookie, verification.exp, profile);
+    if (!isRoleAllowedForPath(pathname, profile)) {
+      return NextResponse.redirect(new URL("/account-status", request.url));
+    }
+
     return NextResponse.next();
   } catch {
     return NextResponse.redirect(new URL("/login", request.url));
