@@ -874,7 +874,7 @@ export function InternalChatHub() {
                             >
                               <div className="flex min-w-0 items-center gap-2">
                                 <Avatar className="h-7 w-7">
-                                  <AvatarImage src={member.photoURL || "/placeholder.svg"} alt={member.name} />
+                                  <AvatarImage src={member.photoURL || undefined} alt={member.name} />
                                   <AvatarFallback className="text-[10px]">{initials(member.name)}</AvatarFallback>
                                 </Avatar>
                                 <div className="min-w-0">
@@ -961,7 +961,7 @@ export function InternalChatHub() {
                   >
                     <div className="flex items-center gap-2">
                       <Avatar className="h-8 w-8">
-                        <AvatarImage src={avatarSrc || "/placeholder.svg"} alt={avatarName} />
+                        <AvatarImage src={avatarSrc || undefined} alt={avatarName} />
                         <AvatarFallback className="text-xs">{initials(avatarName)}</AvatarFallback>
                       </Avatar>
                       <div className="min-w-0 flex-1">
@@ -1099,7 +1099,7 @@ export function InternalChatHub() {
                             <div className="mt-1 h-8 w-8 shrink-0">
                               {showAvatar ? (
                                 <Avatar className="h-8 w-8">
-                                  <AvatarImage src={author?.photoURL || "/placeholder.svg"} alt={author?.name || "Utilizador"} />
+                                  <AvatarImage src={author?.photoURL || undefined} alt={author?.name || "Utilizador"} />
                                   <AvatarFallback className="text-xs">{initials(author?.name || "U")}</AvatarFallback>
                                 </Avatar>
                               ) : null}

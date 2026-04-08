@@ -229,7 +229,7 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
 
               <div className="flex items-center gap-3 rounded-full border border-border bg-card px-3 py-1">
                 <Avatar className="h-7 w-7">
-                  <AvatarImage src={state.photoURL || "/placeholder.svg"} alt={state.name} />
+                  <AvatarImage src={state.photoURL || undefined} alt={state.name} />
                   <AvatarFallback>{state.name.charAt(0)}</AvatarFallback>
                 </Avatar>
                 <div className="leading-tight">

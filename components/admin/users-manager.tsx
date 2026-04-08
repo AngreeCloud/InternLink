@@ -191,7 +191,7 @@ export function UsersManager() {
               <div key={user.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
                 <div className="flex items-center space-x-4">
                   <Avatar className="h-10 w-10">
-                    <AvatarImage src="/placeholder.svg" alt={user.name} />
+                    <AvatarImage src={undefined} alt={user.name} />
                     <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                   </Avatar>
                   <div className="space-y-1">

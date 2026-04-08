@@ -138,7 +138,7 @@ export function NotificationsInbox({ notifications, onOpenChat }: NotificationsI
                     >
                       <div className="flex items-start gap-2">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={notification.avatarUrl || "/placeholder.svg"} alt={notification.title} />
+                          <AvatarImage src={notification.avatarUrl || undefined} alt={notification.title} />
                           <AvatarFallback>{avatarFallback(notification.title)}</AvatarFallback>
                         </Avatar>
                         <div className="min-w-0 flex-1">

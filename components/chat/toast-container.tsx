@@ -41,7 +41,7 @@ function ChatToastItem(props: {
       <CardContent className="p-3">
         <div className="flex items-start gap-3">
           <Avatar className="h-9 w-9">
-            <AvatarImage src={notification.avatarUrl || "/placeholder.svg"} alt={notification.title} />
+            <AvatarImage src={notification.avatarUrl || undefined} alt={notification.title} />
             <AvatarFallback>{avatarFallback(notification.title)}</AvatarFallback>
           </Avatar>
 

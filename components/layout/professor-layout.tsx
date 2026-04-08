@@ -249,7 +249,7 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={state.photoURL || "/placeholder.svg"} alt={state.name} />
+                      <AvatarImage src={state.photoURL || undefined} alt={state.name} />
                       <AvatarFallback>{state.name.charAt(0)}</AvatarFallback>
                     </Avatar>
                   </Button>
