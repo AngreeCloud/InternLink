@@ -153,7 +153,7 @@ export function TutorSchoolInternships({ schoolId }: { schoolId: string }) {
         <div className="p-4">
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8">
-              <AvatarImage src={school.profileImageUrl || "/placeholder.svg"} alt={school.name} />
+              <AvatarImage src={school.profileImageUrl || undefined} alt={school.name} />
               <AvatarFallback>{schoolLabel.charAt(0)}</AvatarFallback>
             </Avatar>
             <p className="text-sm font-medium">{school.name}</p>
@@ -182,7 +182,7 @@ export function TutorSchoolInternships({ schoolId }: { schoolId: string }) {
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <Avatar className="h-7 w-7">
-                          <AvatarImage src="/placeholder.svg" alt={estagio.alunoNome} />
+                          <AvatarImage src={undefined} alt={estagio.alunoNome} />
                           <AvatarFallback>{estagio.alunoNome.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <p className="text-sm font-medium">{estagio.alunoNome}</p>

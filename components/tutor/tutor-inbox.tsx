@@ -447,7 +447,7 @@ export function TutorInbox() {
                         </div>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Avatar className="h-5 w-5">
-                            <AvatarImage src={invite.professorPhotoURL || "/placeholder.svg"} alt={invite.professorName} />
+                            <AvatarImage src={invite.professorPhotoURL || undefined} alt={invite.professorName} />
                             <AvatarFallback>{invite.professorName.charAt(0)}</AvatarFallback>
                           </Avatar>
                           <span>Professor: {invite.professorName}</span>

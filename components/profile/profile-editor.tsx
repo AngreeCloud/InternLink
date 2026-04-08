@@ -272,7 +272,7 @@ export function ProfileEditor() {
           <div className="flex items-center gap-4">
             <div className="relative">
               <Avatar className="h-20 w-20">
-                <AvatarImage src={photoPreview || "/placeholder.svg"} alt={profile.nome} />
+                <AvatarImage src={photoPreview || undefined} alt={profile.nome} />
                 <AvatarFallback className="text-lg">{profile.nome.charAt(0)}</AvatarFallback>
               </Avatar>
               <label

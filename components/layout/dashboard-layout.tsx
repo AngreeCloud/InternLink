@@ -30,6 +30,8 @@ import { onAuthStateChanged, signOut } from "firebase/auth"
 import { doc, getDoc } from "firebase/firestore"
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime"
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge"
+import { NotificationsInbox } from "@/components/chat/notifications-inbox"
+import { useChatNotifications } from "@/lib/chat/use-chat-notifications"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
@@ -69,6 +71,17 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
     return pathname === href || pathname.startsWith(`${href}/`)
   }
+
+  const isChatPage = isActiveRoute("/dashboard/chat")
+
+  const { notifications, handleOpenConversation } = useChatNotifications({
+    userId: state.userId,
+    enabled: !isChatPage,
+    isChatOpen: isChatPage,
+    onOpenConversation: (conversationId) => {
+      router.push(`/dashboard/chat?conversationId=${conversationId}`)
+    },
+  })
 
   useEffect(() => {
     let unsubscribe = () => {}
@@ -233,11 +246,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
             <div className="flex flex-1"></div>
             <div className="flex items-center gap-x-4 lg:gap-x-6">
+              <NotificationsInbox notifications={notifications} onOpenChat={handleOpenConversation} />
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
+                      <AvatarImage src={user.avatar || undefined} alt={user.name} />
                       <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                     </Avatar>
                   </Button>

@@ -53,6 +53,7 @@ describe("markConversationSeen", () => {
       createdAt: 1709999999000,
       editedAt: null,
       deleted: false,
+      deletedAt: null,
       seenBy: {},
     });
 
@@ -81,6 +82,7 @@ describe("markConversationSeen", () => {
       createdAt: 1710000004000,
       editedAt: null,
       deleted: false,
+      deletedAt: null,
       seenBy: { userA: 1710000004000 },
     });
 

@@ -8,6 +8,8 @@ import { doc, getDoc } from "firebase/firestore";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { SchoolAdminProvider } from "@/components/school-admin/school-admin-context";
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
+import { NotificationsInbox } from "@/components/chat/notifications-inbox";
+import { useChatNotifications } from "@/lib/chat/use-chat-notifications";
 import { SchoolAdminApprovalsBadge } from "@/components/school-admin/school-admin-approvals-badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -52,6 +54,17 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
 
     return pathname === href || pathname.startsWith(`${href}/`);
   };
+
+  const isChatPage = isActiveRoute("/school-admin/chat");
+
+  const { notifications, handleOpenConversation } = useChatNotifications({
+    userId: state.userId,
+    enabled: !isChatPage,
+    isChatOpen: isChatPage,
+    onOpenConversation: (conversationId) => {
+      router.push(`/school-admin/chat?conversationId=${conversationId}`);
+    },
+  });
 
   useEffect(() => {
     let unsubscribe = () => {};
@@ -212,9 +225,11 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
               <Menu className="h-5 w-5" />
             </Button>
             <div className="flex flex-1 items-center justify-end gap-3">
+              <NotificationsInbox notifications={notifications} onOpenChat={handleOpenConversation} />
+
               <div className="flex items-center gap-3 rounded-full border border-border bg-card px-3 py-1">
                 <Avatar className="h-7 w-7">
-                  <AvatarImage src={state.photoURL || "/placeholder.svg"} alt={state.name} />
+                  <AvatarImage src={state.photoURL || undefined} alt={state.name} />
                   <AvatarFallback>{state.name.charAt(0)}</AvatarFallback>
                 </Avatar>
                 <div className="leading-tight">

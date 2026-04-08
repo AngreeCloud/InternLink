@@ -88,6 +88,9 @@
           "deleted": {
             ".validate": "newData.isBoolean()"
           },
+          "deletedAt": {
+            ".validate": "newData.val() === null || newData.isNumber()"
+          },
           "seenBy": {
             "$uid": {
               ".write": "auth != null && auth.uid === $uid && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true",

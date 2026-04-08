@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import { initializeFirestore, memoryLocalCache, type Firestore } from "firebase/firestore";
 import { getDatabase, type Database } from "firebase/database";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
@@ -53,7 +53,9 @@ export async function ensureFirebaseInitialized(): Promise<void> {
     const config = await fetchPublicConfig();
     app = getApps().length ? getApp() : initializeApp(config);
     auth = getAuth(app);
-    db = getFirestore(app);
+    db = initializeFirestore(app, {
+      localCache: memoryLocalCache(),
+    });
     rtdb = getDatabase(app);
     storage = getStorage(app);
   })();

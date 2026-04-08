@@ -98,7 +98,7 @@ export function TutorSystemOverview() {
               <div key={tutor.id} className="flex items-center justify-between rounded-lg border border-border p-3">
                 <div className="flex items-center gap-3">
                   <Avatar className="h-9 w-9">
-                    <AvatarImage src={tutor.photoURL || "/placeholder.svg"} alt={tutor.nome} />
+                    <AvatarImage src={tutor.photoURL || undefined} alt={tutor.nome} />
                     <AvatarFallback>{tutor.nome.charAt(0)}</AvatarFallback>
                   </Avatar>
                   <div>

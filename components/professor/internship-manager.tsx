@@ -630,7 +630,7 @@ export function InternshipManager() {
                             ].join(" ")}
                           >
                             <Avatar className="h-8 w-8">
-                              <AvatarImage src={student.photoURL || "/placeholder.svg"} alt={student.nome} />
+                              <AvatarImage src={student.photoURL || undefined} alt={student.nome} />
                               <AvatarFallback>{student.nome.charAt(0)}</AvatarFallback>
                             </Avatar>
                             <div className="min-w-0">
@@ -678,7 +678,7 @@ export function InternshipManager() {
                             ].join(" ")}
                           >
                             <Avatar className="h-8 w-8">
-                              <AvatarImage src={tutor.photoURL || "/placeholder.svg"} alt={tutor.nome} />
+                              <AvatarImage src={tutor.photoURL || undefined} alt={tutor.nome} />
                               <AvatarFallback>{tutor.nome.charAt(0)}</AvatarFallback>
                             </Avatar>
                             <div className="min-w-0">
@@ -787,7 +787,7 @@ export function InternshipManager() {
                 <div key={tutor.id} className="flex items-center justify-between rounded-lg border border-border p-3">
                   <div className="flex items-center gap-3">
                     <Avatar className="h-9 w-9">
-                      <AvatarImage src={tutor.photoURL || "/placeholder.svg"} alt={tutor.nome} />
+                      <AvatarImage src={tutor.photoURL || undefined} alt={tutor.nome} />
                       <AvatarFallback>{tutor.nome.charAt(0)}</AvatarFallback>
                     </Avatar>
                     <div>
@@ -883,7 +883,7 @@ export function InternshipManager() {
                       ].join(" ")}
                     >
                       <Avatar className="h-8 w-8">
-                        <AvatarImage src={tutor.photoURL || "/placeholder.svg"} alt={tutor.nome} />
+                        <AvatarImage src={tutor.photoURL || undefined} alt={tutor.nome} />
                         <AvatarFallback>{tutor.nome.charAt(0)}</AvatarFallback>
                       </Avatar>
                       <div className="min-w-0">
@@ -944,7 +944,7 @@ export function InternshipManager() {
 
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Avatar className="h-6 w-6">
-                          <AvatarImage src={linkedStudent?.photoURL || "/placeholder.svg"} alt={estagio.alunoNome} />
+                          <AvatarImage src={linkedStudent?.photoURL || undefined} alt={estagio.alunoNome} />
                           <AvatarFallback>{estagio.alunoNome.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <span>Aluno: {estagio.alunoNome} ({estagio.alunoEmail})</span>
@@ -954,7 +954,7 @@ export function InternshipManager() {
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Avatar className="h-6 w-6">
                             <AvatarImage
-                              src={linkedTutor?.photoURL || "/placeholder.svg"}
+                              src={linkedTutor?.photoURL || undefined}
                               alt={linkedTutor?.nome || "Tutor"}
                             />
                             <AvatarFallback>{(linkedTutor?.nome || "Tutor").charAt(0)}</AvatarFallback>

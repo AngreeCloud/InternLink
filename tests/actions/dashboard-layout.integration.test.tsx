@@ -11,6 +11,7 @@ const mockOnAuthStateChanged = vi.fn();
 const mockGetDoc = vi.fn();
 const mockDoc = vi.fn();
 const mockChatBadge = vi.fn();
+const mockUseChatNotifications = vi.fn();
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
@@ -45,6 +46,21 @@ vi.mock("@/components/chat/chat-nav-unread-badge", () => ({
     mockChatBadge(props);
     return <span data-testid="chat-badge" data-user={props.userId} data-active={String(Boolean(props.isActive))} />;
   },
+}));
+
+vi.mock("@/lib/chat/use-chat-notifications", () => ({
+  useChatNotifications: (args: unknown) => {
+    mockUseChatNotifications(args);
+    return {
+      notifications: [],
+      dismissNotification: vi.fn(),
+      handleOpenConversation: vi.fn(),
+    };
+  },
+}));
+
+vi.mock("@/components/chat/notifications-inbox", () => ({
+  NotificationsInbox: () => <span data-testid="notifications-inbox" />,
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -125,6 +141,50 @@ beforeEach(() => {
 });
 
 describe("DashboardLayout integration", () => {
+  it("ativa notificações fora da rota de chat", async () => {
+    mockUsePathname.mockReturnValue("/dashboard/reports");
+
+    await act(async () => {
+      TestRenderer.create(
+        <DashboardLayout>
+          <div>Conteudo</div>
+        </DashboardLayout>
+      );
+    });
+
+    await flush();
+
+    const lastCallIndex = mockUseChatNotifications.mock.calls.length - 1;
+    const props = mockUseChatNotifications.mock.calls[lastCallIndex]?.[0] as {
+      enabled: boolean;
+      isChatOpen: boolean;
+    };
+    expect(props.enabled).toBe(true);
+    expect(props.isChatOpen).toBe(false);
+  });
+
+  it("desativa notificações na rota de chat", async () => {
+    mockUsePathname.mockReturnValue("/dashboard/chat");
+
+    await act(async () => {
+      TestRenderer.create(
+        <DashboardLayout>
+          <div>Conteudo</div>
+        </DashboardLayout>
+      );
+    });
+
+    await flush();
+
+    const lastCallIndex = mockUseChatNotifications.mock.calls.length - 1;
+    const props = mockUseChatNotifications.mock.calls[lastCallIndex]?.[0] as {
+      enabled: boolean;
+      isChatOpen: boolean;
+    };
+    expect(props.enabled).toBe(false);
+    expect(props.isChatOpen).toBe(true);
+  });
+
   it("mounts chat badge in desktop and mobile chat nav items", async () => {
     await act(async () => {
       TestRenderer.create(

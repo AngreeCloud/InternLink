@@ -248,7 +248,7 @@ export function ChatInterface() {
               {selectedRoom.participants.map((participant) => (
                 <div key={participant.id} className="flex items-center gap-1">
                   <Avatar className="h-6 w-6">
-                    <AvatarImage src={participant.avatar || "/placeholder.svg"} />
+                    <AvatarImage src={participant.avatar || undefined} />
                     <AvatarFallback className="text-xs">{participant.name.charAt(0)}</AvatarFallback>
                   </Avatar>
                   <div className={`h-2 w-2 rounded-full ${participant.online ? "bg-green-500" : "bg-gray-400"}`} />

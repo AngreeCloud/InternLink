@@ -46,6 +46,7 @@ import type {
 export const CHAT_MESSAGE_MAX_CHARS = 2000;
 export const CHAT_ATTACHMENTS_MAX_FILES = 3;
 export const CHAT_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024;
+export const CHAT_DELETED_MESSAGE_PREVIEW = "Mensagem eliminada";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -55,12 +56,20 @@ type OrgMemberIndexEntry = {
   role: ChatRole;
 };
 
+type OrgMemberSyncState = {
+  signature: string;
+  syncedAt: number;
+};
+
 type UserSchoolFields = {
   schoolId?: string;
   escolaId?: string;
 };
 
 let dbInstance: Database | null = null;
+const orgMemberSyncInFlight = new Map<string, Promise<void>>();
+const orgMemberSyncState = new Map<string, OrgMemberSyncState>();
+const ORG_MEMBER_SYNC_TTL_MS = 15_000;
 
 function sanitizeText(text: string): string {
   return text.trim().slice(0, CHAT_MESSAGE_MAX_CHARS);
@@ -72,6 +81,55 @@ function nowTs(): number {
 
 function getOrgIdFromUserData(data: UserSchoolFields): string | null {
   return data.schoolId || data.escolaId || null;
+}
+
+function buildOrgMemberSyncKey(orgId: string, userId: string): string {
+  return `${orgId}:${userId}`;
+}
+
+function buildOrgMemberSignature(entry: OrgMemberIndexEntry): string {
+  return `${entry.name}|${entry.email}|${entry.role}`;
+}
+
+async function syncOrgMemberIndexEntry(
+  orgId: string,
+  userId: string,
+  entry: OrgMemberIndexEntry
+): Promise<void> {
+  const key = buildOrgMemberSyncKey(orgId, userId);
+  const now = nowTs();
+  const signature = buildOrgMemberSignature(entry);
+  const previous = orgMemberSyncState.get(key);
+
+  if (
+    previous &&
+    previous.signature === signature &&
+    now - previous.syncedAt < ORG_MEMBER_SYNC_TTL_MS
+  ) {
+    return;
+  }
+
+  const pending = orgMemberSyncInFlight.get(key);
+  if (pending) {
+    await pending;
+    return;
+  }
+
+  const writePromise = (async () => {
+    const rtdb = await getRealtimeDb();
+    await set(ref(rtdb, `orgMembers/${orgId}/${userId}`), entry);
+    orgMemberSyncState.set(key, {
+      signature,
+      syncedAt: nowTs(),
+    });
+  })();
+
+  orgMemberSyncInFlight.set(key, writePromise);
+  try {
+    await writePromise;
+  } finally {
+    orgMemberSyncInFlight.delete(key);
+  }
 }
 
 function toChatRole(role: string | undefined): ChatRole {
@@ -107,6 +165,7 @@ function mapMessage(snapshot: DataSnapshot): ChatMessage {
     createdAt: value.createdAt,
     editedAt: value.editedAt ?? null,
     deleted: Boolean(value.deleted),
+    deletedAt: value.deletedAt ?? null,
     seenBy: value.seenBy || {},
   };
 }
@@ -150,8 +209,7 @@ export async function getCurrentChatProfile(): Promise<ChatUserProfile | null> {
 
 export async function ensureOrgMemberIndex(profile: ChatUserProfile): Promise<void> {
   if (!profile.orgId) return;
-  const rtdb = await getRealtimeDb();
-  await set(ref(rtdb, `orgMembers/${profile.orgId}/${profile.uid}`), {
+  await syncOrgMemberIndexEntry(profile.orgId, profile.uid, {
     name: profile.name,
     email: profile.email,
     role: profile.role,
@@ -847,6 +905,7 @@ export async function sendMessage(params: {
     createdAt,
     editedAt: null,
     deleted: false,
+    deletedAt: null,
     seenBy: {
       [sender.uid]: createdAt,
     },
@@ -863,6 +922,7 @@ export async function sendMessage(params: {
       createdAt: message.createdAt,
       editedAt: message.editedAt,
       deleted: message.deleted,
+      deletedAt: message.deletedAt,
       seenBy: message.seenBy,
     },
     [`conversations/${conversationId}/lastMessage`]: {
@@ -918,12 +978,23 @@ export async function editMessage(params: {
     throw new Error("Não pode editar uma mensagem apagada.");
   }
 
-  await update(ref(rtdb), {
+  const conversationSnap = await get(ref(rtdb, `conversations/${params.conversationId}`));
+  const participants = conversationSnap.exists()
+    ? Object.keys(((conversationSnap.val() as { participants?: Record<string, true> })?.participants) || {})
+    : [];
+
+  const updates: Record<string, unknown> = {
     [`messages/${params.conversationId}/${params.messageId}/text`]: newText,
     [`messages/${params.conversationId}/${params.messageId}/editedAt`]: nowTs(),
     [`conversations/${params.conversationId}/lastMessage/text`]: newText,
     [`conversations/${params.conversationId}/updatedAt`]: nowTs(),
-  });
+  };
+
+  for (const participantId of participants) {
+    updates[`userConversations/${participantId}/${params.conversationId}/lastMessageText`] = newText;
+  }
+
+  await update(ref(rtdb), updates);
 }
 
 export async function deleteMessage(params: {
@@ -940,13 +1011,67 @@ export async function deleteMessage(params: {
     throw new Error("Só o autor pode apagar esta mensagem.");
   }
 
-  await update(ref(rtdb), {
+  if (msg.deleted) return;
+
+  const conversationSnap = await get(ref(rtdb, `conversations/${params.conversationId}`));
+  const participants = conversationSnap.exists()
+    ? Object.keys(((conversationSnap.val() as { participants?: Record<string, true> })?.participants) || {})
+    : [];
+
+  const deletedAt = nowTs();
+
+  const updates: Record<string, unknown> = {
     [`messages/${params.conversationId}/${params.messageId}/deleted`]: true,
-    [`messages/${params.conversationId}/${params.messageId}/text`]: null,
-    [`messages/${params.conversationId}/${params.messageId}/editedAt`]: nowTs(),
-    [`conversations/${params.conversationId}/lastMessage/text`]: "A mensagem foi apagada",
-    [`conversations/${params.conversationId}/updatedAt`]: nowTs(),
-  });
+    [`messages/${params.conversationId}/${params.messageId}/deletedAt`]: deletedAt,
+    [`conversations/${params.conversationId}/lastMessage/text`]: CHAT_DELETED_MESSAGE_PREVIEW,
+    [`conversations/${params.conversationId}/updatedAt`]: deletedAt,
+  };
+
+  for (const participantId of participants) {
+    updates[`userConversations/${participantId}/${params.conversationId}/lastMessageText`] =
+      CHAT_DELETED_MESSAGE_PREVIEW;
+  }
+
+  await update(ref(rtdb), updates);
+}
+
+export async function restoreDeletedMessage(params: {
+  conversationId: string;
+  messageId: string;
+  actorId: string;
+}): Promise<void> {
+  const rtdb = await getRealtimeDb();
+  const msgSnap = await get(ref(rtdb, `messages/${params.conversationId}/${params.messageId}`));
+  if (!msgSnap.exists()) throw new Error("Mensagem não encontrada.");
+
+  const msg = msgSnap.val() as ChatMessage;
+  if (msg.senderId !== params.actorId) {
+    throw new Error("Só o autor pode anular a eliminação desta mensagem.");
+  }
+
+  if (!msg.deleted) return;
+
+  const conversationSnap = await get(ref(rtdb, `conversations/${params.conversationId}`));
+  const participants = conversationSnap.exists()
+    ? Object.keys(((conversationSnap.val() as { participants?: Record<string, true> })?.participants) || {})
+    : [];
+
+  const hasAttachments = Object.keys(msg.attachments || {}).length > 0;
+  const restoredText = msg.text || (hasAttachments ? "[Anexo]" : null);
+  const updatedAt = nowTs();
+
+  const updates: Record<string, unknown> = {
+    [`messages/${params.conversationId}/${params.messageId}/deleted`]: false,
+    [`messages/${params.conversationId}/${params.messageId}/deletedAt`]: null,
+    [`conversations/${params.conversationId}/lastMessage/text`]: restoredText,
+    [`conversations/${params.conversationId}/updatedAt`]: updatedAt,
+  };
+
+  for (const participantId of participants) {
+    updates[`userConversations/${participantId}/${params.conversationId}/lastMessageText`] = restoredText;
+  }
+
+  await update(ref(rtdb), updates);
 }
 
 export async function blockExternalUser(params: {

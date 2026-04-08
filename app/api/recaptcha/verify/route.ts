@@ -6,10 +6,35 @@ type VerifyResponse = {
   action?: string;
 };
 
+function shouldBypassRecaptchaInDev() {
+  const isProduction = process.env.NODE_ENV === "production";
+  const explicitBypassOff = process.env.RECAPTCHA_BYPASS_IN_DEV === "false";
+  return !isProduction && !explicitBypassOff;
+}
+
+function devBypassResponse(reason: string) {
+  return NextResponse.json(
+    {
+      success: true,
+      bypassed: true,
+      reason,
+    },
+    {
+      headers: {
+        "cache-control": "no-store",
+      },
+    }
+  );
+}
+
 export async function POST(request: Request) {
   const secret = process.env.NEXT_RECAPTCHA_SECRET_KEY;
 
   if (!secret) {
+    if (shouldBypassRecaptchaInDev()) {
+      return devBypassResponse("dev-bypass-missing-secret");
+    }
+
     return NextResponse.json(
       {
         success: false,
@@ -61,6 +86,10 @@ export async function POST(request: Request) {
   });
 
   if (!verifyResponse.ok) {
+    if (shouldBypassRecaptchaInDev()) {
+      return devBypassResponse("dev-bypass-google-unavailable");
+    }
+
     return NextResponse.json(
       {
         success: false,
@@ -75,6 +104,10 @@ export async function POST(request: Request) {
   const hasValidScore = typeof verification.score === "number" && verification.score >= minScore;
   const hasValidAction = expectedAction ? verification.action === expectedAction : true;
   const isValid = Boolean(verification.success && hasValidScore && hasValidAction);
+
+  if (!isValid && shouldBypassRecaptchaInDev()) {
+    return devBypassResponse("dev-bypass-low-score-or-action");
+  }
 
   return NextResponse.json(
     {

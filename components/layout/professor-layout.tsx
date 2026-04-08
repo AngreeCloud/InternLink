@@ -8,6 +8,8 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
+import { NotificationsInbox } from "@/components/chat/notifications-inbox";
+import { useChatNotifications } from "@/lib/chat/use-chat-notifications";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -70,6 +72,17 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
 
     return pathname === href || pathname.startsWith(`${href}/`);
   };
+
+  const isChatPage = isActiveRoute("/professor/chat");
+
+  const { notifications, handleOpenConversation } = useChatNotifications({
+    userId: state.userId,
+    enabled: !isChatPage,
+    isChatOpen: isChatPage,
+    onOpenConversation: (conversationId) => {
+      router.push(`/professor/chat?conversationId=${conversationId}`);
+    },
+  });
 
   useEffect(() => {
     let unsubscribe = () => {};
@@ -230,11 +243,13 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
             <div className="flex flex-1"></div>
             <div className="flex items-center gap-x-4 lg:gap-x-6">
+              <NotificationsInbox notifications={notifications} onOpenChat={handleOpenConversation} />
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={state.photoURL || "/placeholder.svg"} alt={state.name} />
+                      <AvatarImage src={state.photoURL || undefined} alt={state.name} />
                       <AvatarFallback>{state.name.charAt(0)}</AvatarFallback>
                     </Avatar>
                   </Button>
