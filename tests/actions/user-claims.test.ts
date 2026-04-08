@@ -28,7 +28,7 @@ beforeEach(() => {
 describe("ensureUserClaims", () => {
   it("creates claims when missing", async () => {
     mockDocGet.mockResolvedValueOnce({
-      exists: () => true,
+      exists: true,
       data: () => ({ role: "professor", estado: "ativo" }),
     });
     mockGetUser.mockResolvedValueOnce({
@@ -48,7 +48,7 @@ describe("ensureUserClaims", () => {
 
   it("updates claims when Firestore changes", async () => {
     mockDocGet.mockResolvedValueOnce({
-      exists: () => true,
+      exists: true,
       data: () => ({ role: "professor", estado: "ativo" }),
     });
     mockGetUser.mockResolvedValueOnce({
@@ -66,7 +66,7 @@ describe("ensureUserClaims", () => {
 
   it("does nothing when claims are already correct", async () => {
     mockDocGet.mockResolvedValueOnce({
-      exists: () => true,
+      exists: true,
       data: () => ({ role: "aluno", estado: "ativo" }),
     });
     mockGetUser.mockResolvedValueOnce({

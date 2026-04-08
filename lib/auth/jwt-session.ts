@@ -88,16 +88,13 @@ export async function validateFirebaseSessionJwt(
 
   const projectId = resolveProjectId(options.projectId);
 
-  const issuerCandidates = [
-    `https://session.firebase.google.com/${projectId}`,
-    `https://securetoken.google.com/${projectId}`,
-  ];
+  const sessionIssuer = `https://session.firebase.google.com/${projectId}`;
 
   const verifyToken = async (forceRefresh: boolean) => {
     const keyResolver = await getGoogleJwksKeyResolver(options.fetchImpl, { forceRefresh });
     return jwtVerify(token, keyResolver, {
       audience: projectId,
-      issuer: issuerCandidates,
+      issuer: sessionIssuer,
     });
   };
 

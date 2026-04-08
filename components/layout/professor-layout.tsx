@@ -53,6 +53,7 @@ type AuthState = {
   name: string;
   email: string;
   photoURL: string;
+  accessFailurePath: string;
 };
 
 export function ProfessorLayout({ children }: { children: React.ReactNode }) {
@@ -65,6 +66,7 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
     name: "",
     email: "",
     photoURL: "",
+    accessFailurePath: "",
   });
   const router = useRouter();
   const pathname = usePathname();
@@ -97,13 +99,13 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
 
       unsubscribe = onAuthStateChanged(auth, async (user) => {
         if (!user) {
-          setState((prev) => ({ ...prev, loading: false }));
+          setState((prev) => ({ ...prev, loading: false, accessFailurePath: "/login" }));
           return;
         }
 
         const userSnap = await getDoc(doc(db, "users", user.uid));
         if (!userSnap.exists()) {
-          setState((prev) => ({ ...prev, loading: false }));
+          setState((prev) => ({ ...prev, loading: false, accessFailurePath: "/account-status" }));
           return;
         }
 
@@ -117,12 +119,12 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
         };
 
         if (data.role !== "professor") {
-          setState((prev) => ({ ...prev, loading: false }));
+          setState((prev) => ({ ...prev, loading: false, accessFailurePath: "/account-status" }));
           return;
         }
 
         if (data.estado !== "ativo") {
-          setState((prev) => ({ ...prev, loading: false }));
+          setState((prev) => ({ ...prev, loading: false, accessFailurePath: "/account-status" }));
           return;
         }
 
@@ -133,12 +135,19 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
           name: data.nome || user.displayName || "Professor",
           email: data.email || user.email || "",
           photoURL: data.photoURL || "",
+          accessFailurePath: "",
         });
       });
     })();
 
     return () => unsubscribe();
   }, [router]);
+
+  useEffect(() => {
+    if (!state.loading && !state.userId && state.accessFailurePath) {
+      router.replace(state.accessFailurePath);
+    }
+  }, [router, state.accessFailurePath, state.loading, state.userId]);
 
   if (state.loading) {
     return (
@@ -149,11 +158,16 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (!state.userId) {
-    return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        <p>A redirecionar...</p>
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen bg-background">
+      {isLoggingOut ? <LogoutOverlay /> : null}
       {/* Mobile sidebar */}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <SheetContent side="left" className="w-72 p-0">

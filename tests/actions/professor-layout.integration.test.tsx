@@ -251,7 +251,7 @@ describe("ProfessorLayout integration", () => {
 
     await flush();
 
-    expect(mockRouterReplace).not.toHaveBeenCalled();
+    expect(mockRouterReplace).toHaveBeenCalledWith("/account-status");
     expect(mockChatBadge).not.toHaveBeenCalled();
   });
 });
