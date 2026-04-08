@@ -16,6 +16,7 @@ import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime"
 import { getRecaptchaV3Token } from "@/lib/recaptcha-v3"
 import { finalizePendingRegistration, isVerificationBypassEnabled } from "@/lib/verification"
 import { createServerSession } from "@/lib/auth/client-session"
+import { getLoginRedirectRoute } from "@/lib/auth/status-routing"
 import { useRouter } from "next/navigation"
 import { AccessValidationOverlay } from "@/components/layout/access-validation-overlay"
 
@@ -61,24 +62,9 @@ export function LoginForm() {
   }
 
   const redirectBasedOnRole = (role: string, estado: string) => {
-    const navigate = (href: string) => {
-      router.prefetch(href)
-      router.push(href)
-    }
-
-    if (role === "admin_escolar") {
-      navigate("/school-admin")
-    } else if (role === "aluno" && estado !== "ativo") {
-      navigate("/waiting")
-    } else if (role === "aluno") {
-      navigate("/dashboard")
-    } else if (role === "professor" && estado === "ativo") {
-      navigate("/professor")
-    } else if (role === "tutor") {
-      navigate("/tutor")
-    } else {
-      navigate("/account-status")
-    }
+    const href = getLoginRedirectRoute(role, estado)
+    router.prefetch(href)
+    router.push(href)
   }
 
   const handleGoogleLogin = async () => {

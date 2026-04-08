@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Link from "next/link"
 import { getAccountStatusApprovalMessage } from "@/lib/approval-messages"
+import { getDashboardRouteForRole } from "@/lib/auth/status-routing"
 import { SchoolSelector } from "@/components/auth/school-selector"
 import type { School } from "@/lib/types/school"
 
@@ -152,9 +153,16 @@ export default function AccountStatusPage() {
 
   const statusLabel = state.status || "pendente"
   const canAccessDashboard = statusLabel === "ativo"
-  const dashboardHref = state.role === "professor" ? "/professor" : state.role === "tutor" ? "/tutor" : "/dashboard"
+  const dashboardHref = getDashboardRouteForRole(state.role)
   const approvalMessage = getAccountStatusApprovalMessage(state.role)
   const canChangeSchool = state.role === "professor" && state.status === "pendente" && state.userId.length > 0
+
+  useEffect(() => {
+    if (state.loading || !state.userId) return
+    if (state.status !== "ativo") return
+
+    router.replace(getDashboardRouteForRole(state.role))
+  }, [router, state.loading, state.role, state.status, state.userId])
 
   const handleChangeSchoolAssociation = async () => {
     if (!canChangeSchool) return
