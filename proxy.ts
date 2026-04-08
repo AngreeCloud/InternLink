@@ -2,42 +2,33 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import {
   SESSION_COOKIE_NAME,
-  SESSION_VERIFY_CACHE_TTL_MS,
   isProtectedPath,
   isRoleAllowedForPath,
 } from "@/lib/auth/session";
+import { validateFirebaseSessionJwt } from "@/lib/auth/jwt-session";
 
-type CacheEntry = {
+type RoleCacheEntry = {
   expiresAt: number;
+  uid: string;
   role?: string;
   estado?: string;
 };
 
-const sessionVerificationCache = new Map<string, CacheEntry>();
+const roleCache = new Map<string, RoleCacheEntry>();
 
-function getCachedSessionValidity(sessionCookie: string): boolean {
-  const entry = sessionVerificationCache.get(sessionCookie);
-  if (!entry) {
-    return false;
-  }
-
-  if (entry.expiresAt <= Date.now()) {
-    sessionVerificationCache.delete(sessionCookie);
-    return false;
-  }
-
-  return true;
+function getRoleCacheKey(uid: string, exp: number): string {
+  return `${uid}:${exp}`;
 }
 
-function getCachedSessionProfile(sessionCookie: string): { role?: string; estado?: string } | undefined {
-  const entry = sessionVerificationCache.get(sessionCookie);
+function getCachedProfile(uid: string, exp: number): { role?: string; estado?: string } | null {
+  const entry = roleCache.get(getRoleCacheKey(uid, exp));
   if (!entry) {
-    return undefined;
+    return null;
   }
 
   if (entry.expiresAt <= Date.now()) {
-    sessionVerificationCache.delete(sessionCookie);
-    return undefined;
+    roleCache.delete(getRoleCacheKey(uid, exp));
+    return null;
   }
 
   return {
@@ -46,29 +37,24 @@ function getCachedSessionProfile(sessionCookie: string): { role?: string; estado
   };
 }
 
-function setCachedSessionValidity(
-  sessionCookie: string,
-  tokenExpUnix?: number,
-  profile?: { role?: string; estado?: string }
-): void {
-  const tokenExpiryMs = tokenExpUnix ? tokenExpUnix * 1000 : Date.now() + SESSION_VERIFY_CACHE_TTL_MS;
-  const expiresAt = Math.min(tokenExpiryMs, Date.now() + SESSION_VERIFY_CACHE_TTL_MS);
-  sessionVerificationCache.set(sessionCookie, {
-    expiresAt,
-    role: profile?.role,
-    estado: profile?.estado,
+function setCachedProfile(uid: string, exp: number, profile: { role?: string; estado?: string }) {
+  roleCache.set(getRoleCacheKey(uid, exp), {
+    uid,
+    expiresAt: exp * 1000,
+    role: profile.role,
+    estado: profile.estado,
   });
 }
 
-async function verifySessionCookie(
-  request: NextRequest
-): Promise<{ valid: boolean; exp?: number; role?: string; estado?: string }> {
+async function loadRoleProfileFromVerifyApi(
+  request: NextRequest,
+  sessionCookie: string
+): Promise<{ valid: boolean; uid?: string; role?: string; estado?: string; exp?: number }> {
   const verifyUrl = new URL("/api/auth/session/verify", request.url);
-
   const response = await fetch(verifyUrl, {
     method: "POST",
     headers: {
-      cookie: request.headers.get("cookie") ?? "",
+      cookie: `${SESSION_COOKIE_NAME}=${sessionCookie}`,
     },
     cache: "no-store",
   });
@@ -77,21 +63,24 @@ async function verifySessionCookie(
     return { valid: false };
   }
 
-  const data = (await response.json()) as {
+  const payload = (await response.json()) as {
     valid?: boolean;
-    exp?: number;
+    uid?: string;
     role?: string;
     estado?: string;
+    exp?: number;
   };
-  if (!data.valid) {
+
+  if (!payload.valid) {
     return { valid: false };
   }
 
   return {
     valid: true,
-    exp: data.exp,
-    role: data.role,
-    estado: data.estado,
+    uid: payload.uid,
+    role: payload.role,
+    estado: payload.estado,
+    exp: payload.exp,
   };
 }
 
@@ -107,28 +96,66 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (getCachedSessionValidity(sessionCookie)) {
-    const cachedProfile = getCachedSessionProfile(sessionCookie);
-    if (cachedProfile && isRoleAllowedForPath(pathname, cachedProfile)) {
-      return NextResponse.next();
+  let validatedSession = null;
+  let preloadedProfile: { role?: string; estado?: string } | null = null;
+  try {
+    validatedSession = await validateFirebaseSessionJwt(sessionCookie);
+  } catch {
+    validatedSession = null;
+  }
+
+  if (!validatedSession) {
+    // Fallback path to prevent false-negatives in local JWT validation
+    // (e.g., temporary key rotation or env mismatch during dev).
+    try {
+      const fallback = await loadRoleProfileFromVerifyApi(request, sessionCookie);
+      if (!fallback.valid || !fallback.uid || typeof fallback.exp !== "number") {
+        return NextResponse.redirect(new URL("/login", request.url));
+      }
+
+      validatedSession = {
+        uid: fallback.uid,
+        exp: fallback.exp,
+      };
+      preloadedProfile = {
+        role: fallback.role,
+        estado: fallback.estado,
+      };
+    } catch {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+  }
+
+  const { uid, exp } = validatedSession;
+  if (!Number.isFinite(exp) || exp <= Math.floor(Date.now() / 1000)) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  const cachedProfile = getCachedProfile(uid, exp);
+  if (cachedProfile) {
+    if (!isRoleAllowedForPath(pathname, cachedProfile)) {
+      return NextResponse.redirect(new URL("/account-status", request.url));
     }
 
-    return NextResponse.redirect(new URL("/account-status", request.url));
+    return NextResponse.next();
   }
 
   try {
-    const verification = await verifySessionCookie(request);
-    if (!verification.valid) {
-      return NextResponse.redirect(new URL("/login", request.url));
+    let resolvedProfile = preloadedProfile;
+    if (!resolvedProfile) {
+      const profileResponse = await loadRoleProfileFromVerifyApi(request, sessionCookie);
+      if (!profileResponse.valid || profileResponse.uid !== uid) {
+        return NextResponse.redirect(new URL("/login", request.url));
+      }
+
+      resolvedProfile = {
+        role: profileResponse.role,
+        estado: profileResponse.estado,
+      };
     }
 
-    const profile = {
-      role: verification.role,
-      estado: verification.estado,
-    };
-
-    setCachedSessionValidity(sessionCookie, verification.exp, profile);
-    if (!isRoleAllowedForPath(pathname, profile)) {
+    setCachedProfile(uid, exp, resolvedProfile);
+    if (!isRoleAllowedForPath(pathname, resolvedProfile)) {
       return NextResponse.redirect(new URL("/account-status", request.url));
     }
 

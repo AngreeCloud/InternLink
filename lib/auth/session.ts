@@ -1,5 +1,8 @@
 export const SESSION_COOKIE_NAME = "internlink_session";
-export const SESSION_VERIFY_CACHE_TTL_MS = 60_000;
+// Cache TTL is now driven by token expiry, not this constant
+// This is only used as fallback if token exp is not available
+// Increased from 60s to 24h to reduce Firestore calls on cache misses
+export const SESSION_VERIFY_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 export const SESSION_EXPIRES_IN_MS = 5 * 24 * 60 * 60 * 1000; // 5 days
 
 export type AppUserRole = "aluno" | "professor" | "tutor" | "admin_escolar";
