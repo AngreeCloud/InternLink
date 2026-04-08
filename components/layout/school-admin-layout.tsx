@@ -9,7 +9,7 @@ import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { logoutWithServerSession } from "@/lib/auth/client-session";
 import { SchoolAdminProvider } from "@/components/school-admin/school-admin-context";
 import { LogoutOverlay } from "@/components/layout/logout-overlay"
-import { AccessValidationOverlay } from "@/components/layout/access-validation-overlay";
+import { TRANSITION_PORTAL_MS } from "@/components/layout/access-validation-overlay";
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
 import { NotificationsInbox } from "@/components/chat/notifications-inbox";
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications";
@@ -117,7 +117,11 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   if (state.loading) {
-    return <AccessValidationOverlay title="A validar acesso..." description="A abrir a gestão da escola." footer="A carregar contexto, permissões e dados da escola." />;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        <p>A validar acesso...</p>
+      </div>
+    );
   }
 
   if (!state.userId || !state.schoolId) {
@@ -240,8 +244,12 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
                 size="sm"
                 onClick={async () => {
                   setIsLoggingOut(true);
+                  const logoutPromise = logoutWithServerSession({ deferClientSignOutMs: 150 });
+                  await Promise.allSettled([
+                    logoutPromise,
+                    new Promise((resolve) => setTimeout(resolve, TRANSITION_PORTAL_MS)),
+                  ]);
                   router.replace("/login");
-                  void logoutWithServerSession({ deferClientSignOutMs: 150 });
                 }}
               >
                 <LogOut className="mr-2 h-4 w-4" />

@@ -34,7 +34,7 @@ import { NotificationsInbox } from "@/components/chat/notifications-inbox"
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications"
 import { logoutWithServerSession } from "@/lib/auth/client-session"
 import { LogoutOverlay } from "@/components/layout/logout-overlay"
-import { AccessValidationOverlay } from "@/components/layout/access-validation-overlay"
+import { TRANSITION_PORTAL_MS } from "@/components/layout/access-validation-overlay"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
@@ -143,7 +143,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [router])
 
   if (state.loading) {
-    return <AccessValidationOverlay title="A validar acesso..." description="A abrir o teu dashboard." footer="Estamos a carregar a sessão e a confirmar as permissões." />
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        <p>A validar acesso...</p>
+      </div>
+    )
   }
 
   if (!state.userId) {
@@ -271,8 +275,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   <DropdownMenuItem
                     onClick={async () => {
                       setIsLoggingOut(true)
+                      const logoutPromise = logoutWithServerSession({ deferClientSignOutMs: 150 })
+                      await Promise.allSettled([
+                        logoutPromise,
+                        new Promise((resolve) => setTimeout(resolve, TRANSITION_PORTAL_MS)),
+                      ])
                       router.replace("/login")
-                      void logoutWithServerSession({ deferClientSignOutMs: 150 })
                     }}
                   >
                     <LogOut className="mr-2 h-4 w-4" />

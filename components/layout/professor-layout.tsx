@@ -13,7 +13,7 @@ import { NotificationsInbox } from "@/components/chat/notifications-inbox";
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { AccessValidationOverlay } from "@/components/layout/access-validation-overlay";
+import { TRANSITION_PORTAL_MS } from "@/components/layout/access-validation-overlay";
 import { LogoutOverlay } from "@/components/layout/logout-overlay";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -141,7 +141,11 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   if (state.loading) {
-    return <AccessValidationOverlay title="A validar acesso..." description="A abrir o espaço do professor." footer="A preparar navegação, permissões e contexto da escola." />;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        <p>A validar acesso...</p>
+      </div>
+    );
   }
 
   if (!state.userId) {
@@ -267,13 +271,17 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={async () => {
+                      setIsLoggingOut(true);
+                      const logoutPromise = logoutWithServerSession({ deferClientSignOutMs: 150 });
+                      await Promise.allSettled([
+                        logoutPromise,
+                        new Promise((resolve) => setTimeout(resolve, TRANSITION_PORTAL_MS)),
+                      ]);
                       router.replace("/login");
-                      void logoutWithServerSession({ deferClientSignOutMs: 150 });
                     }}
                   >
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Sair</span>
-                      setIsLoggingOut(true);
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

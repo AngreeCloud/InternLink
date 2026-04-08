@@ -138,29 +138,56 @@ body.recaptcha-badge-visible .grecaptcha-badge {
   pointer-events: auto;
 }
 
-@keyframes logout-progress {
+body.transition-overlay-active {
+  overflow: hidden;
+}
+
+body.transition-overlay-active .grecaptcha-badge {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+@keyframes transition-overlay-blur {
   0% {
-    transform: translateX(-55%);
+    backdrop-filter: blur(0px);
+    background-color: color-mix(in oklab, var(--background) 0%, transparent);
   }
 
-  50% {
-    transform: translateX(75%);
+  28% {
+    backdrop-filter: blur(12px);
+    background-color: color-mix(in oklab, var(--background) 82%, transparent);
+  }
+
+  52% {
+    backdrop-filter: blur(1.5px);
+    background-color: color-mix(in oklab, var(--background) 18%, transparent);
   }
 
   100% {
-    transform: translateX(-55%);
+    backdrop-filter: blur(0px);
+    background-color: color-mix(in oklab, var(--background) 0%, transparent);
   }
 }
 
-@keyframes logout-glow {
-  0%,
-  100% {
-    transform: translateX(-50%) translateY(-50%) scale(0.92);
-    opacity: 0.55;
+@keyframes transition-brand-zoom {
+  0% {
+    transform: scale(0.84);
+    opacity: 0;
   }
 
-  50% {
-    transform: translateX(-50%) translateY(-50%) scale(1.08);
-    opacity: 0.9;
+  22% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+
+  38% {
+    transform: scale(0.68);
+    opacity: 0;
+  }
+
+  100% {
+    transform: scale(0.68);
+    opacity: 0;
   }
 }
