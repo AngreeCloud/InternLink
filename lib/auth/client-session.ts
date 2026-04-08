@@ -86,10 +86,29 @@ type LogoutOptions = {
   deferClientSignOutMs?: number;
 };
 
+const LOGOUT_TRANSITION_MAX_WAIT_MS = 5000;
+
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+async function withTimeout(promise: Promise<unknown>, timeoutMs: number): Promise<void> {
+  await Promise.race([promise, wait(timeoutMs)]);
+}
+
+export async function waitForLogoutTransition(
+  logoutPromise: Promise<unknown>,
+  minOverlayMs: number,
+  options: { maxWaitMs?: number } = {}
+): Promise<void> {
+  const maxWaitMs = options.maxWaitMs ?? LOGOUT_TRANSITION_MAX_WAIT_MS;
+
+  await Promise.allSettled([
+    wait(minOverlayMs),
+    withTimeout(logoutPromise, maxWaitMs),
+  ]);
 }
 
 export async function logoutWithServerSession(options: LogoutOptions = {}): Promise<void> {

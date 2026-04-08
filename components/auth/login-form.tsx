@@ -86,6 +86,7 @@ export function LoginForm() {
     
     googleLockRef.current = true
     setError("")
+    let didNavigate = false
 
     try {
       if (recaptchaSiteKey) {
@@ -102,7 +103,10 @@ export function LoginForm() {
       const userEmail = user.email || ""
       const verificationBypassEnabled = isVerificationBypassEnabled()
 
+      setIsGoogleLoading(true)
+
       if (!user.emailVerified && !verificationBypassEnabled) {
+        didNavigate = true
         router.push(`/verify-email?email=${encodeURIComponent(userEmail)}`)
         return
       }
@@ -176,8 +180,8 @@ export function LoginForm() {
         }
       }
 
-      setIsGoogleLoading(true)
       const session = await createServerSession(user)
+      didNavigate = true
       redirectBasedOnRole(session.role || role, session.estado || estado)
     } catch (err: any) {
       if (err?.code === "auth/popup-closed-by-user" || err?.code === "auth/cancelled-popup-request") {
@@ -194,7 +198,9 @@ export function LoginForm() {
         setError(message.includes("Firebase config") ? message : "Erro ao fazer login com Google. Tente novamente.")
       }
     } finally {
-      resetGoogleLoginState()
+      if (!didNavigate) {
+        resetGoogleLoginState()
+      }
     }
   }
 

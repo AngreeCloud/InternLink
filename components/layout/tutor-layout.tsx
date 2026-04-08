@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
-import { logoutWithServerSession } from "@/lib/auth/client-session";
+import { logoutWithServerSession, waitForLogoutTransition } from "@/lib/auth/client-session";
 import { LogoutOverlay } from "@/components/layout/logout-overlay";
 import { TRANSITION_PORTAL_MS } from "@/components/layout/access-validation-overlay";
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
@@ -198,10 +198,7 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
                   onClick={async () => {
                     setIsLoggingOut(true);
                     const logoutPromise = logoutWithServerSession({ deferClientSignOutMs: 150 });
-                    await Promise.allSettled([
-                      logoutPromise,
-                      new Promise((resolve) => setTimeout(resolve, TRANSITION_PORTAL_MS)),
-                    ]);
+                    await waitForLogoutTransition(logoutPromise, TRANSITION_PORTAL_MS);
                     router.replace("/login");
                   }}
                 >
