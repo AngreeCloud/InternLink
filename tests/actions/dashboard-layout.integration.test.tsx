@@ -243,7 +243,7 @@ describe("DashboardLayout integration", () => {
 
     await flush();
 
-    expect(mockRouterReplace).toHaveBeenCalledWith("/account-status");
+    expect(mockRouterReplace).not.toHaveBeenCalled();
     expect(mockChatBadge).not.toHaveBeenCalled();
   });
 });

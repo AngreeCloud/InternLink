@@ -26,12 +26,15 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { onAuthStateChanged, signOut } from "firebase/auth"
+import { onAuthStateChanged } from "firebase/auth"
 import { doc, getDoc } from "firebase/firestore"
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime"
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge"
 import { NotificationsInbox } from "@/components/chat/notifications-inbox"
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications"
+import { logoutWithServerSession } from "@/lib/auth/client-session"
+import { LogoutOverlay } from "@/components/layout/logout-overlay"
+import { AccessValidationOverlay } from "@/components/layout/access-validation-overlay"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
@@ -54,6 +57,7 @@ type AuthState = {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [state, setState] = useState<AuthState>({
     loading: true,
     userId: "",
@@ -93,14 +97,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       unsubscribe = onAuthStateChanged(auth, async (user) => {
         if (!user) {
           setState((prev) => ({ ...prev, loading: false }))
-          router.replace("/login")
           return
         }
 
         const userSnap = await getDoc(doc(db, "users", user.uid))
         if (!userSnap.exists()) {
           setState((prev) => ({ ...prev, loading: false }))
-          router.replace("/login")
           return
         }
 
@@ -114,19 +116,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
         if (data.role === "admin_escolar") {
           setState((prev) => ({ ...prev, loading: false }))
-          router.replace("/school-admin")
           return
         }
 
         if (data.role !== "aluno") {
           setState((prev) => ({ ...prev, loading: false }))
-          router.replace("/account-status")
           return
         }
 
         if (data.estado !== "ativo") {
           setState((prev) => ({ ...prev, loading: false }))
-          router.replace("/waiting")
           return
         }
 
@@ -144,11 +143,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [router])
 
   if (state.loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
-        <p>A validar acesso...</p>
-      </div>
-    )
+    return <AccessValidationOverlay title="A validar acesso..." description="A abrir o teu dashboard." footer="Estamos a carregar a sessão e a confirmar as permissões." />
   }
 
   if (!state.userId) {
@@ -163,6 +158,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background">
+      {isLoggingOut ? <LogoutOverlay /> : null}
       {/* Mobile sidebar */}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <SheetContent side="left" className="w-64 p-0">
@@ -274,9 +270,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={async () => {
-                      const auth = await getAuthRuntime()
-                      await signOut(auth)
+                      setIsLoggingOut(true)
                       router.replace("/login")
+                      void logoutWithServerSession({ deferClientSignOutMs: 150 })
                     }}
                   >
                     <LogOut className="mr-2 h-4 w-4" />

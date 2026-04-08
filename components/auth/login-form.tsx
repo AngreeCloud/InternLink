@@ -15,7 +15,9 @@ import { doc, getDoc } from "firebase/firestore"
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime"
 import { getRecaptchaV3Token } from "@/lib/recaptcha-v3"
 import { finalizePendingRegistration, isVerificationBypassEnabled } from "@/lib/verification"
+import { createServerSession } from "@/lib/auth/client-session"
 import { useRouter } from "next/navigation"
+import { AccessValidationOverlay } from "@/components/layout/access-validation-overlay"
 
 async function verifyRecaptchaToken(token: string, action: "login_password" | "login_google") {
   const response = await fetch("/api/recaptcha/verify", {
@@ -170,7 +172,8 @@ export function LoginForm() {
         }
       }
 
-      redirectBasedOnRole(role, estado)
+      const session = await createServerSession(user)
+      redirectBasedOnRole(session.role || role, session.estado || estado)
     } catch (err: any) {
       if (err?.code === "auth/popup-closed-by-user" || err?.code === "auth/cancelled-popup-request") {
         setError("")
@@ -202,7 +205,6 @@ export function LoginForm() {
       }
 
       const auth = await getAuthRuntime()
-      const db = await getDbRuntime()
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
       const user = userCredential.user
       const verificationBypassEnabled = isVerificationBypassEnabled()
@@ -214,42 +216,8 @@ export function LoginForm() {
         return
       }
 
-      // Email is verified, check if user document exists
-      const userSnap = await getDoc(doc(db, "users", user.uid))
-      let userData = userSnap.exists() ? (userSnap.data() as { role?: string; estado?: string }) : null
-      
-      if (!userData) {
-        if (verificationBypassEnabled && !user.emailVerified) {
-          const pendingSnap = await getDoc(doc(db, "pendingRegistrations", user.uid))
-
-          if (!pendingSnap.exists()) {
-            router.push(`/verify-email?email=${encodeURIComponent(user.email || email)}`)
-            return
-          }
-
-          const pendingData = pendingSnap.data() as { role?: string; estado?: string }
-          userData = {
-            role: pendingData.role,
-            estado: pendingData.estado,
-          }
-        } else {
-        const finalizedUser = await finalizePendingRegistration(db, user.uid, {
-          markEmailVerified: user.emailVerified,
-        })
-
-        if (!finalizedUser) {
-          router.push(`/verify-email?email=${encodeURIComponent(user.email || email)}`)
-          return
-        }
-
-        userData = finalizedUser
-        }
-      }
-
-      const role = userData.role || ""
-      const estado = userData.estado || ""
-
-      redirectBasedOnRole(role, estado)
+      const session = await createServerSession(user)
+      redirectBasedOnRole(session.role, session.estado)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setError(message.includes("Firebase config") ? message : "Erro ao fazer login. Verifique as suas credenciais e tente novamente.")
@@ -257,6 +225,16 @@ export function LoginForm() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  if (isLoading || isGoogleLoading) {
+    return (
+      <AccessValidationOverlay
+        title="A validar acesso..."
+        description="A iniciar sessão e a preparar a tua área pessoal."
+        footer="A transição está a ser preparada para entrar sem um ecrã de espera estático."
+      />
+    )
   }
 
   return (

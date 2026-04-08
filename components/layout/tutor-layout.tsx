@@ -4,9 +4,12 @@ import type React from "react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
+import { logoutWithServerSession } from "@/lib/auth/client-session";
+import { LogoutOverlay } from "@/components/layout/logout-overlay";
+import { AccessValidationOverlay } from "@/components/layout/access-validation-overlay";
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
 import { NotificationsInbox } from "@/components/chat/notifications-inbox";
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications";
@@ -32,6 +35,7 @@ type AuthState = {
 };
 
 export function TutorLayout({ children }: { children: React.ReactNode }) {
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [state, setState] = useState<AuthState>({
     loading: true,
     userId: "",
@@ -72,14 +76,12 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
       unsubscribe = onAuthStateChanged(auth, async (user) => {
         if (!user) {
           setState((prev) => ({ ...prev, loading: false }));
-          router.replace("/login");
           return;
         }
 
         const userSnap = await getDoc(doc(db, "users", user.uid));
         if (!userSnap.exists()) {
           setState((prev) => ({ ...prev, loading: false }));
-          router.replace("/login");
           return;
         }
 
@@ -94,7 +96,6 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
 
         if (data.role !== "tutor") {
           setState((prev) => ({ ...prev, loading: false }));
-          router.replace("/login");
           return;
         }
 
@@ -113,11 +114,7 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   if (state.loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
-        <p>A validar acesso...</p>
-      </div>
-    );
+    return <AccessValidationOverlay title="A validar acesso..." description="A abrir o painel do tutor." footer="A sincronizar sessão e permissões para entrar sem interrupções." />;
   }
 
   if (!state.userId) {
@@ -126,6 +123,7 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
+      {isLoggingOut ? <LogoutOverlay /> : null}
       <div className="sticky top-0 z-40 border-b border-border bg-card px-4 shadow-sm sm:px-6 lg:px-8">
         <div className="mx-auto flex min-h-16 max-w-6xl flex-wrap items-center justify-between gap-3 py-2">
           <div className="flex items-center gap-2">
@@ -194,9 +192,9 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={async () => {
-                    const auth = await getAuthRuntime();
-                    await signOut(auth);
+                    setIsLoggingOut(true);
                     router.replace("/login");
+                    void logoutWithServerSession({ deferClientSignOutMs: 150 });
                   }}
                 >
                   <LogOut className="mr-2 h-4 w-4" />

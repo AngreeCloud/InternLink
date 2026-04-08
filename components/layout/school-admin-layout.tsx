@@ -3,10 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
+import { logoutWithServerSession } from "@/lib/auth/client-session";
 import { SchoolAdminProvider } from "@/components/school-admin/school-admin-context";
+import { LogoutOverlay } from "@/components/layout/logout-overlay"
+import { AccessValidationOverlay } from "@/components/layout/access-validation-overlay";
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
 import { NotificationsInbox } from "@/components/chat/notifications-inbox";
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications";
@@ -36,6 +39,7 @@ type AuthState = {
 
 export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [state, setState] = useState<AuthState>({
     loading: true,
     userId: "",
@@ -76,14 +80,12 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
       unsubscribe = onAuthStateChanged(auth, async (user) => {
         if (!user) {
           setState((prev) => ({ ...prev, loading: false }));
-          router.replace("/login");
           return;
         }
 
         const userSnap = await getDoc(doc(db, "users", user.uid));
         if (!userSnap.exists()) {
           setState((prev) => ({ ...prev, loading: false }));
-          router.replace("/login");
           return;
         }
 
@@ -97,7 +99,6 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
 
         if (data.role !== "admin_escolar" || !data.schoolId) {
           setState((prev) => ({ ...prev, loading: false }));
-          router.replace("/login");
           return;
         }
 
@@ -116,11 +117,7 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   if (state.loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
-        <p>A validar acesso...</p>
-      </div>
-    );
+    return <AccessValidationOverlay title="A validar acesso..." description="A abrir a gestão da escola." footer="A carregar contexto, permissões e dados da escola." />;
   }
 
   if (!state.userId || !state.schoolId) {
@@ -137,6 +134,7 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
       }}
     >
       <div className="min-h-screen bg-muted/20">
+        {isLoggingOut ? <LogoutOverlay /> : null}
         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
           <SheetContent side="left" className="w-72 p-0">
             <div className="flex h-full flex-col bg-card">
@@ -241,9 +239,9 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
                 variant="outline"
                 size="sm"
                 onClick={async () => {
-                  const auth = await getAuthRuntime();
-                  await signOut(auth);
+                  setIsLoggingOut(true);
                   router.replace("/login");
+                  void logoutWithServerSession({ deferClientSignOutMs: 150 });
                 }}
               >
                 <LogOut className="mr-2 h-4 w-4" />
