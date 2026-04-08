@@ -55,7 +55,7 @@ async function verifySessionCookie(request: NextRequest): Promise<{ valid: boole
   return { valid: true, exp: data.exp };
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (!isProtectedPath(pathname)) {
