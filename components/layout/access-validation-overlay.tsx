@@ -1,57 +1,32 @@
 "use client";
 
-type AccessValidationOverlayProps = {
-  title?: string;
-  description?: string;
-  footer?: string;
-};
+import { useEffect } from "react";
 
-export function AccessValidationOverlay({
-  title = "A validar acesso...",
-  description = "A preparar a tua área de trabalho.",
-  footer = "Isto normalmente demora apenas alguns instantes.",
-}: AccessValidationOverlayProps) {
+export const TRANSITION_PORTAL_MS = 3600;
+
+export function AccessValidationOverlay() {
+  useEffect(() => {
+    if (typeof document === "undefined" || !document.body) {
+      return;
+    }
+
+    document.body.classList.add("transition-overlay-active");
+
+    return () => {
+      if (typeof document !== "undefined" && document.body) {
+        document.body.classList.remove("transition-overlay-active");
+      }
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-background/92 px-4 backdrop-blur-xl">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.22),_transparent_34%),radial-gradient(circle_at_bottom_left,_rgba(6,182,212,0.18),_transparent_30%),radial-gradient(circle_at_center,_rgba(255,255,255,0.04),_transparent_42%)]" />
-      <div className="absolute inset-0 opacity-50 [background-image:linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] [background-size:52px_52px]" />
+    <div className="fixed inset-0 z-[2147483647] overflow-hidden bg-background backdrop-blur-0 animate-[transition-overlay-blur_3600ms_ease-in-out_forwards]" aria-live="polite" aria-label="InternLink transition">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.24),transparent_58%)]" />
 
-      <div className="absolute left-1/2 top-1/2 h-[42rem] w-[42rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-3xl animate-[logout-glow_2.8s_ease-in-out_infinite]" />
-
-      <div className="relative w-full max-w-3xl rounded-[2rem] border border-border/80 bg-card/96 p-8 shadow-[0_30px_80px_rgba(0,0,0,0.28)] sm:p-10">
-        <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
-          <div className="space-y-5">
-            <div className="flex items-center gap-5">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/12 text-primary ring-1 ring-primary/20">
-                <div className="h-8 w-8 rounded-full border-2 border-primary/25 border-t-primary animate-spin [animation-duration:0.9s]" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-lg font-semibold text-card-foreground">{title}</p>
-                <p className="text-sm text-muted-foreground">{description}</p>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-border bg-muted/35 p-4">
-              <p className="text-sm leading-6 text-muted-foreground">{footer}</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="h-4 overflow-hidden rounded-full bg-muted/90 shadow-inner">
-              <div className="h-full w-1/2 rounded-full bg-[length:200%_100%] bg-gradient-to-r from-primary via-cyan-300 to-primary animate-[logout-progress_0.95s_linear_infinite]" />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground sm:grid-cols-3">
-              <div className="rounded-xl border border-border bg-background/60 px-3 py-2">Sessão</div>
-              <div className="rounded-xl border border-border bg-background/60 px-3 py-2">Claims</div>
-              <div className="rounded-xl border border-border bg-background/60 px-3 py-2">Transição</div>
-            </div>
-
-            <div className="flex items-center justify-between text-xs uppercase tracking-[0.22em] text-muted-foreground">
-              <span>A preparar</span>
-              <span>Em curso</span>
-            </div>
-          </div>
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="flex items-center gap-4 animate-[transition-brand-zoom_3600ms_cubic-bezier(0.22,1,0.36,1)_forwards]">
+          <img src="/icon.svg" alt="InternLink" className="h-10 w-10" />
+          <span className="text-xl font-semibold tracking-[0.12em] text-foreground">InternLink</span>
         </div>
       </div>
     </div>

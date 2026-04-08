@@ -61,18 +61,23 @@ export function LoginForm() {
   }
 
   const redirectBasedOnRole = (role: string, estado: string) => {
+    const navigate = (href: string) => {
+      router.prefetch(href)
+      router.push(href)
+    }
+
     if (role === "admin_escolar") {
-      router.push("/school-admin")
+      navigate("/school-admin")
     } else if (role === "aluno" && estado !== "ativo") {
-      router.push("/waiting")
+      navigate("/waiting")
     } else if (role === "aluno") {
-      router.push("/dashboard")
+      navigate("/dashboard")
     } else if (role === "professor" && estado === "ativo") {
-      router.push("/professor")
+      navigate("/professor")
     } else if (role === "tutor") {
-      router.push("/tutor")
+      navigate("/tutor")
     } else {
-      router.push("/account-status")
+      navigate("/account-status")
     }
   }
 
@@ -80,7 +85,6 @@ export function LoginForm() {
     if (googleLockRef.current) return
     
     googleLockRef.current = true
-    setIsGoogleLoading(true)
     setError("")
 
     try {
@@ -172,6 +176,7 @@ export function LoginForm() {
         }
       }
 
+      setIsGoogleLoading(true)
       const session = await createServerSession(user)
       redirectBasedOnRole(session.role || role, session.estado || estado)
     } catch (err: any) {
@@ -228,13 +233,7 @@ export function LoginForm() {
   }
 
   if (isLoading || isGoogleLoading) {
-    return (
-      <AccessValidationOverlay
-        title="A validar acesso..."
-        description="A iniciar sessão e a preparar a tua área pessoal."
-        footer="A transição está a ser preparada para entrar sem um ecrã de espera estático."
-      />
-    )
+    return <AccessValidationOverlay />
   }
 
   return (
