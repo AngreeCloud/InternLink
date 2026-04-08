@@ -154,12 +154,17 @@ body.transition-overlay-active .grecaptcha-badge {
     background-color: color-mix(in oklab, var(--background) 0%, transparent);
   }
 
-  28% {
+  24% {
     backdrop-filter: blur(12px);
     background-color: color-mix(in oklab, var(--background) 82%, transparent);
   }
 
-  52% {
+  72% {
+    backdrop-filter: blur(8px);
+    background-color: color-mix(in oklab, var(--background) 56%, transparent);
+  }
+
+  90% {
     backdrop-filter: blur(1.5px);
     background-color: color-mix(in oklab, var(--background) 18%, transparent);
   }
@@ -176,18 +181,37 @@ body.transition-overlay-active .grecaptcha-badge {
     opacity: 0;
   }
 
-  22% {
+  24% {
     transform: scale(1.08);
     opacity: 1;
   }
 
-  38% {
-    transform: scale(0.68);
-    opacity: 0;
+  78% {
+    transform: scale(1.02);
+    opacity: 1;
   }
 
   100% {
     transform: scale(0.68);
+    opacity: 0;
+  }
+
+}
+
+@keyframes transition-overlay-glow {
+  0% {
+    opacity: 0;
+  }
+
+  24% {
+    opacity: 1;
+  }
+
+  78% {
+    opacity: 1;
+  }
+
+  100% {
     opacity: 0;
   }
 }
