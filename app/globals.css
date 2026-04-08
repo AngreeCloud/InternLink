@@ -140,14 +140,27 @@ body.recaptcha-badge-visible .grecaptcha-badge {
 
 @keyframes logout-progress {
   0% {
-    transform: translateX(-45%);
+    transform: translateX(-55%);
   }
 
   50% {
-    transform: translateX(55%);
+    transform: translateX(75%);
   }
 
   100% {
-    transform: translateX(-45%);
+    transform: translateX(-55%);
+  }
+}
+
+@keyframes logout-glow {
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(-50%) scale(0.92);
+    opacity: 0.55;
+  }
+
+  50% {
+    transform: translateX(-50%) translateY(-50%) scale(1.08);
+    opacity: 0.9;
   }
 }
