@@ -15,6 +15,7 @@ import { doc, getDoc } from "firebase/firestore"
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime"
 import { getRecaptchaV3Token } from "@/lib/recaptcha-v3"
 import { finalizePendingRegistration, isVerificationBypassEnabled } from "@/lib/verification"
+import { createServerSession } from "@/lib/auth/client-session"
 import { useRouter } from "next/navigation"
 
 async function verifyRecaptchaToken(token: string, action: "login_password" | "login_google") {
@@ -170,6 +171,7 @@ export function LoginForm() {
         }
       }
 
+      await createServerSession(user)
       redirectBasedOnRole(role, estado)
     } catch (err: any) {
       if (err?.code === "auth/popup-closed-by-user" || err?.code === "auth/cancelled-popup-request") {
@@ -249,6 +251,7 @@ export function LoginForm() {
       const role = userData.role || ""
       const estado = userData.estado || ""
 
+      await createServerSession(user)
       redirectBasedOnRole(role, estado)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)

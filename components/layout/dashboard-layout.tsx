@@ -26,12 +26,13 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { onAuthStateChanged, signOut } from "firebase/auth"
+import { onAuthStateChanged } from "firebase/auth"
 import { doc, getDoc } from "firebase/firestore"
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime"
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge"
 import { NotificationsInbox } from "@/components/chat/notifications-inbox"
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications"
+import { logoutWithServerSession } from "@/lib/auth/client-session"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
@@ -93,14 +94,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       unsubscribe = onAuthStateChanged(auth, async (user) => {
         if (!user) {
           setState((prev) => ({ ...prev, loading: false }))
-          router.replace("/login")
           return
         }
 
         const userSnap = await getDoc(doc(db, "users", user.uid))
         if (!userSnap.exists()) {
           setState((prev) => ({ ...prev, loading: false }))
-          router.replace("/login")
           return
         }
 
@@ -114,19 +113,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
         if (data.role === "admin_escolar") {
           setState((prev) => ({ ...prev, loading: false }))
-          router.replace("/school-admin")
           return
         }
 
         if (data.role !== "aluno") {
           setState((prev) => ({ ...prev, loading: false }))
-          router.replace("/account-status")
           return
         }
 
         if (data.estado !== "ativo") {
           setState((prev) => ({ ...prev, loading: false }))
-          router.replace("/waiting")
           return
         }
 
@@ -274,8 +270,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={async () => {
-                      const auth = await getAuthRuntime()
-                      await signOut(auth)
+                      await logoutWithServerSession()
                       router.replace("/login")
                     }}
                   >

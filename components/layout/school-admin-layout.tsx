@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
+import { logoutWithServerSession } from "@/lib/auth/client-session";
 import { SchoolAdminProvider } from "@/components/school-admin/school-admin-context";
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
 import { NotificationsInbox } from "@/components/chat/notifications-inbox";
@@ -76,14 +77,12 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
       unsubscribe = onAuthStateChanged(auth, async (user) => {
         if (!user) {
           setState((prev) => ({ ...prev, loading: false }));
-          router.replace("/login");
           return;
         }
 
         const userSnap = await getDoc(doc(db, "users", user.uid));
         if (!userSnap.exists()) {
           setState((prev) => ({ ...prev, loading: false }));
-          router.replace("/login");
           return;
         }
 
@@ -97,7 +96,6 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
 
         if (data.role !== "admin_escolar" || !data.schoolId) {
           setState((prev) => ({ ...prev, loading: false }));
-          router.replace("/login");
           return;
         }
 
@@ -241,8 +239,7 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
                 variant="outline"
                 size="sm"
                 onClick={async () => {
-                  const auth = await getAuthRuntime();
-                  await signOut(auth);
+                  await logoutWithServerSession();
                   router.replace("/login");
                 }}
               >

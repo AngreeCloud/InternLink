@@ -4,9 +4,10 @@ import type React from "react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
+import { logoutWithServerSession } from "@/lib/auth/client-session";
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
 import { NotificationsInbox } from "@/components/chat/notifications-inbox";
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications";
@@ -72,14 +73,12 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
       unsubscribe = onAuthStateChanged(auth, async (user) => {
         if (!user) {
           setState((prev) => ({ ...prev, loading: false }));
-          router.replace("/login");
           return;
         }
 
         const userSnap = await getDoc(doc(db, "users", user.uid));
         if (!userSnap.exists()) {
           setState((prev) => ({ ...prev, loading: false }));
-          router.replace("/login");
           return;
         }
 
@@ -94,7 +93,6 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
 
         if (data.role !== "tutor") {
           setState((prev) => ({ ...prev, loading: false }));
-          router.replace("/login");
           return;
         }
 
@@ -194,8 +192,7 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={async () => {
-                    const auth = await getAuthRuntime();
-                    await signOut(auth);
+                    await logoutWithServerSession();
                     router.replace("/login");
                   }}
                 >
