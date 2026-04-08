@@ -3,6 +3,10 @@ import { POST } from "@/app/api/recaptcha/verify/route";
 
 const originalEnv = { ...process.env };
 
+function setEnv(key: string, value: string) {
+  (process.env as Record<string, string | undefined>)[key] = value;
+}
+
 beforeEach(() => {
   vi.restoreAllMocks();
   process.env = { ...originalEnv };
@@ -14,7 +18,7 @@ afterEach(() => {
 
 describe("POST /api/recaptcha/verify", () => {
   it("bypasses verification in development when secret is missing", async () => {
-    process.env.NODE_ENV = "development";
+    setEnv("NODE_ENV", "development");
     delete process.env.NEXT_RECAPTCHA_SECRET_KEY;
 
     const request = new Request("http://localhost/api/recaptcha/verify", {
@@ -32,7 +36,7 @@ describe("POST /api/recaptcha/verify", () => {
   });
 
   it("returns missing-secret error in production when secret is missing", async () => {
-    process.env.NODE_ENV = "production";
+    setEnv("NODE_ENV", "production");
     delete process.env.NEXT_RECAPTCHA_SECRET_KEY;
 
     const request = new Request("http://localhost/api/recaptcha/verify", {
@@ -50,7 +54,7 @@ describe("POST /api/recaptcha/verify", () => {
   });
 
   it("bypasses low score/action mismatch in development", async () => {
-    process.env.NODE_ENV = "development";
+    setEnv("NODE_ENV", "development");
     process.env.NEXT_RECAPTCHA_SECRET_KEY = "secret";
     process.env.RECAPTCHA_MIN_SCORE = "0.5";
 
