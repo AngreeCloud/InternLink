@@ -210,6 +210,7 @@ export function LoginForm() {
       }
 
       const auth = await getAuthRuntime()
+      const db = await getDbRuntime()
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
       const user = userCredential.user
       const verificationBypassEnabled = isVerificationBypassEnabled()
@@ -219,6 +220,19 @@ export function LoginForm() {
         // User needs to verify email first
         router.push(`/verify-email?email=${encodeURIComponent(user.email || email)}`)
         return
+      }
+
+      const userSnap = await getDoc(doc(db, "users", user.uid))
+      if (!userSnap.exists()) {
+        const finalizedUser = await finalizePendingRegistration(db, user.uid, {
+          markEmailVerified: user.emailVerified,
+        })
+
+        if (!finalizedUser) {
+          await signOut(auth)
+          setError("Não encontrámos uma conta associada a este login. Registe-se para continuar.")
+          return
+        }
       }
 
       const session = await createServerSession(user)

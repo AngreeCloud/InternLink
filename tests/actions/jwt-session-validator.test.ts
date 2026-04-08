@@ -114,6 +114,17 @@ describe("validateFirebaseSessionJwt", () => {
     expect(session).toBeNull();
   });
 
+  it("rejects ID-token issuer for session validation", async () => {
+    const fixture = await createTokenFixture({ issuer: "https://securetoken.google.com/demo-project" });
+
+    const session = await validateFirebaseSessionJwt(fixture.token, {
+      projectId: fixture.projectId,
+      fetchImpl: fixture.jwksFetch,
+    });
+
+    expect(session).toBeNull();
+  });
+
   it("rejects token with wrong audience", async () => {
     const fixture = await createTokenFixture({ audience: "other-project" });
 
