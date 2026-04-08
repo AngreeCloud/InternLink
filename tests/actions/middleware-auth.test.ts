@@ -34,17 +34,9 @@ describe("proxy session auth", () => {
     mockValidateFirebaseSessionJwt.mockResolvedValue({
       uid: "user-1",
       exp: Math.floor(Date.now() / 1000) + 600,
+      role: "aluno",
+      estado: "ativo",
     });
-
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        valid: true,
-        uid: "user-1",
-        role: "aluno",
-        estado: "ativo",
-      }),
-    } as Response);
 
     const response = await proxy(createRequest("/dashboard", "valid-cookie"));
 
@@ -60,6 +52,19 @@ describe("proxy session auth", () => {
 
   it("rejects request with invalid cookie", async () => {
     mockValidateFirebaseSessionJwt.mockResolvedValue(null);
+
+    const response = await proxy(createRequest("/dashboard", "bad-cookie"));
+
+    expect(response.headers.get("location")).toBe("http://localhost/login");
+  });
+
+  it("rejects request with missing claims", async () => {
+    mockValidateFirebaseSessionJwt.mockResolvedValue({
+      uid: "user-1",
+      exp: Math.floor(Date.now() / 1000) + 600,
+      role: "",
+      estado: "",
+    });
 
     const response = await proxy(createRequest("/dashboard", "bad-cookie"));
 

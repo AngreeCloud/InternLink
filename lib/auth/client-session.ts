@@ -20,19 +20,40 @@ async function ensureOk(response: Response, fallbackMessage: string): Promise<vo
 }
 
 export async function createServerSession(user: User): Promise<void> {
-  const idToken = await user.getIdToken(true);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const idToken = await user.getIdToken(true);
 
-  const response = await fetch("/api/auth/session", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ idToken }),
-    cache: "no-store",
-    credentials: "include",
-  });
+    const response = await fetch("/api/auth/session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ idToken }),
+      cache: "no-store",
+      credentials: "include",
+    });
 
-  await ensureOk(response, "Nao foi possivel iniciar a sessao no servidor.");
+    if (response.ok) {
+      return;
+    }
+
+    let claimsUpdated = false;
+    try {
+      const data = (await response.json()) as { claimsUpdated?: boolean };
+      claimsUpdated = Boolean(data.claimsUpdated);
+    } catch {
+      // Ignore parse failures and fall through to standard error handling.
+    }
+
+      if (response.status === 428 || claimsUpdated) {
+        await wait(500);
+      continue;
+    }
+
+    await ensureOk(response, "Nao foi possivel iniciar a sessao no servidor.");
+  }
+
+  throw new Error("Nao foi possivel iniciar a sessao no servidor.");
 }
 
 export async function clearServerSession(): Promise<void> {

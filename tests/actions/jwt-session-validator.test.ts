@@ -20,6 +20,10 @@ async function createTokenFixture(options?: {
   subject?: string;
   issuer?: string;
   audience?: string;
+  includeRole?: boolean;
+  includeEstado?: boolean;
+  roleValue?: string;
+  estadoValue?: string;
   expiresInSeconds?: number;
   signWithDifferentKey?: boolean;
 }) {
@@ -32,7 +36,15 @@ async function createTokenFixture(options?: {
   publicJwk.alg = "RS256";
   publicJwk.use = "sig";
 
-  const jwt = new SignJWT({})
+  const payload: Record<string, unknown> = {};
+  if (options?.includeRole !== false) {
+    payload.role = options?.roleValue ?? "professor";
+  }
+  if (options?.includeEstado !== false) {
+    payload.estado = options?.estadoValue ?? "ativo";
+  }
+
+  const jwt = new SignJWT(payload)
     .setProtectedHeader({ alg: "RS256", kid: "jwt-test-kid" })
     .setAudience(options?.audience ?? projectId)
     .setIssuer(options?.issuer ?? `https://session.firebase.google.com/${projectId}`)
@@ -74,6 +86,8 @@ describe("validateFirebaseSessionJwt", () => {
     expect(session).toEqual(
       expect.objectContaining({
         uid: "uid-1",
+        role: "professor",
+        estado: "ativo",
       })
     );
   });
@@ -124,6 +138,28 @@ describe("validateFirebaseSessionJwt", () => {
 
   it("rejects token without UID in sub", async () => {
     const fixture = await createTokenFixture({ subject: "__missing__" });
+
+    const session = await validateFirebaseSessionJwt(fixture.token, {
+      projectId: fixture.projectId,
+      fetchImpl: fixture.jwksFetch,
+    });
+
+    expect(session).toBeNull();
+  });
+
+  it("rejects token without role claim", async () => {
+    const fixture = await createTokenFixture({ includeRole: false });
+
+    const session = await validateFirebaseSessionJwt(fixture.token, {
+      projectId: fixture.projectId,
+      fetchImpl: fixture.jwksFetch,
+    });
+
+    expect(session).toBeNull();
+  });
+
+  it("rejects token without estado claim", async () => {
+    const fixture = await createTokenFixture({ includeEstado: false });
 
     const session = await validateFirebaseSessionJwt(fixture.token, {
       projectId: fixture.projectId,

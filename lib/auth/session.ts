@@ -6,11 +6,23 @@ export const SESSION_VERIFY_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 export const SESSION_EXPIRES_IN_MS = 5 * 24 * 60 * 60 * 1000; // 5 days
 
 export type AppUserRole = "aluno" | "professor" | "tutor" | "admin_escolar";
+export const APP_USER_ROLES = ["aluno", "professor", "tutor", "admin_escolar"] as const;
+
+export type AppUserEstado = "ativo" | "pendente" | "recusado" | "removido";
+export const APP_USER_ESTADOS = ["ativo", "pendente", "recusado", "removido"] as const;
 
 export type SessionUserProfile = {
   role?: string;
   estado?: string;
 };
+
+export function isAppUserRole(value: unknown): value is AppUserRole {
+  return typeof value === "string" && (APP_USER_ROLES as readonly string[]).includes(value);
+}
+
+export function isAppUserEstado(value: unknown): value is AppUserEstado {
+  return typeof value === "string" && (APP_USER_ESTADOS as readonly string[]).includes(value);
+}
 
 export const PROTECTED_ROUTE_PREFIXES = [
   "/student",

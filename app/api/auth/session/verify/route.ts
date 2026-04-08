@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getFirebaseAdminAuth, getFirebaseAdminDb } from "@/lib/firebase-admin";
+import { getFirebaseAdminAuth } from "@/lib/firebase-admin";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
@@ -16,19 +16,19 @@ export async function POST() {
 
     const auth = getFirebaseAdminAuth();
     const decoded = await auth.verifySessionCookie(sessionCookie, true);
-    const db = getFirebaseAdminDb();
+    const role = typeof decoded.role === "string" ? decoded.role : undefined;
+    const estado = typeof decoded.estado === "string" ? decoded.estado : undefined;
 
-    const userSnap = await db.collection("users").doc(decoded.uid).get();
-    const userData = userSnap.exists
-      ? (userSnap.data() as { role?: string; estado?: string })
-      : {};
+    if (!role || !estado) {
+      return NextResponse.json({ valid: false }, { status: 401 });
+    }
 
     return NextResponse.json({
       valid: true,
       exp: decoded.exp,
       uid: decoded.uid,
-      role: userData.role,
-      estado: userData.estado,
+      role,
+      estado,
     });
   } catch {
     return NextResponse.json({ valid: false }, { status: 401 });

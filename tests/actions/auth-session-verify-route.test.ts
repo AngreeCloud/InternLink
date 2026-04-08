@@ -2,18 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockVerifySessionCookie = vi.fn();
 const mockCookies = vi.fn();
-const mockDocGet = vi.fn();
 
 vi.mock("@/lib/firebase-admin", () => ({
   getFirebaseAdminAuth: () => ({
     verifySessionCookie: mockVerifySessionCookie,
-  }),
-  getFirebaseAdminDb: () => ({
-    collection: () => ({
-      doc: () => ({
-        get: mockDocGet,
-      }),
-    }),
   }),
 }));
 
@@ -26,7 +18,7 @@ beforeEach(() => {
 });
 
 describe("POST /api/auth/session/verify", () => {
-  it("returns profile role and estado when cookie is valid", async () => {
+  it("returns role and estado directly from JWT custom claims", async () => {
     const { POST } = await import("@/app/api/auth/session/verify/route");
 
     mockCookies.mockResolvedValueOnce({
@@ -35,10 +27,8 @@ describe("POST /api/auth/session/verify", () => {
     mockVerifySessionCookie.mockResolvedValueOnce({
       uid: "uid-1",
       exp: Math.floor(Date.now() / 1000) + 3600,
-    });
-    mockDocGet.mockResolvedValueOnce({
-      exists: true,
-      data: () => ({ role: "professor", estado: "ativo" }),
+      role: "professor",
+      estado: "ativo",
     });
 
     const response = await POST();

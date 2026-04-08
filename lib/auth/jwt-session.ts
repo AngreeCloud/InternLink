@@ -1,5 +1,6 @@
 import { jwtVerify } from "jose";
 import { getGoogleJwksKeyResolver } from "@/lib/auth/edge-jwks";
+import { isAppUserEstado, isAppUserRole } from "@/lib/auth/session";
 
 export const AUTH_UID_HEADER = "x-auth-uid";
 export const AUTH_EXP_HEADER = "x-auth-exp";
@@ -7,11 +8,15 @@ export const AUTH_EXP_HEADER = "x-auth-exp";
 export type ValidatedSession = {
   uid: string;
   exp: number;
+  role: string;
+  estado: string;
 };
 
 type SessionCacheEntry = {
   uid: string;
   exp: number;
+  role: string;
+  estado: string;
   expiresAt: number;
 };
 
@@ -51,6 +56,8 @@ function getCachedSession(token: string, now: number): ValidatedSession | null {
   return {
     uid: entry.uid,
     exp: entry.exp,
+    role: entry.role,
+    estado: entry.estado,
   };
 }
 
@@ -58,6 +65,8 @@ function cacheSession(token: string, session: ValidatedSession) {
   validatedSessionCache.set(token, {
     uid: session.uid,
     exp: session.exp,
+    role: session.role,
+    estado: session.estado,
     expiresAt: session.exp * 1000,
   });
 }
@@ -86,6 +95,8 @@ export async function validateFirebaseSessionJwt(
       issuer: issuerCandidates,
     });
 
+    const customClaims = payload as Record<string, unknown>;
+
     if (typeof payload.exp !== "number" || payload.exp <= Math.floor(nowMs / 1000)) {
       return null;
     }
@@ -94,9 +105,25 @@ export async function validateFirebaseSessionJwt(
       return null;
     }
 
+    const roleClaim = customClaims.role;
+    const estadoClaim = customClaims.estado;
+
+    if (!isAppUserRole(roleClaim)) {
+      return null;
+    }
+
+    if (!isAppUserEstado(estadoClaim)) {
+      return null;
+    }
+
+    const role = roleClaim;
+    const estado = estadoClaim;
+
     const session: ValidatedSession = {
       uid: payload.sub,
       exp: payload.exp,
+      role,
+      estado,
     };
 
     cacheSession(token, session);

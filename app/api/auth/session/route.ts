@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getFirebaseAdminAuth } from "@/lib/firebase-admin";
+import { getFirebaseAdminAuth, getFirebaseAdminDb } from "@/lib/firebase-admin";
 import {
   SESSION_COOKIE_NAME,
   SESSION_EXPIRES_IN_MS,
 } from "@/lib/auth/session";
+import { ensureUserClaims } from "@/lib/auth/custom-claims";
 
 export const runtime = "nodejs";
 
@@ -25,13 +26,32 @@ export async function POST(request: Request) {
     }
 
     const auth = getFirebaseAdminAuth();
-    await auth.verifyIdToken(idToken, true);
+    const decoded = await auth.verifyIdToken(idToken, true);
+    const db = getFirebaseAdminDb();
+
+    const claimsSync = await ensureUserClaims(auth, db, decoded.uid);
+
+    if (claimsSync.updated) {
+      return NextResponse.json(
+        {
+          ok: false,
+          claimsUpdated: true,
+          role: claimsSync.role,
+          estado: claimsSync.estado,
+        },
+        { status: 428 }
+      );
+    }
 
     const sessionCookie = await auth.createSessionCookie(idToken, {
       expiresIn: SESSION_EXPIRES_IN_MS,
     });
 
-    const response = NextResponse.json({ ok: true });
+    const response = NextResponse.json({
+      ok: true,
+      role: claimsSync.role,
+      estado: claimsSync.estado,
+    });
     response.cookies.set({
       name: SESSION_COOKIE_NAME,
       value: sessionCookie,

@@ -4,14 +4,20 @@ import { proxy } from "@/proxy";
 import { clearGoogleJwksCacheForTests } from "@/lib/auth/edge-jwks";
 import { clearValidatedSessionCacheForTests } from "@/lib/auth/jwt-session";
 
-async function createValidSessionToken(projectId: string, uid: string, expiresInSeconds = 3600) {
+async function createValidSessionToken(
+  projectId: string,
+  uid: string,
+  role: string,
+  estado: string,
+  expiresInSeconds = 3600
+) {
   const { publicKey, privateKey } = await generateKeyPair("RS256");
   const publicJwk = await exportJWK(publicKey);
   publicJwk.kid = "integration-kid";
   publicJwk.alg = "RS256";
   publicJwk.use = "sig";
 
-  const token = await new SignJWT({})
+  const token = await new SignJWT({ role, estado })
     .setProtectedHeader({ alg: "RS256", kid: "integration-kid" })
     .setSubject(uid)
     .setAudience(projectId)
@@ -27,7 +33,7 @@ function createRequest(pathname: string, sessionCookie?: string) {
   return {
     url: `http://localhost${pathname}`,
     nextUrl: { pathname },
-    headers: new Headers(),
+    headers: new Headers(sessionCookie ? { cookie: `internlink_session=${sessionCookie}` } : {}),
     cookies: {
       get: (name: string) =>
         name === "internlink_session" && sessionCookie
@@ -53,38 +59,17 @@ describe("proxy integration", () => {
 
   it("login cookie -> proxy validates JWT and authorizes role", async () => {
     const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "demo-project";
-    const { token, publicJwk } = await createValidSessionToken(projectId, "uid-1", 600);
+    const { token, publicJwk } = await createValidSessionToken(projectId, "uid-1", "professor", "ativo", 600);
 
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = String(input);
-      if (url.includes("securetoken@system.gserviceaccount.com")) {
-        return {
-          ok: true,
-          headers: new Headers({ "cache-control": "public, max-age=86400" }),
-          json: async () => ({ keys: [publicJwk] }),
-        } as Response;
-      }
-
-      if (url.includes("/api/auth/session/verify")) {
-        return {
-          ok: true,
-          json: async () => ({
-            valid: true,
-            uid: "uid-1",
-            role: "professor",
-            estado: "ativo",
-            exp: Math.floor(Date.now() / 1000) + 600,
-          }),
-        } as Response;
-      }
-
-      throw new Error(`Unexpected fetch URL: ${url}`);
-    });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      headers: new Headers({ "cache-control": "public, max-age=86400" }),
+      json: async () => ({ keys: [publicJwk] }),
+    } as Response);
 
     const response = await proxy(createRequest("/professor", token));
 
     expect(response.headers.get("location")).toBeNull();
-    expect(fetchSpy).toHaveBeenCalled();
   });
 
   it("logout cookie removed -> proxy blocks", async () => {
@@ -94,7 +79,7 @@ describe("proxy integration", () => {
 
   it("expired token -> proxy blocks", async () => {
     const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "demo-project";
-    const { token, publicJwk } = await createValidSessionToken(projectId, "uid-2", -10);
+    const { token, publicJwk } = await createValidSessionToken(projectId, "uid-2", "professor", "ativo", -10);
 
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,

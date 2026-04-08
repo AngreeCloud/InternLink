@@ -26,6 +26,8 @@
     "lint": "next lint",
     "migrate:chat-delete:check": "node scripts/migrate-chat-message-delete-state.js",
     "migrate:chat-delete:apply": "node scripts/migrate-chat-message-delete-state.js --apply",
+    "migrate:claims:check": "node scripts/migrate-user-claims.js",
+    "migrate:claims:apply": "node scripts/migrate-user-claims.js --apply",
     "migrate:estagios:check": "node scripts/migrate-estagios-current-shape.js",
     "migrate:estagios:apply": "node scripts/migrate-estagios-current-shape.js --apply",
     "start": "next start",
