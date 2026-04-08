@@ -52,4 +52,44 @@ describe("createServerSession", () => {
       expect.objectContaining({ method: "POST" })
     );
   });
+
+  it("retries multiple times when refresh is still propagating", async () => {
+    mockGetIdToken
+      .mockResolvedValueOnce("token-1")
+      .mockResolvedValueOnce("token-2")
+      .mockResolvedValueOnce("token-3")
+      .mockResolvedValueOnce("token-4");
+
+    const user = {
+      getIdToken: mockGetIdToken,
+    } as any;
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 428,
+        json: async () => ({ claimsUpdated: true, refreshRequired: true }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 428,
+        json: async () => ({ claimsUpdated: true, refreshRequired: true }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 428,
+        json: async () => ({ claimsUpdated: true, refreshRequired: true }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      } as Response);
+
+    await createServerSession(user);
+
+    expect(mockGetIdToken).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
 });

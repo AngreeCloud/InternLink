@@ -40,7 +40,12 @@ describe("proxy session auth", () => {
 
     const response = await proxy(createRequest("/dashboard", "valid-cookie"));
 
-    expect(mockValidateFirebaseSessionJwt).toHaveBeenCalledWith("valid-cookie");
+    expect(mockValidateFirebaseSessionJwt).toHaveBeenCalledWith(
+      "valid-cookie",
+      expect.objectContaining({
+        onFailure: expect.any(Function),
+      })
+    );
     expect(response.headers.get("location")).toBeNull();
   });
 

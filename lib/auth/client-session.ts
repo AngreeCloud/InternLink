@@ -3,24 +3,30 @@
 import type { User } from "firebase/auth";
 import { getAuthRuntime } from "@/lib/firebase-runtime";
 
-async function ensureOk(response: Response, fallbackMessage: string): Promise<void> {
-  if (response.ok) return;
+const SESSION_CREATE_MAX_ATTEMPTS = 4;
+const SESSION_CREATE_RETRY_DELAYS_MS = [300, 700, 1200] as const;
 
-  let message = fallbackMessage;
+type SessionCreateErrorPayload = {
+  error?: string;
+  claimsUpdated?: boolean;
+  refreshRequired?: boolean;
+};
+
+async function readJsonPayload(response: Response): Promise<SessionCreateErrorPayload> {
   try {
-    const data = (await response.json()) as { error?: string };
-    if (data.error) {
-      message = data.error;
-    }
+    return (await response.json()) as SessionCreateErrorPayload;
   } catch {
-    // Keep fallback message.
+    return {};
   }
+}
 
-  throw new Error(message);
+function delayForAttempt(attempt: number): number {
+  const lastKnownDelay = SESSION_CREATE_RETRY_DELAYS_MS[SESSION_CREATE_RETRY_DELAYS_MS.length - 1] ?? 1200;
+  return SESSION_CREATE_RETRY_DELAYS_MS[attempt] ?? lastKnownDelay;
 }
 
 export async function createServerSession(user: User): Promise<void> {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < SESSION_CREATE_MAX_ATTEMPTS; attempt += 1) {
     const idToken = await user.getIdToken(true);
 
     const response = await fetch("/api/auth/session", {
@@ -37,23 +43,21 @@ export async function createServerSession(user: User): Promise<void> {
       return;
     }
 
-    let claimsUpdated = false;
-    try {
-      const data = (await response.json()) as { claimsUpdated?: boolean };
-      claimsUpdated = Boolean(data.claimsUpdated);
-    } catch {
-      // Ignore parse failures and fall through to standard error handling.
-    }
+    const payload = await readJsonPayload(response);
+    const claimsUpdated =
+      response.status === 428 ||
+      Boolean(payload.claimsUpdated) ||
+      Boolean(payload.refreshRequired);
 
-      if (response.status === 428 || claimsUpdated) {
-        await wait(500);
+    if (claimsUpdated && attempt < SESSION_CREATE_MAX_ATTEMPTS - 1) {
+      await wait(delayForAttempt(attempt));
       continue;
     }
 
-    await ensureOk(response, "Nao foi possivel iniciar a sessao no servidor.");
+    throw new Error(payload.error || "Nao foi possivel iniciar a sessao no servidor.");
   }
 
-  throw new Error("Nao foi possivel iniciar a sessao no servidor.");
+  throw new Error("Nao foi possivel iniciar a sessao no servidor. Tente novamente em alguns segundos.");
 }
 
 export async function clearServerSession(): Promise<void> {

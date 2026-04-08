@@ -8,8 +8,8 @@ export const SESSION_EXPIRES_IN_MS = 5 * 24 * 60 * 60 * 1000; // 5 days
 export type AppUserRole = "aluno" | "professor" | "tutor" | "admin_escolar";
 export const APP_USER_ROLES = ["aluno", "professor", "tutor", "admin_escolar"] as const;
 
-export type AppUserEstado = "ativo" | "pendente" | "recusado" | "removido";
-export const APP_USER_ESTADOS = ["ativo", "pendente", "recusado", "removido"] as const;
+export type AppUserEstado = "ativo" | "pendente" | "recusado" | "removido" | "inativo";
+export const APP_USER_ESTADOS = ["ativo", "pendente", "recusado", "removido", "inativo"] as const;
 
 export type SessionUserProfile = {
   role?: string;

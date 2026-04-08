@@ -68,6 +68,8 @@ describe("/api/auth/session route", () => {
     expect(payload.role).toBe("professor");
     expect(payload.estado).toBe("ativo");
     expect(mockVerifyIdToken).toHaveBeenCalledWith("token-123", true);
+    expect(mockGetUser).not.toHaveBeenCalled();
+    expect(mockUserDocGet).not.toHaveBeenCalled();
     expect(mockSetCustomUserClaims).not.toHaveBeenCalled();
     expect(mockCreateSessionCookie).toHaveBeenCalledTimes(1);
     expect(response.headers.get("set-cookie") || "").toContain("internlink_session=session-cookie-value");
@@ -105,6 +107,38 @@ describe("/api/auth/session route", () => {
       role: "professor",
       estado: "ativo",
     });
+    expect(mockCreateSessionCookie).not.toHaveBeenCalled();
+  });
+
+  it("returns 428 when idToken claims are stale even if custom claims are synced", async () => {
+    const { POST } = await import("@/app/api/auth/session/route");
+
+    mockVerifyIdToken.mockResolvedValueOnce({
+      uid: "uid-123",
+      role: undefined,
+      estado: undefined,
+    });
+    mockGetUser.mockResolvedValueOnce({
+      customClaims: { role: "professor", estado: "ativo" },
+    });
+    mockUserDocGet.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({ role: "professor", estado: "ativo" }),
+    });
+
+    const request = new Request("http://localhost/api/auth/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken: "token-123" }),
+    });
+
+    const response = await POST(request);
+    const payload = (await response.json()) as { claimsUpdated?: boolean; refreshRequired?: boolean };
+
+    expect(response.status).toBe(428);
+    expect(payload.claimsUpdated).toBe(true);
+    expect(payload.refreshRequired).toBe(true);
+    expect(mockSetCustomUserClaims).not.toHaveBeenCalled();
     expect(mockCreateSessionCookie).not.toHaveBeenCalled();
   });
 

@@ -169,6 +169,23 @@ describe("validateFirebaseSessionJwt", () => {
     expect(session).toBeNull();
   });
 
+  it("accepts token with legacy inativo estado", async () => {
+    const fixture = await createTokenFixture({ estadoValue: "inativo" });
+
+    const session = await validateFirebaseSessionJwt(fixture.token, {
+      projectId: fixture.projectId,
+      fetchImpl: fixture.jwksFetch,
+    });
+
+    expect(session).toEqual(
+      expect.objectContaining({
+        uid: "uid-1",
+        role: "professor",
+        estado: "inativo",
+      })
+    );
+  });
+
   it("uses validation cache for repeated calls", async () => {
     const fixture = await createTokenFixture();
     const fetchSpy = async () => {

@@ -1,7 +1,14 @@
-import { createLocalJWKSet, type JWTVerifyGetKey, type JSONWebKeySet } from "jose";
+import {
+  createLocalJWKSet,
+  exportJWK,
+  importX509,
+  type JSONWebKey,
+  type JWTVerifyGetKey,
+  type JSONWebKeySet,
+} from "jose";
 
-const GOOGLE_SECURETOKEN_JWKS_URL =
-  "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
+const GOOGLE_SESSION_COOKIE_PUBLIC_KEYS_URL =
+  "https://www.googleapis.com/identitytoolkit/v3/relyingparty/publicKeys";
 const DEFAULT_JWKS_CACHE_MS = 24 * 60 * 60 * 1000;
 
 type JwksCacheEntry = {
@@ -11,6 +18,8 @@ type JwksCacheEntry = {
 
 let jwksCache: JwksCacheEntry | null = null;
 let jwksKeyResolver: JWTVerifyGetKey | null = null;
+
+type X509CertMap = Record<string, string>;
 
 function resolveTtlMs(cacheControl: string | null): number {
   if (!cacheControl) {
@@ -30,23 +39,70 @@ function resolveTtlMs(cacheControl: string | null): number {
   return Math.min(maxAgeSeconds * 1000, DEFAULT_JWKS_CACHE_MS);
 }
 
-function assertJwks(payload: unknown): asserts payload is JSONWebKeySet {
+function isJwks(payload: unknown): payload is JSONWebKeySet {
   if (!payload || typeof payload !== "object") {
-    throw new Error("JWKS payload invalid");
+    return false;
   }
 
   const candidate = payload as { keys?: unknown };
-  if (!Array.isArray(candidate.keys) || candidate.keys.length === 0) {
-    throw new Error("JWKS payload missing keys");
-  }
+  return Array.isArray(candidate.keys) && candidate.keys.length > 0;
 }
 
-export async function getGoogleJwks(fetchImpl: typeof fetch = fetch): Promise<JSONWebKeySet> {
-  if (jwksCache && jwksCache.expiresAt > Date.now()) {
+function isX509CertMap(payload: unknown): payload is X509CertMap {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return false;
+  }
+
+  const entries = Object.entries(payload as Record<string, unknown>);
+  if (entries.length === 0) {
+    return false;
+  }
+
+  return entries.every(([, value]) => typeof value === "string");
+}
+
+async function convertX509MapToJwks(certMap: X509CertMap): Promise<JSONWebKeySet> {
+  const keys: JSONWebKey[] = [];
+
+  for (const [kid, cert] of Object.entries(certMap)) {
+    const keyLike = await importX509(cert, "RS256");
+    const jwk = await exportJWK(keyLike);
+    jwk.kid = kid;
+    jwk.use = "sig";
+    jwk.alg = "RS256";
+    keys.push(jwk);
+  }
+
+  if (keys.length === 0) {
+    throw new Error("Session key payload missing keys");
+  }
+
+  return { keys };
+}
+
+async function normalizePayloadToJwks(payload: unknown): Promise<JSONWebKeySet> {
+  if (isJwks(payload)) {
+    return payload;
+  }
+
+  if (isX509CertMap(payload)) {
+    return convertX509MapToJwks(payload);
+  }
+
+  throw new Error("Unsupported session key payload format");
+}
+
+export async function getGoogleJwks(
+  fetchImpl: typeof fetch = fetch,
+  options: { forceRefresh?: boolean } = {}
+): Promise<JSONWebKeySet> {
+  const forceRefresh = options.forceRefresh === true;
+
+  if (!forceRefresh && jwksCache && jwksCache.expiresAt > Date.now()) {
     return jwksCache.jwks;
   }
 
-  const response = await fetchImpl(GOOGLE_SECURETOKEN_JWKS_URL, {
+  const response = await fetchImpl(GOOGLE_SESSION_COOKIE_PUBLIC_KEYS_URL, {
     method: "GET",
     cache: "no-store",
   });
@@ -56,26 +112,29 @@ export async function getGoogleJwks(fetchImpl: typeof fetch = fetch): Promise<JS
   }
 
   const payload = (await response.json()) as unknown;
-  assertJwks(payload);
+  const jwks = await normalizePayloadToJwks(payload);
 
   const ttlMs = resolveTtlMs(response.headers.get("cache-control"));
   jwksCache = {
-    jwks: payload,
+    jwks,
     expiresAt: Date.now() + ttlMs,
   };
-  jwksKeyResolver = createLocalJWKSet(payload);
+  jwksKeyResolver = createLocalJWKSet(jwks);
 
-  return payload;
+  return jwks;
 }
 
 export async function getGoogleJwksKeyResolver(
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  options: { forceRefresh?: boolean } = {}
 ): Promise<JWTVerifyGetKey> {
-  if (jwksCache && jwksCache.expiresAt > Date.now() && jwksKeyResolver) {
+  const forceRefresh = options.forceRefresh === true;
+
+  if (!forceRefresh && jwksCache && jwksCache.expiresAt > Date.now() && jwksKeyResolver) {
     return jwksKeyResolver;
   }
 
-  const jwks = await getGoogleJwks(fetchImpl);
+  const jwks = await getGoogleJwks(fetchImpl, { forceRefresh });
   jwksKeyResolver = createLocalJWKSet(jwks);
   return jwksKeyResolver;
 }
