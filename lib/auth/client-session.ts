@@ -6,10 +6,17 @@ import { getAuthRuntime } from "@/lib/firebase-runtime";
 const SESSION_CREATE_MAX_ATTEMPTS = 4;
 const SESSION_CREATE_RETRY_DELAYS_MS = [300, 700, 1200] as const;
 
+export type SessionCreationResult = {
+  role: string;
+  estado: string;
+};
+
 type SessionCreateErrorPayload = {
   error?: string;
   claimsUpdated?: boolean;
   refreshRequired?: boolean;
+  role?: string;
+  estado?: string;
 };
 
 async function readJsonPayload(response: Response): Promise<SessionCreateErrorPayload> {
@@ -25,9 +32,9 @@ function delayForAttempt(attempt: number): number {
   return SESSION_CREATE_RETRY_DELAYS_MS[attempt] ?? lastKnownDelay;
 }
 
-export async function createServerSession(user: User): Promise<void> {
+export async function createServerSession(user: User): Promise<SessionCreationResult> {
   for (let attempt = 0; attempt < SESSION_CREATE_MAX_ATTEMPTS; attempt += 1) {
-    const idToken = await user.getIdToken(true);
+    const idToken = attempt === 0 ? await user.getIdToken() : await user.getIdToken(true);
 
     const response = await fetch("/api/auth/session", {
       method: "POST",
@@ -40,7 +47,12 @@ export async function createServerSession(user: User): Promise<void> {
     });
 
     if (response.ok) {
-      return;
+      const payload = await readJsonPayload(response);
+      if (!payload.role || !payload.estado) {
+        throw new Error("Nao foi possivel obter os dados da sessao.");
+      }
+
+      return { role: payload.role, estado: payload.estado };
     }
 
     const payload = await readJsonPayload(response);

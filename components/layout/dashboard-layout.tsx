@@ -34,6 +34,7 @@ import { NotificationsInbox } from "@/components/chat/notifications-inbox"
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications"
 import { logoutWithServerSession } from "@/lib/auth/client-session"
 import { LogoutOverlay } from "@/components/layout/logout-overlay"
+import { AccessValidationOverlay } from "@/components/layout/access-validation-overlay"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
@@ -142,11 +143,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [router])
 
   if (state.loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
-        <p>A validar acesso...</p>
-      </div>
-    )
+    return <AccessValidationOverlay title="A validar acesso..." description="A abrir o teu dashboard." footer="Estamos a carregar a sessão e a confirmar as permissões." />
   }
 
   if (!state.userId) {

@@ -9,6 +9,7 @@ import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { logoutWithServerSession } from "@/lib/auth/client-session";
 import { SchoolAdminProvider } from "@/components/school-admin/school-admin-context";
 import { LogoutOverlay } from "@/components/layout/logout-overlay"
+import { AccessValidationOverlay } from "@/components/layout/access-validation-overlay";
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
 import { NotificationsInbox } from "@/components/chat/notifications-inbox";
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications";
@@ -116,11 +117,7 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   if (state.loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
-        <p>A validar acesso...</p>
-      </div>
-    );
+    return <AccessValidationOverlay title="A validar acesso..." description="A abrir a gestão da escola." footer="A carregar contexto, permissões e dados da escola." />;
   }
 
   if (!state.userId || !state.schoolId) {

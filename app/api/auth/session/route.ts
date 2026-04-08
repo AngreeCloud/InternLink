@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     }
 
     const auth = getFirebaseAdminAuth();
-    const decoded = (await auth.verifyIdToken(idToken, true)) as DecodedTokenLike;
+    const decoded = (await auth.verifyIdToken(idToken)) as DecodedTokenLike;
     logAuthSessionDebug("id_token_verified", {
       uid: decoded.uid,
       role: typeof decoded.role === "string" ? decoded.role : null,
@@ -188,7 +188,7 @@ export async function DELETE() {
     if (sessionCookie) {
       const auth = getFirebaseAdminAuth();
       try {
-        const decoded = await auth.verifySessionCookie(sessionCookie, true);
+        const decoded = await auth.verifySessionCookie(sessionCookie, false);
         await auth.revokeRefreshTokens(decoded.sub);
       } catch {
         // Ignore invalid or expired cookies and still clear it client-side.

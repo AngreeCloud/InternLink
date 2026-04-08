@@ -34,7 +34,7 @@ describe("createServerSession", () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ ok: true }),
+        json: async () => ({ ok: true, role: "professor", estado: "ativo" }),
       } as Response);
 
     await createServerSession(user);
@@ -84,7 +84,7 @@ describe("createServerSession", () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ ok: true }),
+        json: async () => ({ ok: true, role: "professor", estado: "ativo" }),
       } as Response);
 
     await createServerSession(user);

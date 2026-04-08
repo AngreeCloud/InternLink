@@ -67,7 +67,7 @@ describe("/api/auth/session route", () => {
     expect(payload.ok).toBe(true);
     expect(payload.role).toBe("professor");
     expect(payload.estado).toBe("ativo");
-    expect(mockVerifyIdToken).toHaveBeenCalledWith("token-123", true);
+    expect(mockVerifyIdToken).toHaveBeenCalledWith("token-123");
     expect(mockGetUser).not.toHaveBeenCalled();
     expect(mockUserDocGet).not.toHaveBeenCalled();
     expect(mockSetCustomUserClaims).not.toHaveBeenCalled();
@@ -170,7 +170,7 @@ describe("/api/auth/session route", () => {
 
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
-    expect(mockVerifySessionCookie).toHaveBeenCalledWith("session-cookie-value", true);
+    expect(mockVerifySessionCookie).toHaveBeenCalledWith("session-cookie-value", false);
     expect(mockRevokeRefreshTokens).toHaveBeenCalledWith("uid-123");
     expect(response.headers.get("set-cookie") || "").toContain("internlink_session=");
   });

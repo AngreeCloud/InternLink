@@ -13,6 +13,7 @@ import { NotificationsInbox } from "@/components/chat/notifications-inbox";
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { AccessValidationOverlay } from "@/components/layout/access-validation-overlay";
 import { LogoutOverlay } from "@/components/layout/logout-overlay";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -140,11 +141,7 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   if (state.loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
-        <p>A validar acesso...</p>
-      </div>
-    );
+    return <AccessValidationOverlay title="A validar acesso..." description="A abrir o espaço do professor." footer="A preparar navegação, permissões e contexto da escola." />;
   }
 
   if (!state.userId) {
