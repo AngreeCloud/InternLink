@@ -8,6 +8,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { logoutWithServerSession } from "@/lib/auth/client-session";
+import { LogoutOverlay } from "@/components/layout/logout-overlay";
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
 import { NotificationsInbox } from "@/components/chat/notifications-inbox";
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications";
@@ -33,6 +34,7 @@ type AuthState = {
 };
 
 export function TutorLayout({ children }: { children: React.ReactNode }) {
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [state, setState] = useState<AuthState>({
     loading: true,
     userId: "",
@@ -124,6 +126,7 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
+      {isLoggingOut ? <LogoutOverlay /> : null}
       <div className="sticky top-0 z-40 border-b border-border bg-card px-4 shadow-sm sm:px-6 lg:px-8">
         <div className="mx-auto flex min-h-16 max-w-6xl flex-wrap items-center justify-between gap-3 py-2">
           <div className="flex items-center gap-2">
@@ -192,6 +195,7 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={async () => {
+                    setIsLoggingOut(true);
                     router.replace("/login");
                     void logoutWithServerSession({ deferClientSignOutMs: 150 });
                   }}

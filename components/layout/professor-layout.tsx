@@ -13,6 +13,7 @@ import { NotificationsInbox } from "@/components/chat/notifications-inbox";
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { LogoutOverlay } from "@/components/layout/logout-overlay";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -55,6 +56,7 @@ type AuthState = {
 
 export function ProfessorLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [state, setState] = useState<AuthState>({
     loading: true,
     userId: "",
@@ -274,6 +276,7 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
                   >
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Sair</span>
+                      setIsLoggingOut(true);
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

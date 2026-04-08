@@ -137,3 +137,17 @@ body.recaptcha-badge-visible .grecaptcha-badge {
   opacity: 1;
   pointer-events: auto;
 }
+
+@keyframes logout-progress {
+  0% {
+    transform: translateX(-45%);
+  }
+
+  50% {
+    transform: translateX(55%);
+  }
+
+  100% {
+    transform: translateX(-45%);
+  }
+}

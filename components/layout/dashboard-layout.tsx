@@ -33,6 +33,7 @@ import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge"
 import { NotificationsInbox } from "@/components/chat/notifications-inbox"
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications"
 import { logoutWithServerSession } from "@/lib/auth/client-session"
+import { LogoutOverlay } from "@/components/layout/logout-overlay"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
@@ -55,6 +56,7 @@ type AuthState = {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [state, setState] = useState<AuthState>({
     loading: true,
     userId: "",
@@ -159,6 +161,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background">
+      {isLoggingOut ? <LogoutOverlay /> : null}
       {/* Mobile sidebar */}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <SheetContent side="left" className="w-64 p-0">
@@ -270,6 +273,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={async () => {
+                      setIsLoggingOut(true)
                       router.replace("/login")
                       void logoutWithServerSession({ deferClientSignOutMs: 150 })
                     }}

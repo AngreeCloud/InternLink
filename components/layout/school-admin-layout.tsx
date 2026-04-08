@@ -8,6 +8,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { logoutWithServerSession } from "@/lib/auth/client-session";
 import { SchoolAdminProvider } from "@/components/school-admin/school-admin-context";
+import { LogoutOverlay } from "@/components/layout/logout-overlay"
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
 import { NotificationsInbox } from "@/components/chat/notifications-inbox";
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications";
@@ -37,6 +38,7 @@ type AuthState = {
 
 export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [state, setState] = useState<AuthState>({
     loading: true,
     userId: "",
@@ -135,6 +137,7 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
       }}
     >
       <div className="min-h-screen bg-muted/20">
+        {isLoggingOut ? <LogoutOverlay /> : null}
         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
           <SheetContent side="left" className="w-72 p-0">
             <div className="flex h-full flex-col bg-card">
@@ -239,6 +242,7 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
                 variant="outline"
                 size="sm"
                 onClick={async () => {
+                  setIsLoggingOut(true);
                   router.replace("/login");
                   void logoutWithServerSession({ deferClientSignOutMs: 150 });
                 }}
