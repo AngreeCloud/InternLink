@@ -118,7 +118,6 @@ function mockCreateUserSuccess(uid: string, email: string) {
 }
 
 function mockPendingRegistrationSuccess() {
-  mockSetDoc.mockResolvedValue(undefined);
   mockSendEmailVerification.mockResolvedValue(undefined);
 }
 
@@ -140,6 +139,13 @@ function mockSchoolWithoutInstitutionalDomain() {
 function expectPendingRegistration(uid: string, data: Record<string, unknown>) {
   expect(mockSetDoc).toHaveBeenCalledWith(
     expect.objectContaining({ path: `pendingRegistrations/${uid}` }),
+    expect.objectContaining(data)
+  );
+}
+
+function expectUserRegistration(uid: string, data: Record<string, unknown>) {
+  expect(mockSetDoc).toHaveBeenCalledWith(
+    expect.objectContaining({ path: `users/${uid}` }),
     expect.objectContaining(data)
   );
 }
@@ -176,12 +182,15 @@ afterAll(async () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockSetDoc.mockResolvedValue(undefined);
+  mockDeleteUser.mockResolvedValue(undefined);
+  mockSendEmailVerification.mockResolvedValue(undefined);
   mockGetDoc.mockResolvedValue(makeSchoolSnapshot({}, false));
 });
 
 // --- test cases -------------------------------------------
 describe("registerAluno action", () => {
-  it("creates auth account and stores pending registration on success", async () => {
+  it("creates auth account and stores pending user document on success", async () => {
     mockCreateUserSuccess("uid-1", "test@example.com");
     mockInstitutionalSchool("@example.com");
     mockPendingRegistrationSuccess();
@@ -189,13 +198,17 @@ describe("registerAluno action", () => {
     const result = await registerAluno(makeAlunoPayload());
 
     expect(mockCreateUser).toHaveBeenCalled();
-    expectPendingRegistration("uid-1", {
+    expectUserRegistration("uid-1", {
       role: "aluno",
       schoolId: "school123",
       courseId: "course456",
       estado: "pendente",
       emailVerified: false,
     });
+    expect(mockSetDoc).not.toHaveBeenCalledWith(
+      expect.objectContaining({ path: "pendingRegistrations/uid-1" }),
+      expect.anything()
+    );
     expect(mockSendEmailVerification).toHaveBeenCalled();
     expect(result.uid).toBe("uid-1");
   });
@@ -233,7 +246,7 @@ describe("registerAluno action", () => {
 
     const result = await registerAluno(payload);
     expect(mockCreateUser).toHaveBeenCalled();
-    expectPendingRegistration("uid-3", {
+    expectUserRegistration("uid-3", {
       role: "aluno",
       email: "student@school.pt",
       estado: "pendente",
@@ -253,7 +266,7 @@ describe("registerAluno action", () => {
 
     const result = await registerAluno(payload);
     expect(mockCreateUser).toHaveBeenCalled();
-    expectPendingRegistration("uid-4", {
+    expectUserRegistration("uid-4", {
       role: "aluno",
       email: "student@gmail.com",
       estado: "pendente",
@@ -263,7 +276,7 @@ describe("registerAluno action", () => {
 });
 
 describe("registerProfessor action", () => {
-  it("creates auth account and stores pending registration on success", async () => {
+  it("creates auth account and stores pending user document on success", async () => {
     mockCreateUserSuccess("prof-1", "professor@school.pt");
     mockInstitutionalSchool("school.pt");
     mockPendingRegistrationSuccess();
@@ -274,13 +287,17 @@ describe("registerProfessor action", () => {
     });
 
     expect(mockCreateUser).toHaveBeenCalled();
-    expectPendingRegistration("prof-1", {
+    expectUserRegistration("prof-1", {
       role: "professor",
       schoolId: "school123",
       courseId: null,
       estado: "pendente",
       emailVerified: false,
     });
+    expect(mockSetDoc).not.toHaveBeenCalledWith(
+      expect.objectContaining({ path: "pendingRegistrations/prof-1" }),
+      expect.anything()
+    );
     expect(mockSendEmailVerification).toHaveBeenCalled();
     expect(result.uid).toBe("prof-1");
   });

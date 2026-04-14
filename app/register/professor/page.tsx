@@ -299,7 +299,7 @@ export default function ProfessorRegisterPage() {
           throw new Error("Sessão Google inválida. Inicie novamente o registo com Google.");
         }
 
-        await setDoc(doc(db, "pendingRegistrations", user.uid), {
+        await setDoc(doc(db, "users", user.uid), {
           role: "professor",
           nome: values.nome,
           email: values.email,

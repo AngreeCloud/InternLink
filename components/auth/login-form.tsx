@@ -16,6 +16,7 @@ import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime"
 import { getRecaptchaV3Token } from "@/lib/recaptcha-v3"
 import { finalizePendingRegistration, isVerificationBypassEnabled } from "@/lib/verification"
 import { createServerSession } from "@/lib/auth/client-session"
+import { getLoginRedirectRoute } from "@/lib/auth/status-routing"
 import { useRouter } from "next/navigation"
 import { AccessValidationOverlay } from "@/components/layout/access-validation-overlay"
 
@@ -43,6 +44,7 @@ export function LoginForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [error, setError] = useState("")
@@ -61,24 +63,9 @@ export function LoginForm() {
   }
 
   const redirectBasedOnRole = (role: string, estado: string) => {
-    const navigate = (href: string) => {
-      router.prefetch(href)
-      router.push(href)
-    }
-
-    if (role === "admin_escolar") {
-      navigate("/school-admin")
-    } else if (role === "aluno" && estado !== "ativo") {
-      navigate("/waiting")
-    } else if (role === "aluno") {
-      navigate("/dashboard")
-    } else if (role === "professor" && estado === "ativo") {
-      navigate("/professor")
-    } else if (role === "tutor") {
-      navigate("/tutor")
-    } else {
-      navigate("/account-status")
-    }
+    const href = getLoginRedirectRoute(role, estado)
+    router.prefetch(href)
+    router.push(href)
   }
 
   const handleGoogleLogin = async () => {
@@ -86,6 +73,7 @@ export function LoginForm() {
     
     googleLockRef.current = true
     setError("")
+    let didNavigate = false
 
     try {
       if (recaptchaSiteKey) {
@@ -102,7 +90,10 @@ export function LoginForm() {
       const userEmail = user.email || ""
       const verificationBypassEnabled = isVerificationBypassEnabled()
 
+      setIsGoogleLoading(true)
+
       if (!user.emailVerified && !verificationBypassEnabled) {
+        didNavigate = true
         router.push(`/verify-email?email=${encodeURIComponent(userEmail)}`)
         return
       }
@@ -114,22 +105,6 @@ export function LoginForm() {
         : null
       
       if (!userData) {
-        if (verificationBypassEnabled && !user.emailVerified) {
-          const pendingSnap = await getDoc(doc(db, "pendingRegistrations", user.uid))
-
-          if (!pendingSnap.exists()) {
-            await signOut(auth)
-            setError("Não encontrámos uma conta associada a este login Google. Registe-se para continuar.")
-            return
-          }
-
-          const pendingData = pendingSnap.data() as { role?: string; estado?: string; schoolId?: string }
-          userData = {
-            role: pendingData.role,
-            estado: pendingData.estado,
-            schoolId: pendingData.schoolId,
-          }
-        } else {
         const finalizedUser = await finalizePendingRegistration(db, user.uid, {
           markEmailVerified: user.emailVerified,
         })
@@ -141,7 +116,6 @@ export function LoginForm() {
         }
 
         userData = finalizedUser
-        }
       }
 
       const role = userData.role || ""
@@ -176,8 +150,8 @@ export function LoginForm() {
         }
       }
 
-      setIsGoogleLoading(true)
       const session = await createServerSession(user)
+      didNavigate = true
       redirectBasedOnRole(session.role || role, session.estado || estado)
     } catch (err: any) {
       if (err?.code === "auth/popup-closed-by-user" || err?.code === "auth/cancelled-popup-request") {
@@ -194,13 +168,15 @@ export function LoginForm() {
         setError(message.includes("Firebase config") ? message : "Erro ao fazer login com Google. Tente novamente.")
       }
     } finally {
-      resetGoogleLoginState()
+      if (!didNavigate) {
+        resetGoogleLoginState()
+      }
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
+    setIsSubmitting(true)
     setError("")
 
     try {
@@ -216,12 +192,6 @@ export function LoginForm() {
       const verificationBypassEnabled = isVerificationBypassEnabled()
 
       // Check if email is verified
-      if (!user.emailVerified && !verificationBypassEnabled) {
-        // User needs to verify email first
-        router.push(`/verify-email?email=${encodeURIComponent(user.email || email)}`)
-        return
-      }
-
       const userSnap = await getDoc(doc(db, "users", user.uid))
       if (!userSnap.exists()) {
         const finalizedUser = await finalizePendingRegistration(db, user.uid, {
@@ -236,13 +206,14 @@ export function LoginForm() {
       }
 
       const session = await createServerSession(user)
+      setIsLoading(true)
       redirectBasedOnRole(session.role, session.estado)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setError(message.includes("Firebase config") ? message : "Erro ao fazer login. Verifique as suas credenciais e tente novamente.")
       console.error(err)
     } finally {
-      setIsLoading(false)
+      setIsSubmitting(false)
     }
   }
 
@@ -316,8 +287,8 @@ export function LoginForm() {
         </CardContent>
 
         <CardFooter className="flex flex-col space-y-4">
-          <Button type="submit" className="w-full mt-1" disabled={isLoading}>
-            {isLoading ? "A entrar..." : "Entrar"}
+          <Button type="submit" className="w-full mt-1" disabled={isSubmitting || isLoading}>
+            {isSubmitting ? "A entrar..." : "Entrar"}
           </Button>
 
           <div className="relative">

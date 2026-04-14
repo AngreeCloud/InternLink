@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Link from "next/link"
 import { getAccountStatusApprovalMessage } from "@/lib/approval-messages"
+import { getDashboardRouteForRole } from "@/lib/auth/status-routing"
 import { SchoolSelector } from "@/components/auth/school-selector"
 import type { School } from "@/lib/types/school"
 
@@ -29,7 +30,7 @@ export default function AccountStatusPage() {
     schoolId: "",
     schoolName: "",
     schoolLogoUrl: "",
-    source: "" as "users" | "pendingRegistrations" | "",
+    source: "" as "users" | "",
   })
   const [schools, setSchools] = useState<School[]>([])
   const [selectedSchoolId, setSelectedSchoolId] = useState("")
@@ -65,7 +66,7 @@ export default function AccountStatusPage() {
         let status = "pendente"
         let role = ""
         let schoolId = ""
-        let source: "users" | "pendingRegistrations" | "" = ""
+        let source: "users" | "" = ""
 
         const schoolsSnap = await getDocs(collection(db, "schools"))
         const schoolsList: School[] = schoolsSnap.docs.map((schoolDoc) => {
@@ -106,25 +107,6 @@ export default function AccountStatusPage() {
           if (data?.createdAt && typeof data.createdAt === "object" && "toDate" in data.createdAt) {
             createdAt = data.createdAt.toDate().toISOString()
           }
-        } else {
-          const pendingSnapshot = await getDoc(doc(db, "pendingRegistrations", user.uid))
-          if (pendingSnapshot.exists()) {
-            const pendingData = pendingSnapshot.data() as {
-              role?: string
-              estado?: string
-              schoolId?: string
-              createdAt?: { toDate: () => Date }
-            }
-
-            role = pendingData?.role || role
-            status = pendingData?.estado || status
-            schoolId = pendingData?.schoolId || ""
-            source = "pendingRegistrations"
-
-            if (pendingData?.createdAt && typeof pendingData.createdAt === "object" && "toDate" in pendingData.createdAt) {
-              createdAt = pendingData.createdAt.toDate().toISOString()
-            }
-          }
         }
 
         const schoolName = schoolsList.find((school) => school.id === schoolId)?.name || ""
@@ -152,9 +134,16 @@ export default function AccountStatusPage() {
 
   const statusLabel = state.status || "pendente"
   const canAccessDashboard = statusLabel === "ativo"
-  const dashboardHref = state.role === "professor" ? "/professor" : state.role === "tutor" ? "/tutor" : "/dashboard"
+  const dashboardHref = getDashboardRouteForRole(state.role)
   const approvalMessage = getAccountStatusApprovalMessage(state.role)
   const canChangeSchool = state.role === "professor" && state.status === "pendente" && state.userId.length > 0
+
+  useEffect(() => {
+    if (state.loading || !state.userId) return
+    if (state.status !== "ativo") return
+
+    router.replace(getDashboardRouteForRole(state.role))
+  }, [router, state.loading, state.role, state.status, state.userId])
 
   const handleChangeSchoolAssociation = async () => {
     if (!canChangeSchool) return
@@ -194,12 +183,6 @@ export default function AccountStatusPage() {
           },
           { merge: true }
         )
-      } else if (state.source === "pendingRegistrations") {
-        await updateDoc(doc(db, "pendingRegistrations", state.userId), {
-          schoolId: selectedSchoolId,
-          escola: schools.find((school) => school.id === selectedSchoolId)?.name || "",
-          updatedAt: serverTimestamp(),
-        })
       }
 
       const nextSchoolName = schools.find((school) => school.id === selectedSchoolId)?.name || ""

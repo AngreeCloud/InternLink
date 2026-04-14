@@ -282,3 +282,40 @@ test("professor pendente só pode alterar schoolId/escola/updatedAt em pendingRe
     })
   );
 });
+
+test("admin escolar consegue aprovar pendingRegistration de professor da sua escola", async () => {
+  const dbAdminSchoolA = testEnv.authenticatedContext("adminSchoolA").firestore();
+
+  await assertSucceeds(
+    updateDoc(doc(dbAdminSchoolA, "pendingRegistrations", "pendingProfSchoolA"), {
+      estado: "ativo",
+      reviewedAt: 1735776000000,
+      reviewedBy: "adminSchoolA",
+    })
+  );
+});
+
+test("admin escolar não consegue aprovar pendingRegistration de outra escola", async () => {
+  const dbAdminSchoolA = testEnv.authenticatedContext("adminSchoolA").firestore();
+
+  await assertFails(
+    updateDoc(doc(dbAdminSchoolA, "pendingRegistrations", "pendingProfSchoolB"), {
+      estado: "ativo",
+      reviewedAt: 1735776000000,
+      reviewedBy: "adminSchoolA",
+    })
+  );
+});
+
+test("admin escolar não consegue alterar campos sensíveis em pendingRegistration", async () => {
+  const dbAdminSchoolA = testEnv.authenticatedContext("adminSchoolA").firestore();
+
+  await assertFails(
+    updateDoc(doc(dbAdminSchoolA, "pendingRegistrations", "pendingProfSchoolA"), {
+      estado: "ativo",
+      reviewedAt: 1735776000000,
+      reviewedBy: "adminSchoolA",
+      schoolId: "schoolB",
+    })
+  );
+});

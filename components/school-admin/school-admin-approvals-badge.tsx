@@ -13,20 +13,17 @@ type Props = {
 export function SchoolAdminApprovalsBadge({ schoolId, isActive = false }: Props) {
   const [pendingTeacherIds, setPendingTeacherIds] = useState<string[]>([]);
   const [pendingUserIds, setPendingUserIds] = useState<string[]>([]);
-  const [pendingRegistrationIds, setPendingRegistrationIds] = useState<string[]>([]);
 
   useEffect(() => {
     let active = true;
     let unsubPendingTeachers = () => {};
     let unsubUsers = () => {};
-    let unsubPendingRegistrations = () => {};
 
     (async () => {
       if (!schoolId) {
         if (active) {
           setPendingTeacherIds([]);
           setPendingUserIds([]);
-          setPendingRegistrationIds([]);
         }
         return;
       }
@@ -61,36 +58,18 @@ export function SchoolAdminApprovalsBadge({ schoolId, isActive = false }: Props)
           setPendingUserIds([]);
         }
       );
-
-      unsubPendingRegistrations = onSnapshot(
-        query(
-          collection(db, "pendingRegistrations"),
-          where("schoolId", "==", schoolId),
-          where("role", "==", "professor"),
-          where("estado", "==", "pendente")
-        ),
-        (snapshot) => {
-          if (!active) return;
-          setPendingRegistrationIds(snapshot.docs.map((docSnap) => docSnap.id));
-        },
-        () => {
-          if (!active) return;
-          setPendingRegistrationIds([]);
-        }
-      );
     })();
 
     return () => {
       active = false;
       unsubPendingTeachers();
       unsubUsers();
-      unsubPendingRegistrations();
     };
   }, [schoolId]);
 
   const pendingCount = useMemo(() => {
-    return new Set([...pendingTeacherIds, ...pendingUserIds, ...pendingRegistrationIds]).size;
-  }, [pendingTeacherIds, pendingRegistrationIds, pendingUserIds]);
+    return new Set([...pendingTeacherIds, ...pendingUserIds]).size;
+  }, [pendingTeacherIds, pendingUserIds]);
 
   if (pendingCount <= 0) {
     return null;

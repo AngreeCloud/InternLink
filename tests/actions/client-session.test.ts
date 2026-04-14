@@ -7,7 +7,7 @@ vi.mock("@/lib/firebase-runtime", () => ({
   getAuthRuntime: (...args: unknown[]) => mockGetAuthRuntime(...args),
 }));
 
-import { createServerSession } from "@/lib/auth/client-session";
+import { createServerSession, waitForLogoutTransition } from "@/lib/auth/client-session";
 
 describe("createServerSession", () => {
   beforeEach(() => {
@@ -91,5 +91,47 @@ describe("createServerSession", () => {
 
     expect(mockGetIdToken).toHaveBeenCalledTimes(4);
     expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe("waitForLogoutTransition", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  it("waits at least the minimum overlay duration when logout resolves early", async () => {
+    const transitionPromise = waitForLogoutTransition(Promise.resolve(), 1000, { maxWaitMs: 5000 });
+
+    let settled = false;
+    void transitionPromise.then(() => {
+      settled = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(900);
+    expect(settled).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(100);
+    await transitionPromise;
+    expect(settled).toBe(true);
+  });
+
+  it("does not hang forever when logout promise never settles", async () => {
+    const neverSettles = new Promise<void>(() => {
+      // Intentionally unresolved.
+    });
+
+    const transitionPromise = waitForLogoutTransition(neverSettles, 1000, { maxWaitMs: 1200 });
+
+    let settled = false;
+    void transitionPromise.then(() => {
+      settled = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(settled).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(100);
+    await transitionPromise;
+    expect(settled).toBe(true);
   });
 });

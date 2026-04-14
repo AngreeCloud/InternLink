@@ -109,9 +109,8 @@ export async function registerAluno(data: z.input<typeof alunoRegisterActionSche
   const user = userCredential.user;
   const userId = user.uid;
 
-  // Store registration data in pendingRegistrations collection
-  // This will be used to create the user document after email verification
-  const pendingRegistrationData = {
+  // Store the account directly in users as the source of truth.
+    const userData = {
     role: "aluno",
     nome,
     email,
@@ -129,8 +128,7 @@ export async function registerAluno(data: z.input<typeof alunoRegisterActionSche
   };
 
   try {
-    // Store pending registration data
-    await setDoc(doc(db, "pendingRegistrations", userId), pendingRegistrationData);
+      await setDoc(doc(db, "users", userId), userData);
     
     // Send email verification
     await sendEmailVerification(user);
@@ -162,8 +160,8 @@ export async function registerProfessor(data: z.input<typeof professorRegisterAc
   const user = userCredential.user;
   const userId = user.uid;
 
-  // Store registration data in pendingRegistrations collection
-  const pendingRegistrationData = {
+  // Store the account directly in users as the source of truth.
+    const userData = {
     role: "professor",
     nome,
     email,
@@ -179,8 +177,7 @@ export async function registerProfessor(data: z.input<typeof professorRegisterAc
   };
 
   try {
-    // Store pending registration data
-    await setDoc(doc(db, "pendingRegistrations", userId), pendingRegistrationData);
+      await setDoc(doc(db, "users", userId), userData);
     
     // Send email verification
     await sendEmailVerification(user);

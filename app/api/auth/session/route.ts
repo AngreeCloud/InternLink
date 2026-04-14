@@ -65,37 +65,6 @@ export async function POST(request: Request) {
       estado: typeof decoded.estado === "string" ? decoded.estado : null,
     });
 
-    const tokenClaims = readTokenClaims(decoded);
-
-    if (tokenClaims) {
-      const sessionCookie = await auth.createSessionCookie(idToken, {
-        expiresIn: SESSION_EXPIRES_IN_MS,
-      });
-      logAuthSessionDebug("session_cookie_created", {
-        uid: decoded.uid,
-        expiresInMs: SESSION_EXPIRES_IN_MS,
-        secure: isProduction(),
-        source: "token_claims",
-      });
-
-      const response = NextResponse.json({
-        ok: true,
-        role: tokenClaims.role,
-        estado: tokenClaims.estado,
-      });
-      response.cookies.set({
-        name: SESSION_COOKIE_NAME,
-        value: sessionCookie,
-        httpOnly: true,
-        secure: isProduction(),
-        sameSite: "lax",
-        path: "/",
-        maxAge: Math.floor(SESSION_EXPIRES_IN_MS / 1000),
-      });
-
-      return response;
-    }
-
     const db = getFirebaseAdminDb();
 
     const claimsSync = await ensureUserClaims(auth, db, decoded.uid);

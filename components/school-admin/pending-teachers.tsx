@@ -15,8 +15,13 @@ type PendingTeacher = {
   email: string;
   createdAt: Date | null;
   hasUserDoc: boolean;
-  source: "pendingTeacherDoc" | "userDoc" | "pendingRegistration";
+  source: "pendingTeacherDoc" | "userDoc";
 };
+
+function getPendingTeacherPriority(teacher: PendingTeacher) {
+  if (teacher.hasUserDoc || teacher.source === "userDoc") return 3;
+  return 1;
+}
 
 
 
@@ -43,11 +48,6 @@ export function PendingTeachersSection({
   const [queryText, setQueryText] = useState("");
 
   const handleTeacherDecision = async (teacher: PendingTeacher, decision: "aprovado" | "recusado") => {
-    if (!teacher.hasUserDoc) {
-      setActionError("Este pedido ainda não tem perfil finalizado. O professor deve concluir o registo para poder ser aprovado.");
-      return;
-    }
-
     setActionError("");
     setActionSuccess("");
     setActingTeacherId(teacher.id);
@@ -59,16 +59,20 @@ export function PendingTeachersSection({
       const userRef = doc(db, "users", teacher.id);
       const pendingTeacherRef = doc(db, "schools", schoolId, "pendingTeachers", teacher.id);
       const historyRef = doc(collection(db, "schools", schoolId, "approvalHistory"));
+      const nextStatus = decision === "aprovado" ? "ativo" : "recusado";
 
-      // NOTE: The approvalHistory collection requires isSchoolAdminFor(schoolId) permission.
-      // This component should only be rendered with showActions=true in school-admin contexts.
-      // Firestore will deny the batch if the user lacks write permission on approvalHistory.
-      batch.update(userRef, {
-        estado: decision === "aprovado" ? "ativo" : "recusado",
-        reviewedAt: serverTimestamp(),
-        reviewedBy: userId,
-      });
-      batch.delete(pendingTeacherRef);
+      if (teacher.hasUserDoc) {
+        batch.update(userRef, {
+          estado: nextStatus,
+          reviewedAt: serverTimestamp(),
+          reviewedBy: userId,
+        });
+        batch.delete(pendingTeacherRef);
+      } else {
+        setActionError("Pedido legado sem conta associada em utilizadores. Execute a migração antes de aprovar/recusar.");
+        return;
+      }
+
       batch.set(historyRef, {
         teacherId: teacher.id,
         teacherName: teacher.name,
@@ -162,44 +166,18 @@ export function PendingTeachersSection({
           })
           .filter((teacher): teacher is Exclude<typeof teacher, null> => teacher !== null);
 
-        const pendingRegistrationsSnapshot = await getDocs(
-          query(
-            collection(db, "pendingRegistrations"),
-            where("role", "==", "professor"),
-            where("estado", "==", "pendente"),
-            where("schoolId", "==", schoolId)
-          )
-        );
-
-        const pendingRegistrationsTeachers = pendingRegistrationsSnapshot.docs.map((docSnap) => {
-          const docData = docSnap.data() as {
-            nome?: string;
-            email?: string;
-            createdAt?: { toDate?: () => Date };
-          };
-
-          return {
-            id: docSnap.id,
-            name: docData.nome || "—",
-            email: docData.email || "—",
-            createdAt: docData.createdAt?.toDate ? docData.createdAt.toDate() : null,
-            hasUserDoc: false,
-            source: "pendingRegistration" as const,
-          } satisfies PendingTeacher;
-        });
-
         if (!active) return;
 
         const usersById = new Set(usersPendingTeachers.map((teacher) => teacher.id));
         const mergedById = new Map<string, PendingTeacher>();
 
-        for (const teacher of [...pendingTeachers, ...pendingRegistrationsTeachers, ...usersPendingTeachers]) {
+        for (const teacher of [...pendingTeachers, ...usersPendingTeachers]) {
           const nextTeacher = usersById.has(teacher.id)
             ? { ...teacher, hasUserDoc: true }
             : teacher;
 
           const existing = mergedById.get(teacher.id);
-          if (!existing || (!existing.hasUserDoc && nextTeacher.hasUserDoc)) {
+          if (!existing || getPendingTeacherPriority(nextTeacher) > getPendingTeacherPriority(existing)) {
             mergedById.set(teacher.id, nextTeacher);
           }
         }
@@ -281,7 +259,7 @@ export function PendingTeachersSection({
                         size="sm"
                         onClick={() => handleTeacherDecision(teacher, "aprovado")}
                         disabled={actingTeacherId === teacher.id || !teacher.hasUserDoc}
-                        title={!teacher.hasUserDoc ? "Aguardar finalização do registo do professor" : ""}
+                        title={!teacher.hasUserDoc ? "Pedido legado sem conta associada em utilizadores" : ""}
                       >
                         Aprovar
                       </Button>
@@ -290,16 +268,16 @@ export function PendingTeachersSection({
                         variant="outline"
                         onClick={() => handleTeacherDecision(teacher, "recusado")}
                         disabled={actingTeacherId === teacher.id || !teacher.hasUserDoc}
-                        title={!teacher.hasUserDoc ? "Aguardar finalização do registo do professor" : ""}
+                        title={!teacher.hasUserDoc ? "Pedido legado sem conta associada em utilizadores" : ""}
                       >
                         Recusar
                       </Button>
                     </div>
                   ) : null}
                 </div>
-                {!teacher.hasUserDoc && (
+                {teacher.source === "pendingTeacherDoc" && (
                   <p className="mt-1 text-xs text-amber-700">
-                    Pedido recebido. A aprovação fica disponível após finalização do perfil do professor.
+                    Pedido legado sem conta associada em utilizadores. Execute a migração para permitir a decisão.
                   </p>
                 )}
               </div>

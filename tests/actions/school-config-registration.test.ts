@@ -113,7 +113,7 @@ function mockPendingRegistrationSuccess() {
 
 function expectPendingRegistration(uid: string, data: Record<string, unknown>) {
   expect(mockSetDoc).toHaveBeenCalledWith(
-    expect.objectContaining({ path: `pendingRegistrations/${uid}` }),
+    expect.objectContaining({ path: `users/${uid}` }),
     expect.objectContaining(data)
   );
 }

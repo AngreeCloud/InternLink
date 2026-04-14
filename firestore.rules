@@ -170,6 +170,21 @@ service cloud.firestore {
           .hasOnly(["schoolId", "escola", "updatedAt"]);
     }
 
+    function isSchoolAdminPendingRegistrationDecision() {
+      return isSchoolAdmin()
+        && resource.data.role == "professor"
+        && resource.data.schoolId == currentUserData().schoolId
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.schoolId == resource.data.schoolId
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.emailVerified == resource.data.emailVerified
+        && request.resource.data.estado in ["ativo", "recusado"]
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly(["estado", "reviewedAt", "reviewedBy"]);
+    }
+
     // USERS
     match /users/{userId} {
       allow read: if isSelf(userId)
@@ -186,6 +201,14 @@ service cloud.firestore {
 
       // Criação final de utilizadores vindos de pendingRegistrations (aluno/professor).
       allow create: if (
+        isSelf(userId)
+        && request.resource.data.role in ["aluno", "professor"]
+        && request.resource.data.estado == "pendente"
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.emailVerified == request.auth.token.email_verified
+      )
+      // Criação final de utilizadores vindos de pendingRegistrations (legado).
+      || (
         isSelf(userId)
         && pendingRegistrationExists(userId)
         && request.resource.data.role == pendingRegistrationData(userId).role
@@ -238,7 +261,8 @@ service cloud.firestore {
       allow delete: if isSelf(userId);
 
       // Professor pendente pode alterar escola de associação mantendo os restantes campos imutáveis.
-      allow update: if isProfessorPendingRegistrationSchoolChange(userId);
+      allow update: if isProfessorPendingRegistrationSchoolChange(userId)
+        || isSchoolAdminPendingRegistrationDecision();
     }
 
     // SCHOOLS + FOLDERS + PENDING TEACHERS
