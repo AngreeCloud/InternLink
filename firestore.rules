@@ -202,6 +202,14 @@ service cloud.firestore {
       // Criação final de utilizadores vindos de pendingRegistrations (aluno/professor).
       allow create: if (
         isSelf(userId)
+        && request.resource.data.role in ["aluno", "professor"]
+        && request.resource.data.estado == "pendente"
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.emailVerified == request.auth.token.email_verified
+      )
+      // Criação final de utilizadores vindos de pendingRegistrations (legado).
+      || (
+        isSelf(userId)
         && pendingRegistrationExists(userId)
         && request.resource.data.role == pendingRegistrationData(userId).role
         && request.resource.data.estado == pendingRegistrationData(userId).estado

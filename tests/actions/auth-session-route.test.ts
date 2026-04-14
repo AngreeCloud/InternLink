@@ -180,6 +180,43 @@ describe("/api/auth/session route", () => {
     expect(mockCreateSessionCookie).not.toHaveBeenCalled();
   });
 
+  it("creates session cookie from pendingRegistrations when users doc does not exist", async () => {
+    const { POST } = await import("@/app/api/auth/session/route");
+
+    mockVerifyIdToken.mockResolvedValueOnce({
+      uid: "uid-pending",
+      role: "professor",
+      estado: "pendente",
+    });
+    mockGetUser.mockResolvedValueOnce({
+      customClaims: { role: "professor", estado: "pendente" },
+    });
+    mockUserDocGet.mockResolvedValueOnce({
+      exists: false,
+      data: () => null,
+    });
+    mockUserDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ role: "professor", estado: "pendente" }),
+    });
+    mockCreateSessionCookie.mockResolvedValueOnce("session-cookie-value");
+
+    const request = new Request("http://localhost/api/auth/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken: "token-pending" }),
+    });
+
+    const response = await POST(request);
+    const payload = (await response.json()) as { ok?: boolean; role?: string; estado?: string };
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.role).toBe("professor");
+    expect(payload.estado).toBe("pendente");
+    expect(mockCreateSessionCookie).toHaveBeenCalledTimes(1);
+  });
+
   it("returns 400 when idToken is missing", async () => {
     const { POST } = await import("@/app/api/auth/session/route");
 

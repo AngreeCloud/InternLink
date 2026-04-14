@@ -14,6 +14,7 @@ const mockDoc = vi.fn();
 const mockCreateServerSession = vi.fn();
 const mockGetLoginRedirectRoute = vi.fn();
 const mockAccessValidationOverlay = vi.fn();
+const mockFinalizePendingRegistration = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => mockRouter,
@@ -45,7 +46,7 @@ vi.mock("@/lib/firebase-runtime", () => ({
 }));
 
 vi.mock("@/lib/verification", () => ({
-  finalizePendingRegistration: vi.fn(),
+  finalizePendingRegistration: (...args: unknown[]) => mockFinalizePendingRegistration(...args),
   isVerificationBypassEnabled: () => false,
 }));
 
@@ -127,14 +128,18 @@ async function flush() {
 }
 
 async function fillCredentialsAndSubmit(renderer: TestRenderer.ReactTestRenderer, email: string, password: string) {
-  const root = renderer.root;
+  const root = renderer.root as any;
 
   const emailInput = root.findByProps({ id: "email" });
   const passwordInput = root.findByProps({ id: "password" });
 
   await act(async () => {
-    emailInput.props.onChange({ target: { value: email } });
-    passwordInput.props.onChange({ target: { value: password } });
+    (emailInput.props as { onChange: (event: { target: { value: string } }) => void }).onChange({
+      target: { value: email },
+    });
+    (passwordInput.props as { onChange: (event: { target: { value: string } }) => void }).onChange({
+      target: { value: password },
+    });
   });
 
   const form = root.findByType("form");
@@ -153,6 +158,7 @@ beforeEach(() => {
   mockGetDoc.mockResolvedValue(makeDocSnapshot({ role: "aluno", estado: "ativo" }));
   mockCreateServerSession.mockResolvedValue({ role: "aluno", estado: "ativo" });
   mockGetLoginRedirectRoute.mockReturnValue("/dashboard");
+  mockFinalizePendingRegistration.mockResolvedValue({ role: "professor", estado: "pendente", schoolId: "school-1" });
 });
 
 afterEach(() => {
@@ -200,5 +206,31 @@ describe("LoginForm transition behavior", () => {
     expect(mockRouterPrefetch).toHaveBeenCalledWith("/dashboard");
     expect(mockRouterPush).toHaveBeenCalledWith("/dashboard");
     expect(mockAccessValidationOverlay).toHaveBeenCalled();
+  });
+
+  it("redireciona conta pendente para account-status mesmo sem user doc", async () => {
+    mockSignInWithEmailAndPassword.mockResolvedValue({
+      user: {
+        uid: "uid-pendente",
+        email: "prof@escola.pt",
+        emailVerified: false,
+      },
+    });
+    mockGetDoc.mockResolvedValueOnce(makeDocSnapshot({}, false));
+    mockCreateServerSession.mockResolvedValueOnce({ role: "professor", estado: "pendente" });
+    mockGetLoginRedirectRoute.mockReturnValueOnce("/account-status");
+    mockFinalizePendingRegistration.mockResolvedValueOnce({ role: "professor", estado: "pendente", schoolId: "school-1" });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(<LoginForm />);
+    });
+
+    await fillCredentialsAndSubmit(renderer, "prof@escola.pt", "senha-correta");
+    await flush();
+
+    expect(mockRouterPrefetch).toHaveBeenCalledWith("/account-status");
+    expect(mockRouterPush).toHaveBeenCalledWith("/account-status");
+    expect(mockRouterPush).not.toHaveBeenCalledWith("/verify-email?email=prof%40escola.pt");
   });
 });

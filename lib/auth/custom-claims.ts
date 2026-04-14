@@ -25,12 +25,14 @@ export async function ensureUserClaims(
   uid: string
 ): Promise<EnsureUserClaimsResult> {
   const userDoc = await db.collection("users").doc(uid).get();
+  const pendingDoc = userDoc.exists ? null : await db.collection("pendingRegistrations").doc(uid).get();
 
-  if (!userDoc.exists) {
+  if (!userDoc.exists && !pendingDoc?.exists) {
     throw new Error(`Utilizador ${uid} não encontrado para sincronizar custom claims.`);
   }
 
-  const userData = userDoc.data() as UserClaims;
+  const sourceDoc = userDoc.exists ? userDoc : pendingDoc;
+  const userData = sourceDoc?.data() as UserClaims;
   const role = normalizeClaimValue(userData.role);
   const estado = normalizeClaimValue(userData.estado);
 

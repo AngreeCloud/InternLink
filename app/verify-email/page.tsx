@@ -29,15 +29,15 @@ export default function EmailVerificationPage() {
   const email = searchParams.get("email") || state.email;
 
   const resolveAndRedirectWithoutFinalizing = async (userId: string, db: Firestore) => {
-    const pendingSnap = await getDoc(doc(db, "pendingRegistrations", userId));
+    const userSnap = await getDoc(doc(db, "users", userId));
 
-    if (!pendingSnap.exists()) {
+    if (!userSnap.exists()) {
       setState((s) => ({ ...s, error: "Dados de registo não encontrados" }));
       return;
     }
 
-    const pendingData = pendingSnap.data() as { role?: string; estado?: string };
-    redirectBasedOnRole(pendingData.role || "", pendingData.estado || "pendente");
+    const userData = userSnap.data() as { role?: string; estado?: string };
+    redirectBasedOnRole(userData.role || "", userData.estado || "pendente");
   };
 
   useEffect(() => {
@@ -67,32 +67,31 @@ export default function EmailVerificationPage() {
           const userDocSnap = await getDoc(doc(db, "users", user.uid));
 
           if (userDocSnap.exists()) {
-            // User already has a document, redirect to appropriate page
             const userData = userDocSnap.data() as { role?: string; estado?: string };
             setState((s) => ({ ...s, role: userData.role || "" }));
-            redirectBasedOnRole(userData.role || "", userData.estado || "");
-          } else {
+
             if (!user.emailVerified && isVerificationBypassEnabled()) {
               await resolveAndRedirectWithoutFinalizing(user.uid, db);
               return;
             }
 
-            // User verified email but no document exists yet
-            // Check pendingRegistrations and create user document
             await createUserDocumentFromPending(user.uid, db);
+            return;
           }
+
+          if (!user.emailVerified && isVerificationBypassEnabled()) {
+            setState((s) => ({ ...s, error: "Dados de registo não encontrados" }));
+            return;
+          }
+
+          // Legacy fallback: finalize from pending source when user doc is absent.
+          await createUserDocumentFromPending(user.uid, db);
         } else {
           const userDocSnap = await getDoc(doc(db, "users", user.uid));
 
           if (userDocSnap.exists()) {
             const userData = userDocSnap.data() as { role?: string };
             setState((s) => ({ ...s, role: userData.role || "" }));
-          } else {
-            const pendingSnap = await getDoc(doc(db, "pendingRegistrations", user.uid));
-            if (pendingSnap.exists()) {
-              const pendingData = pendingSnap.data() as { role?: string };
-              setState((s) => ({ ...s, role: pendingData.role || "" }));
-            }
           }
 
           // Email not verified, set up periodic check
@@ -249,7 +248,14 @@ export default function EmailVerificationPage() {
       }
 
       if (!user.emailVerified) {
-        await resolveAndRedirectWithoutFinalizing(user.uid, db);
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (!userDoc.exists()) {
+          setState((s) => ({ ...s, error: "Dados de registo não encontrados" }));
+          return;
+        }
+
+        const userData = userDoc.data() as { role?: string; estado?: string };
+        redirectBasedOnRole(userData.role || "", userData.estado || "pendente");
         return;
       }
 

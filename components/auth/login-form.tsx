@@ -105,22 +105,6 @@ export function LoginForm() {
         : null
       
       if (!userData) {
-        if (verificationBypassEnabled && !user.emailVerified) {
-          const pendingSnap = await getDoc(doc(db, "pendingRegistrations", user.uid))
-
-          if (!pendingSnap.exists()) {
-            await signOut(auth)
-            setError("Não encontrámos uma conta associada a este login Google. Registe-se para continuar.")
-            return
-          }
-
-          const pendingData = pendingSnap.data() as { role?: string; estado?: string; schoolId?: string }
-          userData = {
-            role: pendingData.role,
-            estado: pendingData.estado,
-            schoolId: pendingData.schoolId,
-          }
-        } else {
         const finalizedUser = await finalizePendingRegistration(db, user.uid, {
           markEmailVerified: user.emailVerified,
         })
@@ -132,7 +116,6 @@ export function LoginForm() {
         }
 
         userData = finalizedUser
-        }
       }
 
       const role = userData.role || ""
@@ -209,12 +192,6 @@ export function LoginForm() {
       const verificationBypassEnabled = isVerificationBypassEnabled()
 
       // Check if email is verified
-      if (!user.emailVerified && !verificationBypassEnabled) {
-        // User needs to verify email first
-        router.push(`/verify-email?email=${encodeURIComponent(user.email || email)}`)
-        return
-      }
-
       const userSnap = await getDoc(doc(db, "users", user.uid))
       if (!userSnap.exists()) {
         const finalizedUser = await finalizePendingRegistration(db, user.uid, {
