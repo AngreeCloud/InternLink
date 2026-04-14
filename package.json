@@ -30,6 +30,8 @@
     "migrate:claims:apply": "node scripts/migrate-user-claims.js --apply",
     "migrate:estagios:check": "node scripts/migrate-estagios-current-shape.js",
     "migrate:estagios:apply": "node scripts/migrate-estagios-current-shape.js --apply",
+    "migrate:pending-teachers:check": "node scripts/migrate-pending-teachers-to-pending-registrations.js",
+    "migrate:pending-teachers:apply": "node scripts/migrate-pending-teachers-to-pending-registrations.js --apply",
     "start": "next start",
     "test:rules": "firebase emulators:exec --only firestore,database \"node tests/firestore/run-rules-tests.mjs\"",
     "test:unit": "vitest run tests/actions",

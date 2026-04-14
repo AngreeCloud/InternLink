@@ -18,6 +18,12 @@ type PendingTeacher = {
   source: "pendingTeacherDoc" | "userDoc" | "pendingRegistration";
 };
 
+function getPendingTeacherPriority(teacher: PendingTeacher) {
+  if (teacher.hasUserDoc || teacher.source === "userDoc") return 3;
+  if (teacher.source === "pendingRegistration") return 2;
+  return 1;
+}
+
 
 
 export function PendingTeachersSection({
@@ -43,11 +49,6 @@ export function PendingTeachersSection({
   const [queryText, setQueryText] = useState("");
 
   const handleTeacherDecision = async (teacher: PendingTeacher, decision: "aprovado" | "recusado") => {
-    if (!teacher.hasUserDoc) {
-      setActionError("Este pedido ainda não tem perfil finalizado. O professor deve concluir o registo para poder ser aprovado.");
-      return;
-    }
-
     setActionError("");
     setActionSuccess("");
     setActingTeacherId(teacher.id);
@@ -58,17 +59,28 @@ export function PendingTeachersSection({
 
       const userRef = doc(db, "users", teacher.id);
       const pendingTeacherRef = doc(db, "schools", schoolId, "pendingTeachers", teacher.id);
+      const pendingRegistrationRef = doc(db, "pendingRegistrations", teacher.id);
       const historyRef = doc(collection(db, "schools", schoolId, "approvalHistory"));
+      const nextStatus = decision === "aprovado" ? "ativo" : "recusado";
 
-      // NOTE: The approvalHistory collection requires isSchoolAdminFor(schoolId) permission.
-      // This component should only be rendered with showActions=true in school-admin contexts.
-      // Firestore will deny the batch if the user lacks write permission on approvalHistory.
-      batch.update(userRef, {
-        estado: decision === "aprovado" ? "ativo" : "recusado",
-        reviewedAt: serverTimestamp(),
-        reviewedBy: userId,
-      });
-      batch.delete(pendingTeacherRef);
+      if (teacher.hasUserDoc) {
+        batch.update(userRef, {
+          estado: nextStatus,
+          reviewedAt: serverTimestamp(),
+          reviewedBy: userId,
+        });
+        batch.delete(pendingTeacherRef);
+      } else if (teacher.source === "pendingRegistration") {
+        batch.update(pendingRegistrationRef, {
+          estado: nextStatus,
+          reviewedAt: serverTimestamp(),
+          reviewedBy: userId,
+        });
+      } else {
+        setActionError("Pedido legado sem registo pendente associado. Execute a migração antes de aprovar/recusar.");
+        return;
+      }
+
       batch.set(historyRef, {
         teacherId: teacher.id,
         teacherName: teacher.name,
@@ -93,7 +105,9 @@ export function PendingTeachersSection({
       setTeachers((current) => current.filter((currentTeacher) => currentTeacher.id !== teacher.id));
       setActionSuccess(
         decision === "aprovado"
-          ? "Professor aprovado com sucesso."
+          ? teacher.hasUserDoc
+            ? "Professor aprovado com sucesso."
+            : "Aprovação registada no pedido pendente. A conta ficará ativa após verificação de email."
           : "Professor recusado e removido da lista de pendentes."
       );
     } catch (error) {
@@ -199,7 +213,7 @@ export function PendingTeachersSection({
             : teacher;
 
           const existing = mergedById.get(teacher.id);
-          if (!existing || (!existing.hasUserDoc && nextTeacher.hasUserDoc)) {
+          if (!existing || getPendingTeacherPriority(nextTeacher) > getPendingTeacherPriority(existing)) {
             mergedById.set(teacher.id, nextTeacher);
           }
         }
@@ -280,8 +294,8 @@ export function PendingTeachersSection({
                       <Button
                         size="sm"
                         onClick={() => handleTeacherDecision(teacher, "aprovado")}
-                        disabled={actingTeacherId === teacher.id || !teacher.hasUserDoc}
-                        title={!teacher.hasUserDoc ? "Aguardar finalização do registo do professor" : ""}
+                        disabled={actingTeacherId === teacher.id || teacher.source === "pendingTeacherDoc"}
+                        title={teacher.source === "pendingTeacherDoc" ? "Pedido legado sem referência pendente" : ""}
                       >
                         Aprovar
                       </Button>
@@ -289,17 +303,22 @@ export function PendingTeachersSection({
                         size="sm"
                         variant="outline"
                         onClick={() => handleTeacherDecision(teacher, "recusado")}
-                        disabled={actingTeacherId === teacher.id || !teacher.hasUserDoc}
-                        title={!teacher.hasUserDoc ? "Aguardar finalização do registo do professor" : ""}
+                        disabled={actingTeacherId === teacher.id || teacher.source === "pendingTeacherDoc"}
+                        title={teacher.source === "pendingTeacherDoc" ? "Pedido legado sem referência pendente" : ""}
                       >
                         Recusar
                       </Button>
                     </div>
                   ) : null}
                 </div>
-                {!teacher.hasUserDoc && (
+                {!teacher.hasUserDoc && teacher.source !== "pendingTeacherDoc" && (
                   <p className="mt-1 text-xs text-amber-700">
-                    Pedido recebido. A aprovação fica disponível após finalização do perfil do professor.
+                    Pedido pendente ainda sem perfil finalizado. Pode decidir já; a decisão será aplicada quando o professor concluir a verificação.
+                  </p>
+                )}
+                {teacher.source === "pendingTeacherDoc" && (
+                  <p className="mt-1 text-xs text-amber-700">
+                    Pedido legado sem referência de registo pendente. Execute a migração para permitir a decisão.
                   </p>
                 )}
               </div>
