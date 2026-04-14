@@ -44,6 +44,7 @@ export function LoginForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [error, setError] = useState("")
@@ -192,7 +193,7 @@ export function LoginForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
+    setIsSubmitting(true)
     setError("")
 
     try {
@@ -228,13 +229,14 @@ export function LoginForm() {
       }
 
       const session = await createServerSession(user)
+      setIsLoading(true)
       redirectBasedOnRole(session.role, session.estado)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setError(message.includes("Firebase config") ? message : "Erro ao fazer login. Verifique as suas credenciais e tente novamente.")
       console.error(err)
     } finally {
-      setIsLoading(false)
+      setIsSubmitting(false)
     }
   }
 
@@ -308,8 +310,8 @@ export function LoginForm() {
         </CardContent>
 
         <CardFooter className="flex flex-col space-y-4">
-          <Button type="submit" className="w-full mt-1" disabled={isLoading}>
-            {isLoading ? "A entrar..." : "Entrar"}
+          <Button type="submit" className="w-full mt-1" disabled={isSubmitting || isLoading}>
+            {isSubmitting ? "A entrar..." : "Entrar"}
           </Button>
 
           <div className="relative">
