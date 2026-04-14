@@ -227,9 +227,13 @@ service cloud.firestore {
       || (
         isSelf(userId)
         && request.resource.data.role == "tutor"
-        && request.resource.data.estado == "ativo"
+        && request.resource.data.estado in ["ativo", "inativo"]
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.emailVerified == request.auth.token.email_verified
+        && (
+          (request.auth.token.email_verified == true && request.resource.data.estado == "ativo")
+          || (request.auth.token.email_verified != true && request.resource.data.estado == "inativo")
+        )
       );
 
       // Permite ao próprio editar campos de perfil e re-solicitar acesso (professor removido/recusado).

@@ -181,7 +181,11 @@ export default function EmailVerificationPage() {
         router.replace("/account-status");
       }
     } else if (role === "tutor") {
-      router.replace("/tutor");
+      if (estado === "ativo") {
+        router.replace("/tutor");
+      } else {
+        router.replace("/account-status");
+      }
     } else {
       router.replace("/account-status");
     }

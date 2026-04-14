@@ -39,6 +39,7 @@ export async function finalizePendingRegistration(
       doc(db, "users", userId),
       {
         ...userData,
+        ...(role === "tutor" && options?.markEmailVerified ? { estado: "ativo" } : {}),
         emailVerified: options?.markEmailVerified ?? true,
         updatedAt: serverTimestamp(),
       },

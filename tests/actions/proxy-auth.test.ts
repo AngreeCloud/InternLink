@@ -50,6 +50,19 @@ describe("proxy auth + role checks", () => {
     expect(response.headers.get("location")).toBe("http://localhost/account-status");
   });
 
+  it("blocks tutor access to /tutor when tutor is not active", async () => {
+    mockValidateFirebaseSessionJwt.mockResolvedValueOnce({
+      uid: "user-4",
+      exp: Math.floor(Date.now() / 1000) + 600,
+      role: "tutor",
+      estado: "inativo",
+    });
+
+    const response = await proxy(createProxyRequest("/tutor", "cookie-4"));
+
+    expect(response.headers.get("location")).toBe("http://localhost/account-status");
+  });
+
   it("allows matching role and caches verification", async () => {
     mockValidateFirebaseSessionJwt.mockResolvedValue({
       uid: "user-2",

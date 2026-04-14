@@ -215,7 +215,7 @@ export async function registerTutor(data: z.input<typeof tutorRegisterActionSche
     dataNascimento: dataNascimento || "",
     localidade: localidade || "",
     telefone: telefone || "",
-    estado: "ativo",
+    estado: user.emailVerified ? "ativo" : "inativo",
     emailVerified: user.emailVerified,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
