@@ -4,12 +4,13 @@ import { useEffect, useState, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { onAuthStateChanged, sendEmailVerification, signOut } from "firebase/auth";
-import { doc, getDoc, type Firestore } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Mail, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
 import { finalizePendingRegistration, isVerificationBypassEnabled } from "@/lib/verification";
+import { createServerSession } from "@/lib/auth/client-session";
 
 export default function EmailVerificationPage() {
   const searchParams = useSearchParams();
@@ -25,19 +26,32 @@ export default function EmailVerificationPage() {
   });
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const cooldownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const hasNavigatedRef = useRef(false);
 
   const email = searchParams.get("email") || state.email;
 
-  const resolveAndRedirectWithoutFinalizing = async (userId: string, db: Firestore) => {
-    const userSnap = await getDoc(doc(db, "users", userId));
+  const navigateOnce = (href: string) => {
+    if (hasNavigatedRef.current) return;
+    hasNavigatedRef.current = true;
+    router.replace(href);
+  };
 
-    if (!userSnap.exists()) {
-      setState((s) => ({ ...s, error: "Dados de registo não encontrados" }));
+  const completeSessionAndRedirect = async (role: string, estado: string) => {
+    const auth = await getAuthRuntime();
+    const user = auth.currentUser;
+
+    if (!user) {
+      navigateOnce("/login");
       return;
     }
 
-    const userData = userSnap.data() as { role?: string; estado?: string };
-    redirectBasedOnRole(userData.role || "", userData.estado || "pendente");
+    try {
+      const session = await createServerSession(user);
+      redirectBasedOnRole(session.role || role, session.estado || estado);
+    } catch {
+      // Fallback to role-based redirect if server session sync is temporarily unavailable.
+      redirectBasedOnRole(role, estado);
+    }
   };
 
   useEffect(() => {
@@ -50,7 +64,7 @@ export default function EmailVerificationPage() {
       unsubscribe = onAuthStateChanged(auth, async (user) => {
         if (!user) {
           setState((s) => ({ ...s, loading: false, error: "Não autenticado" }));
-          router.replace("/login");
+          navigateOnce("/login");
           return;
         }
 
@@ -71,7 +85,8 @@ export default function EmailVerificationPage() {
             setState((s) => ({ ...s, role: userData.role || "" }));
 
             if (!user.emailVerified && isVerificationBypassEnabled()) {
-              await resolveAndRedirectWithoutFinalizing(user.uid, db);
+              // In bypass mode, skip state mutation for existing users and treat login flow as active.
+              await completeSessionAndRedirect(userData.role || "", userData.estado || "");
               return;
             }
 
@@ -153,12 +168,11 @@ export default function EmailVerificationPage() {
         setState((s) => ({ ...s, error: "Dados de registo não encontrados" }));
         const auth = await getAuthRuntime();
         await signOut(auth);
-        router.replace("/register");
+        navigateOnce("/register");
         return;
       }
 
-      // Redirect based on role
-      redirectBasedOnRole(finalizedUser.role, finalizedUser.estado);
+      await completeSessionAndRedirect(finalizedUser.role, finalizedUser.estado);
     } catch (error) {
       console.error("Erro ao criar documento de utilizador:", error);
       setState((s) => ({ ...s, error: "Erro ao criar conta. Tente novamente." }));
@@ -166,28 +180,30 @@ export default function EmailVerificationPage() {
   };
 
   const redirectBasedOnRole = (role: string, estado: string) => {
+    const effectiveEstado = verificationBypassEnabled ? "ativo" : estado;
+
     if (role === "admin_escolar") {
-      router.replace("/school-admin");
+      navigateOnce("/school-admin");
     } else if (role === "aluno") {
-      if (estado === "ativo") {
-        router.replace("/dashboard");
+      if (effectiveEstado === "ativo") {
+        navigateOnce("/dashboard");
       } else {
-        router.replace("/waiting");
+        navigateOnce("/waiting");
       }
     } else if (role === "professor") {
-      if (estado === "ativo") {
-        router.replace("/professor");
+      if (effectiveEstado === "ativo") {
+        navigateOnce("/professor");
       } else {
-        router.replace("/account-status");
+        navigateOnce("/account-status");
       }
     } else if (role === "tutor") {
-      if (estado === "ativo") {
-        router.replace("/tutor");
+      if (effectiveEstado === "ativo") {
+        navigateOnce("/tutor");
       } else {
-        router.replace("/account-status");
+        navigateOnce("/account-status");
       }
     } else {
-      router.replace("/account-status");
+      navigateOnce("/account-status");
     }
   };
 

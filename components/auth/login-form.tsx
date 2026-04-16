@@ -51,6 +51,7 @@ export function LoginForm() {
   const router = useRouter()
   const googleLockRef = useRef(false)
   const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ""
+  const verificationBypassEnabled = isVerificationBypassEnabled()
 
   useEffect(() => {
     if (!recaptchaSiteKey) return
@@ -63,7 +64,8 @@ export function LoginForm() {
   }
 
   const redirectBasedOnRole = (role: string, estado: string) => {
-    const href = getLoginRedirectRoute(role, estado)
+    const effectiveEstado = verificationBypassEnabled ? "ativo" : estado
+    const href = getLoginRedirectRoute(role, effectiveEstado)
     router.prefetch(href)
     router.push(href)
   }
@@ -88,7 +90,6 @@ export function LoginForm() {
       const result = await signInWithPopup(auth, provider)
       const user = result.user
       const userEmail = user.email || ""
-      const verificationBypassEnabled = isVerificationBypassEnabled()
 
       setIsGoogleLoading(true)
 
@@ -189,9 +190,12 @@ export function LoginForm() {
       const db = await getDbRuntime()
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
       const user = userCredential.user
-      const verificationBypassEnabled = isVerificationBypassEnabled()
 
-      // Check if email is verified
+      if (!user.emailVerified && !verificationBypassEnabled) {
+        router.push(`/verify-email?email=${encodeURIComponent(user.email || email)}`)
+        return
+      }
+
       const userSnap = await getDoc(doc(db, "users", user.uid))
       if (!userSnap.exists()) {
         const finalizedUser = await finalizePendingRegistration(db, user.uid, {

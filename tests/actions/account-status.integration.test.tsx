@@ -11,6 +11,7 @@ const mockGetDocs = vi.fn();
 const mockGetDoc = vi.fn();
 const mockDoc = vi.fn();
 const mockCollection = vi.fn();
+const mockGetAccountStatusApprovalMessage = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => ({ get: () => null }),
@@ -69,7 +70,7 @@ vi.mock("@/components/auth/school-selector", () => ({
 }));
 
 vi.mock("@/lib/approval-messages", () => ({
-  getAccountStatusApprovalMessage: () => "pending",
+  getAccountStatusApprovalMessage: (...args: unknown[]) => mockGetAccountStatusApprovalMessage(...args),
 }));
 
 vi.mock("next/link", () => ({
@@ -107,7 +108,25 @@ beforeEach(() => {
     void cb({ uid: "uid-1", email: "student@example.com", metadata: { creationTime: "2026-01-01T00:00:00.000Z" } });
     return vi.fn();
   });
+  mockGetAccountStatusApprovalMessage.mockImplementation((role?: string, estado?: string) => {
+    if (role === "tutor" && estado === "inativo") {
+      return "A conta de tutor está inativa. Verifique o email e volte a iniciar sessão.";
+    }
+    return "A sua conta está pendente de aprovação manual pelo administrador escolar da sua escola.";
+  });
 });
+
+function renderText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.ReactTestRendererJSON[] | null): string {
+  if (node === null) return "";
+  if (Array.isArray(node)) return node.map((child) => renderText(child)).join(" ");
+
+  const children = node.children ?? [];
+  return children
+    .map((child) => (typeof child === "string" ? child : renderText(child)))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 describe("AccountStatusPage integration", () => {
   it("redirects approved student directly to dashboard", async () => {
@@ -137,8 +156,9 @@ describe("AccountStatusPage integration", () => {
   it("keeps pending student on waiting/account-status flow", async () => {
     mockGetDoc.mockResolvedValueOnce(makeUsersSnapshot({ role: "aluno", estado: "pendente" }));
 
+    let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
-      TestRenderer.create(<AccountStatusPage />);
+      tree = TestRenderer.create(<AccountStatusPage />);
     });
 
     await flush();
@@ -147,5 +167,28 @@ describe("AccountStatusPage integration", () => {
     expect(mockRouterReplace).not.toHaveBeenCalledWith("/professor");
     expect(mockRouterReplace).not.toHaveBeenCalledWith("/tutor");
     expect(mockRouterReplace).not.toHaveBeenCalledWith("/school-admin");
+
+    const links = tree!.root.findAllByType("a").map((node) => String(node.props.href));
+    expect(links).not.toContain("/verify-email");
+  });
+
+  it("shows tutor-specific inactive message and never school-approval wording", async () => {
+    mockGetDoc.mockResolvedValueOnce(makeUsersSnapshot({ role: "tutor", estado: "inativo" }));
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(<AccountStatusPage />);
+    });
+
+    await flush();
+
+    expect(mockRouterReplace).not.toHaveBeenCalledWith("/tutor");
+    expect(mockGetAccountStatusApprovalMessage).toHaveBeenCalledWith("tutor", "inativo");
+
+    const text = renderText(tree!.toJSON());
+    const links = tree!.root.findAllByType("a").map((node) => String(node.props.href));
+    expect(text).toContain("A conta de tutor está inativa. Verifique o email e volte a iniciar sessão.");
+    expect(text).not.toContain("pendente de aprovação manual pelo administrador escolar da sua escola");
+    expect(links).toContain("/verify-email");
   });
 });

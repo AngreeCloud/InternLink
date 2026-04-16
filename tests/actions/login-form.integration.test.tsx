@@ -15,6 +15,7 @@ const mockCreateServerSession = vi.fn();
 const mockGetLoginRedirectRoute = vi.fn();
 const mockAccessValidationOverlay = vi.fn();
 const mockFinalizePendingRegistration = vi.fn();
+const mockIsVerificationBypassEnabled = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => mockRouter,
@@ -47,7 +48,7 @@ vi.mock("@/lib/firebase-runtime", () => ({
 
 vi.mock("@/lib/verification", () => ({
   finalizePendingRegistration: (...args: unknown[]) => mockFinalizePendingRegistration(...args),
-  isVerificationBypassEnabled: () => false,
+  isVerificationBypassEnabled: (...args: unknown[]) => mockIsVerificationBypassEnabled(...args),
 }));
 
 vi.mock("@/lib/auth/client-session", () => ({
@@ -159,6 +160,7 @@ beforeEach(() => {
   mockCreateServerSession.mockResolvedValue({ role: "aluno", estado: "ativo" });
   mockGetLoginRedirectRoute.mockReturnValue("/dashboard");
   mockFinalizePendingRegistration.mockResolvedValue({ role: "professor", estado: "pendente", schoolId: "school-1" });
+  mockIsVerificationBypassEnabled.mockReturnValue(false);
 });
 
 afterEach(() => {
@@ -208,7 +210,7 @@ describe("LoginForm transition behavior", () => {
     expect(mockAccessValidationOverlay).toHaveBeenCalled();
   });
 
-  it("redireciona conta pendente para account-status mesmo sem user doc", async () => {
+  it("redireciona para verify-email quando o email não está verificado", async () => {
     mockSignInWithEmailAndPassword.mockResolvedValue({
       user: {
         uid: "uid-pendente",
@@ -216,10 +218,6 @@ describe("LoginForm transition behavior", () => {
         emailVerified: false,
       },
     });
-    mockGetDoc.mockResolvedValueOnce(makeDocSnapshot({}, false));
-    mockCreateServerSession.mockResolvedValueOnce({ role: "professor", estado: "pendente" });
-    mockGetLoginRedirectRoute.mockReturnValueOnce("/account-status");
-    mockFinalizePendingRegistration.mockResolvedValueOnce({ role: "professor", estado: "pendente", schoolId: "school-1" });
 
     let renderer!: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -229,8 +227,34 @@ describe("LoginForm transition behavior", () => {
     await fillCredentialsAndSubmit(renderer, "prof@escola.pt", "senha-correta");
     await flush();
 
-    expect(mockRouterPrefetch).toHaveBeenCalledWith("/account-status");
-    expect(mockRouterPush).toHaveBeenCalledWith("/account-status");
-    expect(mockRouterPush).not.toHaveBeenCalledWith("/verify-email?email=prof%40escola.pt");
+    expect(mockRouterPush).toHaveBeenCalledWith("/verify-email?email=prof%40escola.pt");
+    expect(mockCreateServerSession).not.toHaveBeenCalled();
+    expect(mockGetDoc).not.toHaveBeenCalled();
+  });
+
+  it("em bypass ativo, permite login sem verificação e redireciona como estado ativo", async () => {
+    mockIsVerificationBypassEnabled.mockReturnValue(true);
+    mockGetDoc.mockResolvedValueOnce(makeDocSnapshot({ role: "tutor", estado: "inativo" }));
+    mockCreateServerSession.mockResolvedValueOnce({ role: "tutor", estado: "inativo" });
+    mockGetLoginRedirectRoute.mockReturnValueOnce("/tutor");
+    mockSignInWithEmailAndPassword.mockResolvedValue({
+      user: {
+        uid: "uid-bypass",
+        email: "dev@escola.pt",
+        emailVerified: false,
+      },
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(<LoginForm />);
+    });
+
+    await fillCredentialsAndSubmit(renderer, "dev@escola.pt", "senha-correta");
+    await flush();
+
+    expect(mockGetLoginRedirectRoute).toHaveBeenCalledWith("tutor", "ativo");
+    expect(mockRouterPush).toHaveBeenCalledWith("/tutor");
+    expect(mockCreateServerSession).toHaveBeenCalled();
   });
 });

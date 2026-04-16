@@ -45,14 +45,28 @@ export async function ensureUserClaims(
   }
 
   const currentUser = await auth.getUser(uid);
+  let normalizedEstado = estado;
+
+  if (role === "tutor" && estado === "inativo" && currentUser.emailVerified) {
+    normalizedEstado = "ativo";
+    await db.collection("users").doc(uid).set(
+      {
+        estado: "ativo",
+        emailVerified: true,
+        updatedAt: new Date(),
+      },
+      { merge: true }
+    );
+  }
+
   const currentClaims = (currentUser.customClaims ?? {}) as UserClaims;
   const currentRole = normalizeClaimValue(currentClaims.role);
   const currentEstado = normalizeClaimValue(currentClaims.estado);
 
-  if (currentRole === role && currentEstado === estado) {
+  if (currentRole === role && currentEstado === normalizedEstado) {
     return {
       role,
-      estado,
+      estado: normalizedEstado,
       updated: false,
       claims: currentClaims,
     };
@@ -61,14 +75,14 @@ export async function ensureUserClaims(
   const nextClaims = {
     ...currentClaims,
     role,
-    estado,
+    estado: normalizedEstado,
   };
 
   await auth.setCustomUserClaims(uid, nextClaims);
 
   return {
     role,
-    estado,
+    estado: normalizedEstado,
     updated: true,
     claims: nextClaims,
   };

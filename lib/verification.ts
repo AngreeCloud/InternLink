@@ -33,6 +33,7 @@ export async function finalizePendingRegistration(
     const userData = userSnap.data() as PendingRegistrationData;
     const role = userData.role ?? "";
     const estado = userData.estado ?? "";
+    const effectiveEstado = role === "tutor" && options?.markEmailVerified ? "ativo" : estado;
     const schoolId = userData.schoolId ?? "";
 
     await setDoc(
@@ -59,7 +60,7 @@ export async function finalizePendingRegistration(
       );
     }
 
-    return { role, estado, schoolId };
+    return { role, estado: effectiveEstado, schoolId };
   }
 
   const pendingSnap = await getDoc(doc(db, "pendingRegistrations", userId));
@@ -71,11 +72,13 @@ export async function finalizePendingRegistration(
   const pendingData = pendingSnap.data() as PendingRegistrationData;
   const role = pendingData.role ?? "";
   const estado = pendingData.estado ?? "";
+  const effectiveEstado = role === "tutor" && options?.markEmailVerified ? "ativo" : estado;
   const schoolId = pendingData.schoolId ?? "";
   const normalizedCourseId = pendingData.courseId ?? null;
 
   await setDoc(doc(db, "users", userId), {
     ...pendingData,
+    ...(role === "tutor" && options?.markEmailVerified ? { estado: "ativo" } : {}),
     courseId: normalizedCourseId,
     emailVerified: options?.markEmailVerified ?? true,
     updatedAt: serverTimestamp(),
@@ -96,5 +99,5 @@ export async function finalizePendingRegistration(
 
   await deleteDoc(doc(db, "pendingRegistrations", userId));
 
-  return { role, estado, schoolId };
+  return { role, estado: effectiveEstado, schoolId };
 }

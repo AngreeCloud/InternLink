@@ -135,7 +135,7 @@ export default function AccountStatusPage() {
   const statusLabel = state.status || "pendente"
   const canAccessDashboard = statusLabel === "ativo"
   const dashboardHref = getDashboardRouteForRole(state.role)
-  const approvalMessage = getAccountStatusApprovalMessage(state.role)
+  const approvalMessage = getAccountStatusApprovalMessage(state.role, state.status)
   const canChangeSchool = state.role === "professor" && state.status === "pendente" && state.userId.length > 0
 
   useEffect(() => {
@@ -288,6 +288,11 @@ export default function AccountStatusPage() {
                 <Button asChild variant="outline" size="sm">
                   <Link href="/login">Voltar ao login</Link>
                 </Button>
+                {state.status === "inativo" ? (
+                  <Button asChild size="sm" variant="secondary">
+                    <Link href="/verify-email">Verificar email</Link>
+                  </Button>
+                ) : null}
                 {!canAccessDashboard && state.role === "professor" ? (
                   <Button asChild size="sm" variant="secondary">
                     <Link href="/re-solicitar-acesso">Re-solicitar acesso</Link>
