@@ -141,10 +141,12 @@ service cloud.firestore {
     }
 
     function professorCanUpdateStudentFields() {
-      return !request.resource.data
-        .diff(resource.data)
-        .affectedKeys()
-        .hasAny(["role", "schoolId", "courseId"]);
+      return request.resource.data.role == resource.data.role
+        && request.resource.data.schoolId == resource.data.schoolId
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly(["estado", "courseId", "curso", "updatedAt"]);
     }
 
     function isSchoolAdminViewingProfessorPendingRegistration() {

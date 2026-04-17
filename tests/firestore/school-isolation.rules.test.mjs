@@ -209,6 +209,28 @@ test("professor da mesma escola consegue aprovar aluno pendente da sua escola", 
   );
 });
 
+test("professor da mesma escola consegue atualizar turma do aluno", async () => {
+  const dbProfessorMesmaEscola = testEnv.authenticatedContext("profA").firestore();
+
+  await assertSucceeds(
+    updateDoc(doc(dbProfessorMesmaEscola, "users", "studentA"), {
+      courseId: "courseA",
+      curso: "Informática - Sistemas",
+    })
+  );
+});
+
+test("professor de outra escola não consegue atualizar turma do aluno", async () => {
+  const dbProfessorOutraEscola = testEnv.authenticatedContext("profB").firestore();
+
+  await assertFails(
+    updateDoc(doc(dbProfessorOutraEscola, "users", "studentA"), {
+      courseId: "courseA",
+      curso: "Informática - Sistemas",
+    })
+  );
+});
+
 test("participante da conversa consegue ler chatAccess", async () => {
   const dbProfessorMesmaEscola = testEnv.authenticatedContext("profA").firestore();
 
