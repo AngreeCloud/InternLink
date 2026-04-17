@@ -24,6 +24,10 @@ export function getAccountStatusApprovalMessage(role: string, estado?: string) {
     return "A conta de tutor está a concluir validações de acesso.";
   }
 
+  if (estado === "inativo" || estado === "removido" || estado === "rejeitado") {
+    return "A conta está inativa para acesso. Re-solicite acesso escolhendo escola e turma para nova avaliação.";
+  }
+
   const responsible = getApprovalResponsibleLabel(role);
   return `A sua conta está pendente de aprovação manual pelo ${responsible}.`;
 }

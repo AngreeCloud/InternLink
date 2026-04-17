@@ -31,6 +31,14 @@ type PendingStudent = {
   createdAt: string;
 };
 
+type CourseAccess = {
+  id: string;
+  name: string;
+  teacherIds: string[];
+  supportingTeacherIds: string[];
+  courseDirectorId: string | null;
+};
+
 export function PendingStudentsManager() {
   const [students, setStudents] = useState<PendingStudent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,15 +78,42 @@ export function PendingStudentsManager() {
         )
       );
 
-      const courses = coursesSnap.docs.map((docSnap) => {
-        const data = docSnap.data() as { name?: string };
+      const allCourses = coursesSnap.docs.map((docSnap) => {
+        const data = docSnap.data() as {
+          name?: string;
+          teacherIds?: string[];
+          supportingTeacherIds?: string[];
+          courseDirectorId?: string | null;
+        };
+
         return {
           id: docSnap.id,
           name: data.name || "—",
+          teacherIds: Array.isArray(data.teacherIds) ? data.teacherIds : [],
+          supportingTeacherIds: Array.isArray(data.supportingTeacherIds) ? data.supportingTeacherIds : [],
+          courseDirectorId:
+            typeof data.courseDirectorId === "string" && data.courseDirectorId
+              ? data.courseDirectorId
+              : null,
         };
-      }).sort((left, right) => left.name.localeCompare(right.name, "pt-PT"));
+      });
 
-      setSchoolCourses(courses);
+      const allowedCourses = allCourses
+        .filter((course) => {
+          if (course.courseDirectorId === user.uid) {
+            return true;
+          }
+
+          return (
+            course.teacherIds.includes(user.uid)
+            || course.supportingTeacherIds.includes(user.uid)
+          );
+        })
+        .map((course) => ({ id: course.id, name: course.name }))
+        .sort((left, right) => left.name.localeCompare(right.name, "pt-PT"));
+
+      setSchoolCourses(allowedCourses);
+      const allowedCourseIds = new Set(allowedCourses.map((course) => course.id));
 
       const pendingSnap = await getDocs(
         query(
@@ -89,7 +124,8 @@ export function PendingStudentsManager() {
         )
       );
 
-      const list: PendingStudent[] = pendingSnap.docs.map((docSnap) => {
+      const list: PendingStudent[] = pendingSnap.docs
+        .map((docSnap) => {
         const data = docSnap.data() as {
           nome?: string;
           email?: string;
@@ -98,16 +134,34 @@ export function PendingStudentsManager() {
           dataNascimento?: string;
           createdAt?: { toDate: () => Date };
         };
+
+        const resolvedCourseId = resolveStudentCourseId(
+          {
+            courseId: data.courseId || "",
+            curso: data.curso || "",
+          },
+          allCourses.map((course) => ({ id: course.id, name: course.name }))
+        );
+
+        if (!resolvedCourseId || !allowedCourseIds.has(resolvedCourseId)) {
+          return null;
+        }
+
         return {
           id: docSnap.id,
           nome: data.nome || "—",
           email: data.email || "—",
-          curso: data.curso || "—",
-          courseId: data.courseId || "",
+          curso: resolveStudentCourseName(
+            resolvedCourseId,
+            allCourses.map((course) => ({ id: course.id, name: course.name })),
+            data.curso || ""
+          ),
+          courseId: resolvedCourseId,
           dataNascimento: data.dataNascimento || "—",
           createdAt: data.createdAt?.toDate?.()?.toLocaleDateString("pt-PT") || "—",
         };
-      });
+      })
+        .filter((student): student is PendingStudent => Boolean(student));
 
       setStudents(list);
     } catch (error) {

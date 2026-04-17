@@ -338,7 +338,7 @@ describe("ApprovedStudentsManager integration", () => {
     expect(mockUpdateDoc).toHaveBeenCalledTimes(1);
     const payload = mockUpdateDoc.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(payload).toMatchObject({
-      estado: "removido",
+      estado: "inativo",
       updatedAt: "mock-server-ts",
     });
 
@@ -346,7 +346,7 @@ describe("ApprovedStudentsManager integration", () => {
       (node: { type: unknown; children?: unknown[] }) =>
         node.type === "p"
         && Array.isArray(node.children)
-        && node.children.join("").includes("Aluno Ana Silva removido com sucesso.")
+        && node.children.join("").includes("Aluno Ana Silva marcado como inativo com sucesso.")
     );
     expect(successMessages.length).toBeGreaterThan(0);
   });

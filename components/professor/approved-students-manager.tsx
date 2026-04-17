@@ -350,7 +350,7 @@ export function ApprovedStudentsManager() {
       try {
         const db = await getDbRuntime();
         await updateDoc(doc(db, "users", selectedStudent.id), {
-          estado: "removido",
+          estado: "inativo",
           updatedAt: serverTimestamp(),
         });
 
@@ -361,7 +361,7 @@ export function ApprovedStudentsManager() {
           return next;
         });
 
-        setActionSuccess(`Aluno ${selectedStudent.nome} removido com sucesso.`);
+        setActionSuccess(`Aluno ${selectedStudent.nome} marcado como inativo com sucesso.`);
         setIsManageDialogOpen(false);
       } catch (error) {
         console.error("Erro ao remover aluno:", error);

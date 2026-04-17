@@ -19,6 +19,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/pendingRegistrations/$(userId);
     }
 
+    function coursePath(courseId) {
+      return /databases/$(database)/documents/courses/$(courseId);
+    }
+
     function currentUserDoc() {
       return get(userPath(request.auth.uid));
     }
@@ -37,6 +41,23 @@ service cloud.firestore {
 
     function pendingRegistrationData(userId) {
       return get(pendingRegistrationPath(userId)).data;
+    }
+
+    function courseExists(courseId) {
+      return courseId is string
+        && courseId.size() > 0
+        && exists(coursePath(courseId));
+    }
+
+    function courseData(courseId) {
+      return get(coursePath(courseId)).data;
+    }
+
+    function isCourseFromSchool(courseId, schoolId) {
+      return courseExists(courseId)
+        && schoolId is string
+        && schoolId.size() > 0
+        && courseData(courseId).schoolId == schoolId;
     }
 
     function isSchoolAdmin() {
@@ -127,22 +148,63 @@ service cloud.firestore {
     function isProfessorSchoolReRequestUpdate() {
       return resource.data.role == "professor"
         && request.resource.data.role == "professor"
-        && resource.data.estado in ["pendente", "recusado", "removido"]
+        && resource.data.estado in ["pendente", "recusado", "removido", "inativo"]
         && request.resource.data.estado == "pendente"
         && request.resource.data.schoolId is string
         && request.resource.data.schoolId.size() > 0
-        && request.resource.data.courseId == null
+        && request.resource.data.courseId is string
+        && request.resource.data.courseId.size() > 0
+        && isCourseFromSchool(request.resource.data.courseId, request.resource.data.schoolId)
         && request.resource.data
           .diff(resource.data)
           .affectedKeys()
-          .hasOnly(["estado", "schoolId", "courseId", "reviewedAt", "reviewedBy"])
+          .hasOnly(["estado", "schoolId", "escola", "courseId", "curso", "reviewedAt", "reviewedBy", "updatedAt"])
         && (!request.resource.data.keys().hasAny(["reviewedAt"]) || request.resource.data.reviewedAt == null)
         && (!request.resource.data.keys().hasAny(["reviewedBy"]) || request.resource.data.reviewedBy == null);
     }
 
+    function isStudentSchoolReRequestUpdate() {
+      return resource.data.role == "aluno"
+        && request.resource.data.role == "aluno"
+        && resource.data.estado in ["pendente", "inativo", "removido", "rejeitado"]
+        && request.resource.data.estado == "pendente"
+        && request.resource.data.schoolId is string
+        && request.resource.data.schoolId.size() > 0
+        && request.resource.data.courseId is string
+        && request.resource.data.courseId.size() > 0
+        && isCourseFromSchool(request.resource.data.courseId, request.resource.data.schoolId)
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly(["estado", "schoolId", "escola", "courseId", "curso", "reviewedAt", "reviewedBy", "updatedAt"])
+        && (!request.resource.data.keys().hasAny(["reviewedAt"]) || request.resource.data.reviewedAt == null)
+        && (!request.resource.data.keys().hasAny(["reviewedBy"]) || request.resource.data.reviewedBy == null);
+    }
+
+    function isProfessorAssignedToCourse(courseId) {
+      return courseExists(courseId)
+        && courseData(courseId).schoolId == currentUserData().schoolId
+        && (
+          (courseData(courseId).courseDirectorId is string && courseData(courseId).courseDirectorId == request.auth.uid)
+          || (courseData(courseId).teacherIds is list && courseData(courseId).teacherIds.hasAny([request.auth.uid]))
+          || (courseData(courseId).supportingTeacherIds is list && courseData(courseId).supportingTeacherIds.hasAny([request.auth.uid]))
+        );
+    }
+
+    function professorCanManageStudentCourse() {
+      return resource.data.courseId is string
+        && resource.data.courseId.size() > 0
+        && request.resource.data.courseId is string
+        && request.resource.data.courseId.size() > 0
+        && isProfessorAssignedToCourse(resource.data.courseId)
+        && isProfessorAssignedToCourse(request.resource.data.courseId);
+    }
+
     function professorCanUpdateStudentFields() {
       return request.resource.data.role == resource.data.role
+        && request.resource.data.role == "aluno"
         && request.resource.data.schoolId == resource.data.schoolId
+        && professorCanManageStudentCourse()
         && request.resource.data
           .diff(resource.data)
           .affectedKeys()
@@ -240,7 +302,7 @@ service cloud.firestore {
 
       // Permite ao próprio editar campos de perfil e re-solicitar acesso (professor removido/recusado).
       allow update: if isSelf(userId)
-        && (isSelfUserDocImmutable() || isProfessorSchoolReRequestUpdate());
+        && (isSelfUserDocImmutable() || isProfessorSchoolReRequestUpdate() || isStudentSchoolReRequestUpdate());
 
       // Admin escolar gere utilizadores da própria escola.
       allow update, delete: if isSchoolAdmin()
