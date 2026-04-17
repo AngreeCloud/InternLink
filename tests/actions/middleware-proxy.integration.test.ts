@@ -1,8 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { SignJWT, exportJWK, generateKeyPair } from "jose";
 import { proxy } from "@/proxy";
 import { clearGoogleJwksCacheForTests } from "@/lib/auth/edge-jwks";
 import { clearValidatedSessionCacheForTests } from "@/lib/auth/jwt-session";
+
+let integrationPrivateKey: Awaited<ReturnType<typeof generateKeyPair>>["privateKey"];
+let integrationPublicJwk: Awaited<ReturnType<typeof exportJWK>>;
 
 async function createValidSessionToken(
   projectId: string,
@@ -11,12 +14,6 @@ async function createValidSessionToken(
   estado: string,
   expiresInSeconds = 3600
 ) {
-  const { publicKey, privateKey } = await generateKeyPair("RS256");
-  const publicJwk = await exportJWK(publicKey);
-  publicJwk.kid = "integration-kid";
-  publicJwk.alg = "RS256";
-  publicJwk.use = "sig";
-
   const token = await new SignJWT({ role, estado })
     .setProtectedHeader({ alg: "RS256", kid: "integration-kid" })
     .setSubject(uid)
@@ -24,9 +21,9 @@ async function createValidSessionToken(
     .setIssuer(`https://session.firebase.google.com/${projectId}`)
     .setIssuedAt()
     .setExpirationTime(Math.floor(Date.now() / 1000) + expiresInSeconds)
-    .sign(privateKey);
+    .sign(integrationPrivateKey);
 
-  return { token, publicJwk };
+  return { token, publicJwk: integrationPublicJwk };
 }
 
 function createRequest(pathname: string, sessionCookie?: string) {
@@ -46,10 +43,23 @@ function createRequest(pathname: string, sessionCookie?: string) {
 }
 
 describe("proxy integration", () => {
+  beforeAll(async () => {
+    clearGoogleJwksCacheForTests();
+    clearValidatedSessionCacheForTests();
+
+    const { publicKey, privateKey } = await generateKeyPair("RS256");
+    const publicJwk = await exportJWK(publicKey);
+    publicJwk.kid = "integration-kid";
+    publicJwk.alg = "RS256";
+    publicJwk.use = "sig";
+
+    integrationPrivateKey = privateKey;
+    integrationPublicJwk = publicJwk;
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv("NEXT_PUBLIC_FIREBASE_PROJECT_ID", "demo-project");
-    clearGoogleJwksCacheForTests();
     clearValidatedSessionCacheForTests();
   });
 
