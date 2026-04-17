@@ -498,9 +498,6 @@ export function CoursesManager() {
     await refreshCourses();
   };
 
-  const resolveFolderName = (folderId?: string | null) =>
-    folders.find((folder) => folder.id === folderId)?.name || "Sem pasta";
-
   const filteredCourses = useMemo(() => {
     const data =
       filterFolderId === ALL_FOLDERS_VALUE
@@ -550,11 +547,6 @@ export function CoursesManager() {
     [teachers]
   );
 
-  const getTeacherName = (teacherId?: string | null) => {
-    if (!teacherId) return "Sem diretor definido";
-    return teacherById.get(teacherId)?.name || "Professor removido";
-  };
-
   const getTeacherAvatarFallback = (name: string) => {
     const parts = name
       .split(" ")
@@ -563,6 +555,35 @@ export function CoursesManager() {
     if (parts.length === 0) return "PR";
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return `${parts[0][0] || "P"}${parts[1][0] || "R"}`.toUpperCase();
+  };
+
+  const renderTeacherMiniViewer = (
+    teacherId: string | null | undefined,
+    roleLabel: "Diretor do Curso" | "Outro Professor"
+  ) => {
+    if (!teacherId) return null;
+
+    const teacher = teacherById.get(teacherId);
+    const name = teacher?.name || "Professor removido";
+    const email = teacher?.email || "Conta não disponível";
+
+    return (
+      <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-background/40 p-2">
+        <Avatar className="h-8 w-8">
+          <AvatarImage src={teacher?.photoURL || undefined} alt={name} />
+          <AvatarFallback>{getTeacherAvatarFallback(name)}</AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-medium text-foreground">{name}</p>
+            <Badge variant="outline" className="h-5 px-2 text-[10px]">
+              {roleLabel}
+            </Badge>
+          </div>
+          <p className="truncate text-xs text-muted-foreground">{email}</p>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -943,6 +964,12 @@ export function CoursesManager() {
                       {group.courses.map((course) => {
                         const isEditing = editCourseId === course.id;
                         const draft = isEditing ? editCourse : null;
+                        const maxStudents = course.maxStudents ?? 0;
+                        const enrolledCount = course.enrolledCount ?? 0;
+                        const occupancyRate =
+                          maxStudents > 0 ? Math.min(100, Math.round((enrolledCount / maxStudents) * 100)) : null;
+                        const supportingTeacherIds = Array.from(new Set(course.supportingTeacherIds || []));
+                        const directorViewer = renderTeacherMiniViewer(course.courseDirectorId, "Diretor do Curso");
                         return (
                           <div key={course.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
                             <div className="flex items-start justify-between">
@@ -1265,19 +1292,47 @@ export function CoursesManager() {
                                   <Badge variant="secondary">Limite: {course.maxStudents ?? "—"}</Badge>
                                   <Badge variant="outline">Inscritos: {course.enrolledCount ?? 0}</Badge>
                                 </div>
+                                {occupancyRate !== null ? (
+                                  <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                      <span>Ocupação</span>
+                                      <span>{occupancyRate}%</span>
+                                    </div>
+                                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                                      <div
+                                        className="h-full rounded-full bg-primary transition-all"
+                                        style={{ width: `${occupancyRate}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                ) : null}
                                 <div className="text-sm text-muted-foreground space-y-1">
                                   <p>Duração do estágio: {course.internshipDurationMonths ?? "—"} meses</p>
                                   <p>Data de início: {course.internshipStartDate || "—"}</p>
                                   <p>Data de conclusão: {course.internshipEndDate || "—"}</p>
                                   <p>Horas mínimas para relatório: {course.reportMinHours ?? 80}h</p>
                                   <p>Espera para relatório: {course.reportWaitDays ?? 0} dia(s)</p>
-                                  <p>Diretor do Curso: {getTeacherName(course.courseDirectorId)}</p>
-                                  <p>
-                                    Outros professores:{" "}
-                                    {(course.supportingTeacherIds || [])
-                                      .map((teacherId) => getTeacherName(teacherId))
-                                      .join(", ") || "—"}
+                                </div>
+                                <div className="space-y-2">
+                                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                    Professores associados
                                   </p>
+                                  {directorViewer ? (
+                                    directorViewer
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground">Diretor do Curso: sem diretor definido.</p>
+                                  )}
+                                  {supportingTeacherIds.length > 0 ? (
+                                    <div className="space-y-2">
+                                      {supportingTeacherIds.map((teacherId) => (
+                                        <div key={teacherId}>
+                                          {renderTeacherMiniViewer(teacherId, "Outro Professor")}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground">Sem outros professores associados.</p>
+                                  )}
                                 </div>
                               </div>
                             )}
