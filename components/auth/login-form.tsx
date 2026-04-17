@@ -74,6 +74,7 @@ export function LoginForm() {
     if (googleLockRef.current) return
     
     googleLockRef.current = true
+    setIsGoogleLoading(true)
     setError("")
     let didNavigate = false
 
@@ -90,8 +91,6 @@ export function LoginForm() {
       const result = await signInWithPopup(auth, provider)
       const user = result.user
       const userEmail = user.email || ""
-
-      setIsGoogleLoading(true)
 
       if (!user.emailVerified && !verificationBypassEnabled) {
         didNavigate = true
@@ -152,6 +151,7 @@ export function LoginForm() {
       }
 
       const session = await createServerSession(user)
+      setIsLoading(true)
       didNavigate = true
       redirectBasedOnRole(session.role || role, session.estado || estado)
     } catch (err: any) {
@@ -221,7 +221,7 @@ export function LoginForm() {
     }
   }
 
-  if (isLoading || isGoogleLoading) {
+  if (isLoading) {
     return <AccessValidationOverlay />
   }
 
@@ -291,7 +291,7 @@ export function LoginForm() {
         </CardContent>
 
         <CardFooter className="flex flex-col space-y-4">
-          <Button type="submit" className="w-full mt-1" disabled={isSubmitting || isLoading}>
+          <Button type="submit" className="w-full mt-1" disabled={isSubmitting || isLoading || isGoogleLoading}>
             {isSubmitting ? "A entrar..." : "Entrar"}
           </Button>
 
@@ -310,6 +310,7 @@ export function LoginForm() {
             className="w-full"
             onClick={handleGoogleLogin}
             disabled={isGoogleLoading || isLoading}
+            aria-busy={isGoogleLoading}
           >
             <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
               <path
