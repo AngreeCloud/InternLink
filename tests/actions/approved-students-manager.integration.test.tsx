@@ -127,7 +127,7 @@ beforeEach(() => {
 });
 
 describe("ApprovedStudentsManager integration", () => {
-  it("renderiza aluno e bloqueia troca quando há estágio ativo", async () => {
+  it("renderiza tabela view-only e mostra os 3 estados de estágio", async () => {
     mockGetDocs
       .mockResolvedValueOnce(
         makeQuerySnapshot([
@@ -147,9 +147,34 @@ describe("ApprovedStudentsManager integration", () => {
             dataNascimento: "2007-01-01",
             createdAt: { toDate: () => new Date("2025-01-10T00:00:00Z") },
           }),
+          makeQueryDoc("s2", {
+            nome: "Bruno Costa",
+            email: "bruno@escola.pt",
+            courseId: "c2",
+            curso: "Turma B",
+            localidade: "Lisboa",
+            telefone: "922222222",
+            dataNascimento: "2006-02-01",
+            createdAt: { toDate: () => new Date("2025-01-11T00:00:00Z") },
+          }),
+          makeQueryDoc("s3", {
+            nome: "Carla Pinto",
+            email: "carla@escola.pt",
+            courseId: "c2",
+            curso: "Turma B",
+            localidade: "Coimbra",
+            telefone: "933333333",
+            dataNascimento: "2005-03-01",
+            createdAt: { toDate: () => new Date("2025-01-12T00:00:00Z") },
+          }),
         ])
       )
-      .mockResolvedValueOnce(makeQuerySnapshot([makeQueryDoc("e1", { alunoId: "s1", estado: "ativo" })]));
+      .mockResolvedValueOnce(
+        makeQuerySnapshot([
+          makeQueryDoc("e1", { alunoId: "s1", estado: "ativo" }),
+          makeQueryDoc("e2", { alunoId: "s2", estado: "concluido" }),
+        ])
+      );
 
     let renderer!: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -159,20 +184,27 @@ describe("ApprovedStudentsManager integration", () => {
 
     const root = renderer.root as any;
 
-    const desktopSelect = root.findByProps({ "data-testid": "course-select-desktop-s1" });
-    expect(desktopSelect.props.disabled).toBe(true);
+    expect(root.findAllByType("select").length).toBe(0);
+    expect(root.findByProps({ "data-testid": "open-change-course-dialog" })).toBeTruthy();
+    expect(root.findByProps({ "data-testid": "open-remove-student-dialog" })).toBeTruthy();
 
-    const hasLockedBadge = root.findAll(
+    const statusTexts = root.findAll(
       (node: { type: unknown; children?: unknown[] }) =>
-        node.type === "span" && Array.isArray(node.children) && node.children.join("").includes("Estágio ativo")
+        node.type === "span"
+        && Array.isArray(node.children)
+        && (
+          node.children.join("").includes("Estágio ativo")
+          || node.children.join("").includes("Estágio concluido")
+          || node.children.join("").includes("Sem estágio associado")
+        )
     );
-    expect(hasLockedBadge.length).toBeGreaterThan(0);
+    expect(statusTexts.length).toBeGreaterThanOrEqual(3);
 
     expect(mockUpdateDoc).not.toHaveBeenCalled();
     expect(root.findAllByProps({ "data-testid": "dialog-root" }).length).toBe(0);
   });
 
-  it("abre modal de confirmação e troca turma após confirmar", async () => {
+  it("troca turma por popup com pesquisa de aluno", async () => {
     mockGetDocs
       .mockResolvedValueOnce(
         makeQuerySnapshot([
@@ -204,24 +236,31 @@ describe("ApprovedStudentsManager integration", () => {
 
     const root = renderer.root as any;
 
-    const desktopSelect = root.findByProps({ "data-testid": "course-select-desktop-s1" });
-    expect(desktopSelect.props.disabled).toBe(false);
-
+    const openDialogButton = root.findByProps({ "data-testid": "open-change-course-dialog" });
     await act(async () => {
-      desktopSelect.props.onChange({ target: { value: "c2" } });
+      openDialogButton.props.onClick();
     });
     await flush();
 
-    const dialogRoots = root.findAllByProps({ "data-testid": "dialog-root" });
-    expect(dialogRoots.length).toBe(1);
+    const searchInput = root.findByProps({ "data-testid": "manage-student-search" });
+    await act(async () => {
+      searchInput.props.onChange({ target: { value: "ana" } });
+    });
+    await flush();
 
-    const titleNodes = root.findAll(
-      (node: { type: unknown; children?: unknown[] }) =>
-        node.type === "h2" && Array.isArray(node.children) && node.children.join("").includes("Confirmar troca de turma")
-    );
-    expect(titleNodes.length).toBeGreaterThan(0);
+    const selectStudentButton = root.findByProps({ "data-testid": "select-student-s1" });
+    await act(async () => {
+      selectStudentButton.props.onClick();
+    });
+    await flush();
 
-    const confirmButton = root.findByProps({ "data-testid": "confirm-course-change" });
+    const courseSelect = root.findByProps({ "data-testid": "dialog-course-select" });
+    await act(async () => {
+      courseSelect.props.onChange({ target: { value: "c2" } });
+    });
+    await flush();
+
+    const confirmButton = root.findByProps({ "data-testid": "manage-student-confirm" });
     await act(async () => {
       confirmButton.props.onClick();
     });
@@ -244,5 +283,71 @@ describe("ApprovedStudentsManager integration", () => {
     expect(successMessages.length).toBeGreaterThan(0);
 
     expect(root.findAllByProps({ "data-testid": "dialog-root" }).length).toBe(0);
+  });
+
+  it("remove aluno por popup", async () => {
+    mockGetDocs
+      .mockResolvedValueOnce(
+        makeQuerySnapshot([
+          makeQueryDoc("c1", { name: "Turma A" }),
+          makeQueryDoc("c2", { name: "Turma B" }),
+        ])
+      )
+      .mockResolvedValueOnce(
+        makeQuerySnapshot([
+          makeQueryDoc("s1", {
+            nome: "Ana Silva",
+            email: "ana@escola.pt",
+            courseId: "c1",
+            curso: "Turma A",
+            localidade: "Porto",
+            telefone: "911111111",
+            dataNascimento: "2007-01-01",
+            createdAt: { toDate: () => new Date("2025-01-10T00:00:00Z") },
+          }),
+        ])
+      )
+      .mockResolvedValueOnce(makeQuerySnapshot([]));
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(<ApprovedStudentsManager />);
+    });
+    await flush();
+
+    const root = renderer.root as any;
+
+    const openDialogButton = root.findByProps({ "data-testid": "open-remove-student-dialog" });
+    await act(async () => {
+      openDialogButton.props.onClick();
+    });
+    await flush();
+
+    const selectStudentButton = root.findByProps({ "data-testid": "select-student-s1" });
+    await act(async () => {
+      selectStudentButton.props.onClick();
+    });
+    await flush();
+
+    const confirmButton = root.findByProps({ "data-testid": "manage-student-confirm" });
+    await act(async () => {
+      confirmButton.props.onClick();
+    });
+    await flush();
+
+    expect(mockUpdateDoc).toHaveBeenCalledTimes(1);
+    const payload = mockUpdateDoc.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      estado: "removido",
+      updatedAt: "mock-server-ts",
+    });
+
+    const successMessages = root.findAll(
+      (node: { type: unknown; children?: unknown[] }) =>
+        node.type === "p"
+        && Array.isArray(node.children)
+        && node.children.join("").includes("Aluno Ana Silva removido com sucesso.")
+    );
+    expect(successMessages.length).toBeGreaterThan(0);
   });
 });
