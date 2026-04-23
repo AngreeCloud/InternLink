@@ -423,14 +423,33 @@ service cloud.firestore {
     }
 
     // ESTÁGIOS (geridos pelo professor)
-    match /estagios/{estagioId} {
-      allow read: if isSignedIn()
+    function isEstagioMember(estagioData) {
+      return isSignedIn()
         && (
-          resource.data.alunoId == request.auth.uid
-          || resource.data.professorId == request.auth.uid
-          || (isTutor() && resource.data.tutorId == request.auth.uid)
-          || (resource.data.schoolId != null && isSchoolAdminFor(resource.data.schoolId))
+          estagioData.alunoId == request.auth.uid
+          || estagioData.professorId == request.auth.uid
+          || estagioData.tutorId == request.auth.uid
+          || (estagioData.schoolId != null && isSchoolAdminFor(estagioData.schoolId))
         );
+    }
+
+    function isEstagioDirector(estagioData) {
+      return isSignedIn()
+        && estagioData.professorId == request.auth.uid
+        && (
+          (estagioData.alunoCourseId is string && isCourseDirectorOf(estagioData.alunoCourseId))
+          || (estagioData.courseId is string && isCourseDirectorOf(estagioData.courseId))
+        );
+    }
+
+    function isCourseDirectorOf(courseId) {
+      return courseExists(courseId)
+        && courseData(courseId).courseDirectorId is string
+        && courseData(courseId).courseDirectorId == request.auth.uid;
+    }
+
+    match /estagios/{estagioId} {
+      allow read: if isEstagioMember(resource.data);
 
       allow create: if isSignedIn()
         && currentUserExists()
@@ -440,6 +459,75 @@ service cloud.firestore {
         && currentUserExists()
         && currentUserData().role == "professor"
         && resource.data.professorId == request.auth.uid;
+
+      // Sub-coleção de documentos associados ao estágio.
+      match /documentos/{documentoId} {
+        allow read: if isEstagioMember(get(/databases/$(database)/documents/estagios/$(estagioId)).data);
+
+        // Criação/edição reservada ao Diretor de Curso (via API route com admin SDK).
+        // Na UI client-side permitimos o Diretor de Curso (professor + courseDirectorId).
+        allow create, update, delete: if isSignedIn()
+          && isEstagioDirector(get(/databases/$(database)/documents/estagios/$(estagioId)).data);
+
+        // Histórico imutável de versões.
+        match /versoes/{versionId} {
+          allow read: if isEstagioMember(get(/databases/$(database)/documents/estagios/$(estagioId)).data);
+          allow create: if isSignedIn()
+            && isEstagioDirector(get(/databases/$(database)/documents/estagios/$(estagioId)).data);
+          allow update, delete: if false;
+        }
+
+        // Registo por signatário. Cada utilizador só pode criar a sua própria assinatura.
+        match /assinaturas/{signerUid} {
+          allow read: if isEstagioMember(get(/databases/$(database)/documents/estagios/$(estagioId)).data);
+          allow create: if isSelf(signerUid);
+          allow update, delete: if false;
+        }
+      }
+
+      // Notificações do estágio (apenas o destinatário lê).
+      match /notifications/{notifId} {
+        allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+        allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+        allow create, delete: if isSignedIn()
+          && isEstagioDirector(get(/databases/$(database)/documents/estagios/$(estagioId)).data);
+      }
+
+      // Presenças, sumários e avaliação (estrutura básica para suporte futuro).
+      match /presencas/{dateId} {
+        allow read: if isEstagioMember(get(/databases/$(database)/documents/estagios/$(estagioId)).data);
+        allow write: if isSignedIn()
+          && (
+            isEstagioDirector(get(/databases/$(database)/documents/estagios/$(estagioId)).data)
+            || get(/databases/$(database)/documents/estagios/$(estagioId)).data.tutorId == request.auth.uid
+          );
+      }
+
+      match /sumarios/{weekId} {
+        allow read: if isEstagioMember(get(/databases/$(database)/documents/estagios/$(estagioId)).data);
+        allow write: if isSignedIn()
+          && (
+            isEstagioDirector(get(/databases/$(database)/documents/estagios/$(estagioId)).data)
+            || get(/databases/$(database)/documents/estagios/$(estagioId)).data.alunoId == request.auth.uid
+            || get(/databases/$(database)/documents/estagios/$(estagioId)).data.tutorId == request.auth.uid
+          );
+      }
+
+      match /avaliacao/{avalId} {
+        allow read: if isEstagioMember(get(/databases/$(database)/documents/estagios/$(estagioId)).data)
+          && get(/databases/$(database)/documents/estagios/$(estagioId)).data.alunoId != request.auth.uid;
+        allow write: if isSignedIn()
+          && (
+            isEstagioDirector(get(/databases/$(database)/documents/estagios/$(estagioId)).data)
+            || get(/databases/$(database)/documents/estagios/$(estagioId)).data.professorId == request.auth.uid
+            || get(/databases/$(database)/documents/estagios/$(estagioId)).data.tutorId == request.auth.uid
+          );
+      }
+    }
+
+    // Assinatura pessoal dos utilizadores (settings privadas).
+    match /users/{userId}/settings/{settingId} {
+      allow read, write: if isSelf(userId);
     }
 
     // DOCUMENTOS (geridos pelo professor, lidos por professorId e school admins)
