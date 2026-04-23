@@ -27,6 +27,16 @@ function devBypassResponse(reason: string) {
   );
 }
 
+export async function GET() {
+  return NextResponse.json(
+    {
+      success: false,
+      reason: "method-not-allowed",
+    },
+    { status: 405 }
+  );
+}
+
 export async function POST(request: Request) {
   const secret = process.env.NEXT_RECAPTCHA_SECRET_KEY;
 

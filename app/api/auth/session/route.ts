@@ -10,6 +10,10 @@ import { ensureUserClaims } from "@/lib/auth/custom-claims";
 export const runtime = "nodejs";
 const AUTH_DEBUG = process.env.AUTH_DEBUG === "true";
 
+export async function GET() {
+  return NextResponse.json({ error: "Method Not Allowed" }, { status: 405 });
+}
+
 function logAuthSessionDebug(event: string, details?: Record<string, unknown>) {
   if (!AUTH_DEBUG) return;
   console.info("[auth-session]", event, details ?? {});
