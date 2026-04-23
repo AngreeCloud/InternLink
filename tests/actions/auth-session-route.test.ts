@@ -7,6 +7,7 @@ const mockRevokeRefreshTokens = vi.fn();
 const mockGetUser = vi.fn();
 const mockSetCustomUserClaims = vi.fn();
 const mockUserDocGet = vi.fn();
+const mockUserDocSet = vi.fn();
 const mockCookies = vi.fn();
 
 vi.mock("@/lib/firebase-admin", () => ({
@@ -22,6 +23,7 @@ vi.mock("@/lib/firebase-admin", () => ({
     collection: () => ({
       doc: () => ({
         get: mockUserDocGet,
+        set: mockUserDocSet,
       }),
     }),
   }),
@@ -34,6 +36,7 @@ vi.mock("next/headers", () => ({
 beforeEach(() => {
   vi.resetAllMocks();
   (process.env as Record<string, string | undefined>).NODE_ENV = "test";
+  mockUserDocSet.mockResolvedValue(undefined);
 });
 
 describe("/api/auth/session route", () => {
@@ -230,6 +233,46 @@ describe("/api/auth/session route", () => {
 
     expect(response.status).toBe(400);
     expect(mockVerifyIdToken).not.toHaveBeenCalled();
+  });
+
+  it("promotes tutor inativo to ativo when auth email is verified", async () => {
+    const { POST } = await import("@/app/api/auth/session/route");
+
+    mockVerifyIdToken.mockResolvedValueOnce({
+      uid: "uid-tutor-1",
+      role: "tutor",
+      estado: "inativo",
+    });
+    mockGetUser.mockResolvedValueOnce({
+      customClaims: { role: "tutor", estado: "inativo" },
+      emailVerified: true,
+    });
+    mockUserDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ role: "tutor", estado: "inativo" }),
+    });
+
+    const request = new Request("http://localhost/api/auth/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken: "token-tutor-1" }),
+    });
+
+    const response = await POST(request);
+    const payload = (await response.json()) as { claimsUpdated?: boolean; estado?: string };
+
+    expect(response.status).toBe(428);
+    expect(payload.claimsUpdated).toBe(true);
+    expect(payload.estado).toBe("ativo");
+    expect(mockUserDocSet).toHaveBeenCalledWith(
+      {
+        estado: "ativo",
+        emailVerified: true,
+        updatedAt: expect.any(Date),
+      },
+      { merge: true }
+    );
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith("uid-tutor-1", expect.objectContaining({ estado: "ativo" }));
   });
 
   it("deletes session cookie and revokes refresh tokens", async () => {

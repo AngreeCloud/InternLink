@@ -19,8 +19,13 @@ describe("status-routing", () => {
       expect(getLoginRedirectRoute("professor", "pendente")).toBe("/account-status");
     });
 
-    it("routes tutor accounts to tutor area", () => {
-      expect(getLoginRedirectRoute("tutor", "pendente")).toBe("/tutor");
+    it("routes active tutor accounts to tutor area", () => {
+      expect(getLoginRedirectRoute("tutor", "ativo")).toBe("/tutor");
+    });
+
+    it("routes non-active tutor accounts to account-status", () => {
+      expect(getLoginRedirectRoute("tutor", "pendente")).toBe("/account-status");
+      expect(getLoginRedirectRoute("tutor", "inativo")).toBe("/account-status");
     });
 
     it("routes school admins to school-admin area", () => {

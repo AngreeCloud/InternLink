@@ -37,7 +37,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MoreHorizontal } from "lucide-react";
+import { buildEnrolledCountByCourse } from "@/lib/course-enrollment";
+import { ChevronDown, ChevronRight, MoreHorizontal } from "lucide-react";
 
 type Folder = {
   id: string;
@@ -133,6 +134,7 @@ export function CoursesManager() {
   const [sortBy, setSortBy] = useState<string>("recent");
   const [showCreateCourse, setShowCreateCourse] = useState(false);
   const [showCreateFolderWizard, setShowCreateFolderWizard] = useState(false);
+  const [collapsedFolderIds, setCollapsedFolderIds] = useState<string[]>([]);
 
   const requiresYear = useMemo(
     () => schoolInfo.educationLevel === "Secundária/Profissional",
@@ -189,55 +191,81 @@ export function CoursesManager() {
         const snapshot = await getDocs(
           query(coursesRef, where("schoolId", "==", schoolId), orderBy("createdAt", "desc"))
         );
-        if (!active) return;
-        setCourses(
-          snapshot.docs.map((docSnap) => {
-            const data = docSnap.data() as {
-              name?: string;
-              year?: number;
-              maxStudents?: number;
-              folderId?: string | null;
-              enrolledCount?: number;
-              teacherIds?: string[];
-              courseDirectorId?: string | null;
-              supportingTeacherIds?: string[];
-              internshipDurationMonths?: number;
-              internshipStartDate?: string | null;
-              internshipEndDate?: string | null;
-              reportMinHours?: number;
-              reportWaitDays?: number;
-              createdAt?: { toDate?: () => Date };
-            };
-            const legacyTeacherIds = Array.isArray(data.teacherIds) ? data.teacherIds : [];
-            const rawSupportingTeacherIds = Array.isArray(data.supportingTeacherIds)
-              ? data.supportingTeacherIds
-              : [];
-            const courseDirectorId =
-              typeof data.courseDirectorId === "string" && data.courseDirectorId
-                ? data.courseDirectorId
-                : legacyTeacherIds[0] || null;
-            const supportingTeacherIds = rawSupportingTeacherIds.length
-              ? rawSupportingTeacherIds
-              : legacyTeacherIds.filter((id) => id !== courseDirectorId);
 
-            return {
-              id: docSnap.id,
-              name: data.name || "—",
-              year: data.year ?? null,
-              maxStudents: data.maxStudents ?? null,
-              folderId: data.folderId ?? null,
-              enrolledCount: data.enrolledCount ?? 0,
-              teacherIds: legacyTeacherIds,
-              courseDirectorId,
-              supportingTeacherIds,
-              internshipDurationMonths: data.internshipDurationMonths ?? null,
-              internshipStartDate: data.internshipStartDate ?? null,
-              internshipEndDate: data.internshipEndDate ?? null,
-              reportMinHours: data.reportMinHours ?? 80,
-              reportWaitDays: data.reportWaitDays ?? 0,
-              createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
-            };
-          })
+        const activeStudentsSnap = await getDocs(
+          query(
+            collection(db, "users"),
+            where("schoolId", "==", schoolId),
+            where("role", "==", "aluno"),
+            where("estado", "==", "ativo")
+          )
+        );
+
+        const activeStudents = activeStudentsSnap.docs.map((docSnap) => {
+          const data = docSnap.data() as { courseId?: string; curso?: string };
+          return {
+            courseId: data.courseId || "",
+            curso: data.curso || "",
+          };
+        });
+
+        if (!active) return;
+        const mappedCourses = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data() as {
+            name?: string;
+            year?: number;
+            maxStudents?: number;
+            folderId?: string | null;
+            teacherIds?: string[];
+            courseDirectorId?: string | null;
+            supportingTeacherIds?: string[];
+            internshipDurationMonths?: number;
+            internshipStartDate?: string | null;
+            internshipEndDate?: string | null;
+            reportMinHours?: number;
+            reportWaitDays?: number;
+            createdAt?: { toDate?: () => Date };
+          };
+          const legacyTeacherIds = Array.isArray(data.teacherIds) ? data.teacherIds : [];
+          const rawSupportingTeacherIds = Array.isArray(data.supportingTeacherIds)
+            ? data.supportingTeacherIds
+            : [];
+          const courseDirectorId =
+            typeof data.courseDirectorId === "string" && data.courseDirectorId
+              ? data.courseDirectorId
+              : legacyTeacherIds[0] || null;
+          const supportingTeacherIds = rawSupportingTeacherIds.length
+            ? rawSupportingTeacherIds
+            : legacyTeacherIds.filter((id) => id !== courseDirectorId);
+
+          return {
+            id: docSnap.id,
+            name: data.name || "—",
+            year: data.year ?? null,
+            maxStudents: data.maxStudents ?? null,
+            folderId: data.folderId ?? null,
+            teacherIds: legacyTeacherIds,
+            courseDirectorId,
+            supportingTeacherIds,
+            internshipDurationMonths: data.internshipDurationMonths ?? null,
+            internshipStartDate: data.internshipStartDate ?? null,
+            internshipEndDate: data.internshipEndDate ?? null,
+            reportMinHours: data.reportMinHours ?? 80,
+            reportWaitDays: data.reportWaitDays ?? 0,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
+          };
+        });
+
+        const enrolledCountByCourse = buildEnrolledCountByCourse(
+          activeStudents,
+          mappedCourses.map((course) => ({ id: course.id, name: course.name }))
+        );
+
+        setCourses(
+          mappedCourses.map((course) => ({
+            ...course,
+            enrolledCount: enrolledCountByCourse[course.id] ?? 0,
+          }))
         );
       } catch (error) {
         console.error("[CoursesManager] Erro ao carregar cursos", error);
@@ -297,54 +325,86 @@ export function CoursesManager() {
     const snapshot = await getDocs(
       query(coursesRef, where("schoolId", "==", schoolId), orderBy("createdAt", "desc"))
     );
-    setCourses(
-      snapshot.docs.map((docSnap) => {
-        const data = docSnap.data() as {
-          name?: string;
-          year?: number;
-          maxStudents?: number;
-          folderId?: string | null;
-          enrolledCount?: number;
-          teacherIds?: string[];
-          courseDirectorId?: string | null;
-          supportingTeacherIds?: string[];
-          internshipDurationMonths?: number;
-          internshipStartDate?: string | null;
-          internshipEndDate?: string | null;
-          reportMinHours?: number;
-          reportWaitDays?: number;
-          createdAt?: { toDate?: () => Date };
-        };
-        const legacyTeacherIds = Array.isArray(data.teacherIds) ? data.teacherIds : [];
-        const rawSupportingTeacherIds = Array.isArray(data.supportingTeacherIds)
-          ? data.supportingTeacherIds
-          : [];
-        const courseDirectorId =
-          typeof data.courseDirectorId === "string" && data.courseDirectorId
-            ? data.courseDirectorId
-            : legacyTeacherIds[0] || null;
-        const supportingTeacherIds = rawSupportingTeacherIds.length
-          ? rawSupportingTeacherIds
-          : legacyTeacherIds.filter((id) => id !== courseDirectorId);
 
-        return {
-          id: docSnap.id,
-          name: data.name || "—",
-          year: data.year ?? null,
-          maxStudents: data.maxStudents ?? null,
-          folderId: data.folderId ?? null,
-          enrolledCount: data.enrolledCount ?? 0,
-          teacherIds: legacyTeacherIds,
-          courseDirectorId,
-          supportingTeacherIds,
-          internshipDurationMonths: data.internshipDurationMonths ?? null,
-          internshipStartDate: data.internshipStartDate ?? null,
-          internshipEndDate: data.internshipEndDate ?? null,
-          reportMinHours: data.reportMinHours ?? 80,
-          reportWaitDays: data.reportWaitDays ?? 0,
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
-        };
-      })
+    const activeStudentsSnap = await getDocs(
+      query(
+        collection(db, "users"),
+        where("schoolId", "==", schoolId),
+        where("role", "==", "aluno"),
+        where("estado", "==", "ativo")
+      )
+    );
+
+    const activeStudents = activeStudentsSnap.docs.map((docSnap) => {
+      const data = docSnap.data() as { courseId?: string; curso?: string };
+      return {
+        courseId: data.courseId || "",
+        curso: data.curso || "",
+      };
+    });
+
+    const mappedCourses = snapshot.docs.map((docSnap) => {
+      const data = docSnap.data() as {
+        name?: string;
+        year?: number;
+        maxStudents?: number;
+        folderId?: string | null;
+        teacherIds?: string[];
+        courseDirectorId?: string | null;
+        supportingTeacherIds?: string[];
+        internshipDurationMonths?: number;
+        internshipStartDate?: string | null;
+        internshipEndDate?: string | null;
+        reportMinHours?: number;
+        reportWaitDays?: number;
+        createdAt?: { toDate?: () => Date };
+      };
+      const legacyTeacherIds = Array.isArray(data.teacherIds) ? data.teacherIds : [];
+      const rawSupportingTeacherIds = Array.isArray(data.supportingTeacherIds)
+        ? data.supportingTeacherIds
+        : [];
+      const courseDirectorId =
+        typeof data.courseDirectorId === "string" && data.courseDirectorId
+          ? data.courseDirectorId
+          : legacyTeacherIds[0] || null;
+      const supportingTeacherIds = rawSupportingTeacherIds.length
+        ? rawSupportingTeacherIds
+        : legacyTeacherIds.filter((id) => id !== courseDirectorId);
+
+      return {
+        id: docSnap.id,
+        name: data.name || "—",
+        year: data.year ?? null,
+        maxStudents: data.maxStudents ?? null,
+        folderId: data.folderId ?? null,
+        teacherIds: legacyTeacherIds,
+        courseDirectorId,
+        supportingTeacherIds,
+        internshipDurationMonths: data.internshipDurationMonths ?? null,
+        internshipStartDate: data.internshipStartDate ?? null,
+        internshipEndDate: data.internshipEndDate ?? null,
+        reportMinHours: data.reportMinHours ?? 80,
+        reportWaitDays: data.reportWaitDays ?? 0,
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
+      };
+    });
+
+    const enrolledCountByCourse = buildEnrolledCountByCourse(
+      activeStudents,
+      mappedCourses.map((course) => ({ id: course.id, name: course.name }))
+    );
+
+    setCourses(
+      mappedCourses.map((course) => ({
+        ...course,
+        enrolledCount: enrolledCountByCourse[course.id] ?? 0,
+      }))
+    );
+  };
+
+  const toggleFolderCollapsed = (folderId: string) => {
+    setCollapsedFolderIds((prev) =>
+      prev.includes(folderId) ? prev.filter((id) => id !== folderId) : [...prev, folderId]
     );
   };
 
@@ -498,9 +558,6 @@ export function CoursesManager() {
     await refreshCourses();
   };
 
-  const resolveFolderName = (folderId?: string | null) =>
-    folders.find((folder) => folder.id === folderId)?.name || "Sem pasta";
-
   const filteredCourses = useMemo(() => {
     const data =
       filterFolderId === ALL_FOLDERS_VALUE
@@ -550,11 +607,6 @@ export function CoursesManager() {
     [teachers]
   );
 
-  const getTeacherName = (teacherId?: string | null) => {
-    if (!teacherId) return "Sem diretor definido";
-    return teacherById.get(teacherId)?.name || "Professor removido";
-  };
-
   const getTeacherAvatarFallback = (name: string) => {
     const parts = name
       .split(" ")
@@ -563,6 +615,35 @@ export function CoursesManager() {
     if (parts.length === 0) return "PR";
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return `${parts[0][0] || "P"}${parts[1][0] || "R"}`.toUpperCase();
+  };
+
+  const renderTeacherMiniViewer = (
+    teacherId: string | null | undefined,
+    roleLabel: "Diretor do Curso" | "Outro Professor"
+  ) => {
+    if (!teacherId) return null;
+
+    const teacher = teacherById.get(teacherId);
+    const name = teacher?.name || "Professor removido";
+    const email = teacher?.email || "Conta não disponível";
+
+    return (
+      <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-background/40 p-2">
+        <Avatar className="h-8 w-8">
+          <AvatarImage src={teacher?.photoURL || undefined} alt={name} />
+          <AvatarFallback>{getTeacherAvatarFallback(name)}</AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-medium text-foreground">{name}</p>
+            <Badge variant="outline" className="h-5 px-2 text-[10px]">
+              {roleLabel}
+            </Badge>
+          </div>
+          <p className="truncate text-xs text-muted-foreground">{email}</p>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -927,24 +1008,40 @@ export function CoursesManager() {
             <div className="space-y-6">
               {groupedCourses.map((group) => (
                 <div key={group.id} className="rounded-xl border border-border bg-muted/30 p-4">
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleFolderCollapsed(group.id)}
+                    className="mb-3 flex w-full items-center justify-between gap-2 rounded-md p-1 text-left hover:bg-muted/60"
+                  >
                     <div>
                       <p className="text-xs uppercase tracking-wide text-muted-foreground">Pasta</p>
                       <h3 className="text-base font-semibold text-foreground">{group.name}</h3>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {group.courses.length} curso{group.courses.length === 1 ? "" : "s"}
-                    </span>
-                  </div>
-                  {group.courses.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Sem cursos nesta pasta.</p>
-                  ) : (
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>{group.courses.length} curso{group.courses.length === 1 ? "" : "s"}</span>
+                      {collapsedFolderIds.includes(group.id) ? (
+                        <ChevronRight className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                  </button>
+                  {!collapsedFolderIds.includes(group.id) ? (
+                    group.courses.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Sem cursos nesta pasta.</p>
+                    ) : (
+                    <div className="space-y-4">
                       {group.courses.map((course) => {
                         const isEditing = editCourseId === course.id;
                         const draft = isEditing ? editCourse : null;
+                        const maxStudents = course.maxStudents ?? 0;
+                        const enrolledCount = course.enrolledCount ?? 0;
+                        const occupancyRate =
+                          maxStudents > 0 ? Math.min(100, Math.round((enrolledCount / maxStudents) * 100)) : null;
+                        const supportingTeacherIds = Array.from(new Set(course.supportingTeacherIds || []));
+                        const directorViewer = renderTeacherMiniViewer(course.courseDirectorId, "Diretor do Curso");
                         return (
-                          <div key={course.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+                          <div key={course.id} className="w-full rounded-xl border border-border bg-card p-4 shadow-sm">
                             <div className="flex items-start justify-between">
                               <h3 className="text-lg font-semibold text-foreground">{course.name}</h3>
                               <DropdownMenu>
@@ -1265,19 +1362,47 @@ export function CoursesManager() {
                                   <Badge variant="secondary">Limite: {course.maxStudents ?? "—"}</Badge>
                                   <Badge variant="outline">Inscritos: {course.enrolledCount ?? 0}</Badge>
                                 </div>
+                                {occupancyRate !== null ? (
+                                  <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                      <span>Ocupação</span>
+                                      <span>{occupancyRate}%</span>
+                                    </div>
+                                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                                      <div
+                                        className="h-full rounded-full bg-primary transition-all"
+                                        style={{ width: `${occupancyRate}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                ) : null}
                                 <div className="text-sm text-muted-foreground space-y-1">
                                   <p>Duração do estágio: {course.internshipDurationMonths ?? "—"} meses</p>
                                   <p>Data de início: {course.internshipStartDate || "—"}</p>
                                   <p>Data de conclusão: {course.internshipEndDate || "—"}</p>
                                   <p>Horas mínimas para relatório: {course.reportMinHours ?? 80}h</p>
                                   <p>Espera para relatório: {course.reportWaitDays ?? 0} dia(s)</p>
-                                  <p>Diretor do Curso: {getTeacherName(course.courseDirectorId)}</p>
-                                  <p>
-                                    Outros professores:{" "}
-                                    {(course.supportingTeacherIds || [])
-                                      .map((teacherId) => getTeacherName(teacherId))
-                                      .join(", ") || "—"}
+                                </div>
+                                <div className="space-y-2">
+                                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                    Professores associados
                                   </p>
+                                  {directorViewer ? (
+                                    directorViewer
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground">Diretor do Curso: sem diretor definido.</p>
+                                  )}
+                                  {supportingTeacherIds.length > 0 ? (
+                                    <div className="space-y-2">
+                                      {supportingTeacherIds.map((teacherId) => (
+                                        <div key={teacherId}>
+                                          {renderTeacherMiniViewer(teacherId, "Outro Professor")}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground">Sem outros professores associados.</p>
+                                  )}
                                 </div>
                               </div>
                             )}
@@ -1285,7 +1410,8 @@ export function CoursesManager() {
                         );
                       })}
                     </div>
-                  )}
+                    )
+                  ) : null}
                 </div>
               ))}
             </div>

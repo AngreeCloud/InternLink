@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { SignJWT, exportJWK, generateKeyPair } from "jose";
 import {
   clearGoogleJwksCacheForTests,
@@ -15,6 +15,13 @@ type TokenFixture = {
   jwksFetch: typeof fetch;
 };
 
+const TEST_PROJECT_ID = "demo-project";
+const TEST_KID = "jwt-test-kid";
+
+let sharedSigningPrivateKey: Awaited<ReturnType<typeof generateKeyPair>>["privateKey"];
+let sharedInvalidPrivateKey: Awaited<ReturnType<typeof generateKeyPair>>["privateKey"];
+let sharedVerifyJwk: Awaited<ReturnType<typeof exportJWK>>;
+
 async function createTokenFixture(options?: {
   projectId?: string;
   subject?: string;
@@ -27,14 +34,15 @@ async function createTokenFixture(options?: {
   expiresInSeconds?: number;
   signWithDifferentKey?: boolean;
 }) {
-  const projectId = options?.projectId ?? "demo-project";
-  const signingPair = await generateKeyPair("RS256");
-  const verifyPair = options?.signWithDifferentKey ? await generateKeyPair("RS256") : signingPair;
+  const projectId = options?.projectId ?? TEST_PROJECT_ID;
+  const signingKey = options?.signWithDifferentKey ? sharedInvalidPrivateKey : sharedSigningPrivateKey;
 
-  const publicJwk = await exportJWK(verifyPair.publicKey);
-  publicJwk.kid = "jwt-test-kid";
-  publicJwk.alg = "RS256";
-  publicJwk.use = "sig";
+  const publicJwk = {
+    ...sharedVerifyJwk,
+    kid: TEST_KID,
+    alg: "RS256",
+    use: "sig",
+  };
 
   const payload: Record<string, unknown> = {};
   if (options?.includeRole !== false) {
@@ -45,7 +53,7 @@ async function createTokenFixture(options?: {
   }
 
   const jwt = new SignJWT(payload)
-    .setProtectedHeader({ alg: "RS256", kid: "jwt-test-kid" })
+    .setProtectedHeader({ alg: "RS256", kid: TEST_KID })
     .setAudience(options?.audience ?? projectId)
     .setIssuer(options?.issuer ?? `https://session.firebase.google.com/${projectId}`)
     .setIssuedAt()
@@ -55,7 +63,7 @@ async function createTokenFixture(options?: {
     jwt.setSubject(options?.subject ?? "uid-1");
   }
 
-  const token = await jwt.sign(signingPair.privateKey);
+  const token = await jwt.sign(signingKey);
   const fetchMock = vi.fn().mockResolvedValue({
     ok: true,
     headers: new Headers({ "cache-control": "public, max-age=86400" }),
@@ -70,8 +78,24 @@ async function createTokenFixture(options?: {
 }
 
 describe("validateFirebaseSessionJwt", () => {
-  beforeEach(() => {
+  beforeAll(async () => {
     clearGoogleJwksCacheForTests();
+    clearValidatedSessionCacheForTests();
+
+    const signingPair = await generateKeyPair("RS256");
+    const invalidPair = await generateKeyPair("RS256");
+
+    sharedSigningPrivateKey = signingPair.privateKey;
+    sharedInvalidPrivateKey = invalidPair.privateKey;
+
+    const verifyJwk = await exportJWK(signingPair.publicKey);
+    verifyJwk.kid = TEST_KID;
+    verifyJwk.alg = "RS256";
+    verifyJwk.use = "sig";
+    sharedVerifyJwk = verifyJwk;
+  });
+
+  beforeEach(() => {
     clearValidatedSessionCacheForTests();
   });
 

@@ -1,24 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { bypassVerification, isVerificationBypassEnabled } from "@/lib/verification";
 
 describe("verification bypass configuration", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
-    vi.resetModules();
   });
 
-  it("matches the toggle value in local development", async () => {
+  it("matches the toggle value in local development", () => {
     vi.stubEnv("NODE_ENV", "development");
 
-    const verificationModule = await import("../../lib/verification");
-
-    expect(verificationModule.isVerificationBypassEnabled()).toBe(verificationModule.bypassVerification);
+    expect(isVerificationBypassEnabled()).toBe(bypassVerification);
   });
 
-  it("stays disabled outside local development", async () => {
+  it("stays disabled outside local development", () => {
     vi.stubEnv("NODE_ENV", "production");
 
-    const verificationModule = await import("../../lib/verification");
-
-    expect(verificationModule.isVerificationBypassEnabled()).toBe(false);
+    expect(isVerificationBypassEnabled()).toBe(false);
   });
 });

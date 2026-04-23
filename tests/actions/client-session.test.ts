@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockGetAuthRuntime = vi.fn();
 const mockGetIdToken = vi.fn();
@@ -12,7 +12,12 @@ import { createServerSession, waitForLogoutTransition } from "@/lib/auth/client-
 describe("createServerSession", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
     mockGetAuthRuntime.mockResolvedValue({ signOut: vi.fn() });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("retries after claims refresh response", async () => {
@@ -37,7 +42,9 @@ describe("createServerSession", () => {
         json: async () => ({ ok: true, role: "professor", estado: "ativo" }),
       } as Response);
 
-    await createServerSession(user);
+    const sessionPromise = createServerSession(user);
+    await vi.runAllTimersAsync();
+    await sessionPromise;
 
     expect(mockGetIdToken).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -87,7 +94,9 @@ describe("createServerSession", () => {
         json: async () => ({ ok: true, role: "professor", estado: "ativo" }),
       } as Response);
 
-    await createServerSession(user);
+    const sessionPromise = createServerSession(user);
+    await vi.runAllTimersAsync();
+    await sessionPromise;
 
     expect(mockGetIdToken).toHaveBeenCalledTimes(4);
     expect(fetchMock).toHaveBeenCalledTimes(4);

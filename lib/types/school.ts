@@ -14,6 +14,9 @@ export type School = {
    */
   allowGoogleLogin?: boolean;
   profileImageUrl?: string;
+  bannerUrl?: string;
+  bannerFocusX?: number;
+  bannerFocusY?: number;
   /**
    * Backwards-compatible flag. Original field used `requiresPhone`.
    * New fields split responsibilities:

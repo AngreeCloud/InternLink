@@ -68,6 +68,14 @@ test.beforeEach(async () => {
       email: "prof-b@school-b.pt",
     });
 
+    await setDoc(doc(db, "users", "profC"), {
+      role: "professor",
+      estado: "ativo",
+      schoolId: "schoolA",
+      nome: "Professor C",
+      email: "prof-c@school-a.pt",
+    });
+
     await setDoc(doc(db, "users", "adminSchoolA"), {
       role: "admin_escolar",
       estado: "ativo",
@@ -88,7 +96,8 @@ test.beforeEach(async () => {
       role: "professor",
       estado: "recusado",
       schoolId: "schoolA",
-      courseId: null,
+      courseId: "courseA",
+      curso: "Informática - Sistemas A",
       nome: "Professor Recusado",
       email: "prof-rejected@school-a.pt",
       reviewedAt: 1735689600000,
@@ -99,7 +108,8 @@ test.beforeEach(async () => {
       role: "professor",
       estado: "removido",
       schoolId: "schoolA",
-      courseId: null,
+      courseId: "courseA",
+      curso: "Informática - Sistemas A",
       nome: "Professor Removido",
       email: "prof-removed@school-a.pt",
       reviewedAt: 1735689600000,
@@ -118,8 +128,46 @@ test.beforeEach(async () => {
       role: "aluno",
       estado: "pendente",
       schoolId: "schoolA",
+      courseId: "courseA",
+      curso: "Informática - Sistemas A",
       nome: "Aluno A",
       email: "aluno-a@school-a.pt",
+    });
+
+    await setDoc(doc(db, "users", "studentRemovedA"), {
+      role: "aluno",
+      estado: "removido",
+      schoolId: "schoolA",
+      courseId: "courseA",
+      curso: "Informática - Sistemas A",
+      nome: "Aluno Removido A",
+      email: "aluno-removido-a@school-a.pt",
+      reviewedAt: 1735689600000,
+      reviewedBy: "profA",
+    });
+
+    await setDoc(doc(db, "courses", "courseA"), {
+      schoolId: "schoolA",
+      name: "Informática - Sistemas A",
+      teacherIds: ["profA"],
+      supportingTeacherIds: [],
+      courseDirectorId: "profA",
+    });
+
+    await setDoc(doc(db, "courses", "courseA2"), {
+      schoolId: "schoolA",
+      name: "Gestão A",
+      teacherIds: ["profC"],
+      supportingTeacherIds: [],
+      courseDirectorId: "profC",
+    });
+
+    await setDoc(doc(db, "courses", "courseB"), {
+      schoolId: "schoolB",
+      name: "Eletrónica B",
+      teacherIds: ["profB"],
+      supportingTeacherIds: [],
+      courseDirectorId: "profB",
     });
 
     await setDoc(doc(db, "schools", "schoolA", "pendingTeachers", "teacherPendingA"), {
@@ -209,6 +257,49 @@ test("professor da mesma escola consegue aprovar aluno pendente da sua escola", 
   );
 });
 
+test("professor da mesma escola mas sem turma atribuída não consegue aprovar aluno", async () => {
+  const dbProfessorSemTurma = testEnv.authenticatedContext("profC").firestore();
+
+  await assertFails(
+    updateDoc(doc(dbProfessorSemTurma, "users", "studentA"), {
+      estado: "ativo",
+    })
+  );
+});
+
+test("professor da mesma escola consegue atualizar turma do aluno", async () => {
+  const dbProfessorMesmaEscola = testEnv.authenticatedContext("profA").firestore();
+
+  await assertSucceeds(
+    updateDoc(doc(dbProfessorMesmaEscola, "users", "studentA"), {
+      courseId: "courseA",
+      curso: "Informática - Sistemas",
+    })
+  );
+});
+
+test("professor da turma não consegue mover aluno para turma que não leciona", async () => {
+  const dbProfessorMesmaEscola = testEnv.authenticatedContext("profA").firestore();
+
+  await assertFails(
+    updateDoc(doc(dbProfessorMesmaEscola, "users", "studentA"), {
+      courseId: "courseA2",
+      curso: "Gestão A",
+    })
+  );
+});
+
+test("professor de outra escola não consegue atualizar turma do aluno", async () => {
+  const dbProfessorOutraEscola = testEnv.authenticatedContext("profB").firestore();
+
+  await assertFails(
+    updateDoc(doc(dbProfessorOutraEscola, "users", "studentA"), {
+      courseId: "courseA",
+      curso: "Informática - Sistemas",
+    })
+  );
+});
+
 test("participante da conversa consegue ler chatAccess", async () => {
   const dbProfessorMesmaEscola = testEnv.authenticatedContext("profA").firestore();
 
@@ -243,8 +334,12 @@ test("professor recusado/removido consegue re-solicitar acesso mudando schoolId 
     updateDoc(doc(dbProfRejected, "users", "profRejected"), {
       estado: "pendente",
       schoolId: "schoolB",
+      escola: "Escola B",
+      courseId: "courseB",
+      curso: "Eletrónica B",
       reviewedAt: null,
       reviewedBy: null,
+      updatedAt: 1735776000000,
     })
   );
 
@@ -252,8 +347,29 @@ test("professor recusado/removido consegue re-solicitar acesso mudando schoolId 
     updateDoc(doc(dbProfRemoved, "users", "profRemoved"), {
       estado: "pendente",
       schoolId: "schoolB",
+      escola: "Escola B",
+      courseId: "courseB",
+      curso: "Eletrónica B",
       reviewedAt: null,
       reviewedBy: null,
+      updatedAt: 1735776000000,
+    })
+  );
+});
+
+test("aluno removido consegue re-solicitar acesso com escola e turma", async () => {
+  const dbStudentRemoved = testEnv.authenticatedContext("studentRemovedA").firestore();
+
+  await assertSucceeds(
+    updateDoc(doc(dbStudentRemoved, "users", "studentRemovedA"), {
+      estado: "pendente",
+      schoolId: "schoolB",
+      escola: "Escola B",
+      courseId: "courseB",
+      curso: "Eletrónica B",
+      reviewedAt: null,
+      reviewedBy: null,
+      updatedAt: 1735776000000,
     })
   );
 });

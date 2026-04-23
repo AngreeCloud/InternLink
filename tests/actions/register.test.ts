@@ -343,7 +343,7 @@ describe("registerTutor action", () => {
       expect.objectContaining({
         role: "tutor",
         empresa: "Empresa XPTO",
-        estado: "ativo",
+        estado: "inativo",
       })
     );
     expect(mockSetDoc).not.toHaveBeenCalledWith(

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime"
 import { onAuthStateChanged } from "firebase/auth"
-import { collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from "firebase/firestore"
+import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -28,15 +28,19 @@ export default function AccountStatusPage() {
     status: "pendente",
     role: "",
     schoolId: "",
+    courseId: "",
+    courseName: "",
     schoolName: "",
     schoolLogoUrl: "",
     source: "" as "users" | "",
   })
   const [schools, setSchools] = useState<School[]>([])
+  const [courses, setCourses] = useState<Array<{ id: string; name: string }>>([])
   const [selectedSchoolId, setSelectedSchoolId] = useState("")
-  const [updatingSchool, setUpdatingSchool] = useState(false)
-  const [schoolError, setSchoolError] = useState("")
-  const [schoolSuccess, setSchoolSuccess] = useState("")
+  const [selectedCourseId, setSelectedCourseId] = useState("")
+  const [updatingRequest, setUpdatingRequest] = useState(false)
+  const [requestError, setRequestError] = useState("")
+  const [requestSuccess, setRequestSuccess] = useState("")
 
   const qpEmail = searchParams.get("email")
   const qpCreatedAt = searchParams.get("createdAt")
@@ -66,6 +70,8 @@ export default function AccountStatusPage() {
         let status = "pendente"
         let role = ""
         let schoolId = ""
+        let courseId = ""
+        let courseName = ""
         let source: "users" | "" = ""
 
         const schoolsSnap = await getDocs(collection(db, "schools"))
@@ -73,6 +79,11 @@ export default function AccountStatusPage() {
           const data = schoolDoc.data() as {
             name?: string
             profileImageUrl?: string
+            bannerUrl?: string
+            bannerFocusX?: number
+            bannerFocusY?: number
+            address?: string
+            contact?: string
             emailDomain?: string
             requireInstitutionalEmail?: boolean
             allowGoogleLogin?: boolean
@@ -83,6 +94,11 @@ export default function AccountStatusPage() {
             id: schoolDoc.id,
             name: data.name || "—",
             profileImageUrl: data.profileImageUrl || "",
+            bannerUrl: data.bannerUrl || "",
+            bannerFocusX: typeof data.bannerFocusX === "number" ? data.bannerFocusX : 50,
+            bannerFocusY: typeof data.bannerFocusY === "number" ? data.bannerFocusY : 50,
+            address: data.address || "",
+            contact: data.contact || "",
             emailDomain: data.emailDomain || "",
             requireInstitutionalEmail: Boolean(data.requireInstitutionalEmail),
             allowGoogleLogin: Boolean(data.allowGoogleLogin),
@@ -98,11 +114,15 @@ export default function AccountStatusPage() {
             role?: string
             estado?: string
             schoolId?: string
+            courseId?: string
+            curso?: string
             createdAt?: { toDate: () => Date }
           }
           role = data?.role || ""
           status = data?.estado || status
           schoolId = data?.schoolId || ""
+          courseId = data?.courseId || ""
+          courseName = data?.curso || ""
           source = "users"
           if (data?.createdAt && typeof data.createdAt === "object" && "toDate" in data.createdAt) {
             createdAt = data.createdAt.toDate().toISOString()
@@ -112,6 +132,7 @@ export default function AccountStatusPage() {
         const schoolName = schoolsList.find((school) => school.id === schoolId)?.name || ""
         const schoolLogoUrl = schoolsList.find((school) => school.id === schoolId)?.profileImageUrl || ""
         setSelectedSchoolId(schoolId)
+        setSelectedCourseId(courseId)
 
         setState({
           loading: false,
@@ -122,6 +143,8 @@ export default function AccountStatusPage() {
           status,
           role,
           schoolId,
+          courseId,
+          courseName,
           schoolName,
           schoolLogoUrl,
           source,
@@ -135,8 +158,21 @@ export default function AccountStatusPage() {
   const statusLabel = state.status || "pendente"
   const canAccessDashboard = statusLabel === "ativo"
   const dashboardHref = getDashboardRouteForRole(state.role)
-  const approvalMessage = getAccountStatusApprovalMessage(state.role)
-  const canChangeSchool = state.role === "professor" && state.status === "pendente" && state.userId.length > 0
+  const approvalMessage = getAccountStatusApprovalMessage(state.role, state.status)
+  const canReRequestAccess =
+    state.userId.length > 0
+    && state.role !== "tutor"
+    && ["pendente", "inativo", "removido"].includes(statusLabel)
+
+  const selectedSchoolName = schools.find((school) => school.id === selectedSchoolId)?.name || ""
+  const selectedCourseName = courses.find((course) => course.id === selectedCourseId)?.name || ""
+  const focusSchool = useMemo(
+    () =>
+      schools.find((school) => school.id === selectedSchoolId)
+      || schools.find((school) => school.id === state.schoolId)
+      || null,
+    [schools, selectedSchoolId, state.schoolId]
+  )
 
   useEffect(() => {
     if (state.loading || !state.userId) return
@@ -145,60 +181,132 @@ export default function AccountStatusPage() {
     router.replace(getDashboardRouteForRole(state.role))
   }, [router, state.loading, state.role, state.status, state.userId])
 
-  const handleChangeSchoolAssociation = async () => {
-    if (!canChangeSchool) return
-
+  useEffect(() => {
     if (!selectedSchoolId) {
-      setSchoolError("Selecione uma escola.")
+      setCourses([])
+      setSelectedCourseId("")
       return
     }
 
-    setUpdatingSchool(true)
-    setSchoolError("")
-    setSchoolSuccess("")
+    let cancelled = false
+
+    ;(async () => {
+      try {
+        const db = await getDbRuntime()
+        const coursesSnap = await getDocs(
+          query(collection(db, "courses"), where("schoolId", "==", selectedSchoolId))
+        )
+
+        if (cancelled) return
+
+        const list = coursesSnap.docs
+          .map((courseDoc) => {
+            const data = courseDoc.data() as { name?: string }
+            return {
+              id: courseDoc.id,
+              name: data.name || "—",
+            }
+          })
+          .sort((left, right) => left.name.localeCompare(right.name, "pt-PT"))
+
+        setCourses(list)
+        setSelectedCourseId((previous) => {
+          if (previous && list.some((course) => course.id === previous)) {
+            return previous
+          }
+
+          if (
+            state.schoolId === selectedSchoolId
+            && state.courseId
+            && list.some((course) => course.id === state.courseId)
+          ) {
+            return state.courseId
+          }
+
+          return ""
+        })
+      } catch (error) {
+        console.error("Erro ao carregar turmas para re-solicitação:", error)
+        if (!cancelled) {
+          setCourses([])
+          setSelectedCourseId("")
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedSchoolId, state.courseId, state.schoolId])
+
+  const handleReRequestAccess = async () => {
+    if (!canReRequestAccess) return
+
+    if (!selectedSchoolId) {
+      setRequestError("Selecione uma escola.")
+      return
+    }
+
+    if (!selectedCourseId) {
+      setRequestError("Selecione a turma.")
+      return
+    }
+
+    setUpdatingRequest(true)
+    setRequestError("")
+    setRequestSuccess("")
 
     try {
       const db = await getDbRuntime()
+      const schoolName = selectedSchoolName
+      const courseName = selectedCourseName
 
       if (state.source === "users") {
         await updateDoc(doc(db, "users", state.userId), {
           schoolId: selectedSchoolId,
+          escola: schoolName,
+          courseId: selectedCourseId,
+          curso: courseName,
           estado: "pendente",
-          courseId: null,
           reviewedAt: null,
           reviewedBy: null,
+          updatedAt: serverTimestamp(),
         })
 
-        if (state.schoolId && state.schoolId !== selectedSchoolId) {
-          await deleteDoc(doc(db, "schools", state.schoolId, "pendingTeachers", state.userId))
-        }
+        if (state.role === "professor") {
+          if (state.schoolId && state.schoolId !== selectedSchoolId) {
+            await deleteDoc(doc(db, "schools", state.schoolId, "pendingTeachers", state.userId))
+          }
 
-        await setDoc(
-          doc(db, "schools", selectedSchoolId, "pendingTeachers", state.userId),
-          {
-            name: state.userName,
-            email: state.email,
-            role: "teacher",
-            createdAt: serverTimestamp(),
-          },
-          { merge: true }
-        )
+          await setDoc(
+            doc(db, "schools", selectedSchoolId, "pendingTeachers", state.userId),
+            {
+              name: state.userName,
+              email: state.email,
+              role: "teacher",
+              createdAt: serverTimestamp(),
+            },
+            { merge: true }
+          )
+        }
       }
 
-      const nextSchoolName = schools.find((school) => school.id === selectedSchoolId)?.name || ""
       const nextSchoolLogoUrl = schools.find((school) => school.id === selectedSchoolId)?.profileImageUrl || ""
       setState((previous) => ({
         ...previous,
+        status: "pendente",
         schoolId: selectedSchoolId,
-        schoolName: nextSchoolName,
+        schoolName,
         schoolLogoUrl: nextSchoolLogoUrl,
+        courseId: selectedCourseId,
+        courseName,
       }))
-      setSchoolSuccess(`Pedido atualizado para ${nextSchoolName || "a escola selecionada"}.`)
+      setRequestSuccess(`Pedido atualizado para ${schoolName || "a escola selecionada"}, turma ${courseName || "selecionada"}.`)
     } catch (error) {
-      console.error("Erro ao atualizar escola de associação:", error)
-      setSchoolError("Não foi possível atualizar a escola. Tente novamente.")
+      console.error("Erro ao re-solicitar acesso:", error)
+      setRequestError("Não foi possível atualizar o pedido. Tente novamente.")
     } finally {
-      setUpdatingSchool(false)
+      setUpdatingRequest(false)
     }
   }
 
@@ -228,7 +336,7 @@ export default function AccountStatusPage() {
                   {createdDate ? createdDate.toLocaleString() : "—"}
                 </span>
               </div>
-              {state.schoolName ? (
+              {state.schoolName && !canReRequestAccess ? (
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm text-muted-foreground">Escola</span>
                   <div className="flex items-center gap-2">
@@ -240,28 +348,69 @@ export default function AccountStatusPage() {
                   </div>
                 </div>
               ) : null}
+
+              {focusSchool && canReRequestAccess ? (
+                <div className="overflow-hidden rounded-lg border border-border bg-card">
+                  {focusSchool.bannerUrl ? (
+                    <div className="relative h-24 w-full">
+                      <img
+                        src={focusSchool.bannerUrl}
+                        alt={`Banner de ${focusSchool.name}`}
+                        className="h-full w-full object-cover"
+                        style={{ objectPosition: `${focusSchool.bannerFocusX || 50}% ${focusSchool.bannerFocusY || 50}%` }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="h-24 w-full bg-gradient-to-r from-muted to-muted/40" />
+                  )}
+
+                  <div className="space-y-3 px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={focusSchool.profileImageUrl || ""} alt={focusSchool.name} />
+                        <AvatarFallback>{focusSchool.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Escola selecionada</p>
+                        <p className="font-semibold text-foreground">{focusSchool.name}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2 text-sm sm:grid-cols-2">
+                      <p className="text-muted-foreground">
+                        <span className="font-medium text-foreground">Morada:</span>{" "}
+                        {focusSchool.address || "Sem morada registada"}
+                      </p>
+                      <p className="text-muted-foreground">
+                        <span className="font-medium text-foreground">Contacto:</span>{" "}
+                        {focusSchool.contact || "Sem contacto registado"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               {!canAccessDashboard && (
                 <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                   {approvalMessage}
                 </div>
               )}
 
-              {canChangeSchool && (
+              {canReRequestAccess && (
                 <div className="space-y-3 rounded-md border border-border p-3">
                   <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">Escola associada ao pedido</p>
-                    <p className="text-sm font-medium">{state.schoolName || "Sem escola associada"}</p>
+                    <p className="text-xs text-muted-foreground">Re-solicitar acesso</p>
                   </div>
 
-                  {schoolError ? (
+                  {requestError ? (
                     <Alert variant="destructive">
-                      <AlertDescription>{schoolError}</AlertDescription>
+                      <AlertDescription>{requestError}</AlertDescription>
                     </Alert>
                   ) : null}
 
-                  {schoolSuccess ? (
+                  {requestSuccess ? (
                     <Alert>
-                      <AlertDescription>{schoolSuccess}</AlertDescription>
+                      <AlertDescription>{requestSuccess}</AlertDescription>
                     </Alert>
                   ) : null}
 
@@ -269,17 +418,35 @@ export default function AccountStatusPage() {
                     schools={schools}
                     value={selectedSchoolId}
                     onChange={setSelectedSchoolId}
-                    label="Alterar escola de associação"
+                    label="Escola"
                     placeholder="Pesquise a escola"
-                    disabled={updatingSchool}
+                    disabled={updatingRequest}
+                    selectedPreviewMode="while-searching"
                   />
+
+                  <div className="space-y-1">
+                    <label className="text-sm text-muted-foreground">Turma</label>
+                    <select
+                      className="h-9 w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm"
+                      value={selectedCourseId}
+                      onChange={(event) => setSelectedCourseId(event.target.value)}
+                      disabled={updatingRequest || courses.length === 0}
+                    >
+                      <option value="">Selecionar turma</option>
+                      {courses.map((course) => (
+                        <option key={course.id} value={course.id}>
+                          {course.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
                   <Button
                     size="sm"
-                    onClick={handleChangeSchoolAssociation}
-                    disabled={updatingSchool || !selectedSchoolId}
+                    onClick={handleReRequestAccess}
+                    disabled={updatingRequest || !selectedSchoolId || !selectedCourseId}
                   >
-                    {updatingSchool ? "A atualizar..." : "Atualizar pedido"}
+                    {updatingRequest ? "A atualizar..." : "Re-solicitar acesso"}
                   </Button>
                 </div>
               )}
@@ -288,9 +455,9 @@ export default function AccountStatusPage() {
                 <Button asChild variant="outline" size="sm">
                   <Link href="/login">Voltar ao login</Link>
                 </Button>
-                {!canAccessDashboard && state.role === "professor" ? (
+                {state.status === "inativo" ? (
                   <Button asChild size="sm" variant="secondary">
-                    <Link href="/re-solicitar-acesso">Re-solicitar acesso</Link>
+                    <Link href="/verify-email">Verificar email</Link>
                   </Button>
                 ) : null}
                 {canAccessDashboard ? (

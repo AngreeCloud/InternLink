@@ -16,6 +16,7 @@ type SchoolSelectorProps = {
   className?: string;
   label?: string;
   error?: string;
+  selectedPreviewMode?: "always" | "while-searching" | "never";
 };
 
 export function SchoolSelector({
@@ -27,6 +28,7 @@ export function SchoolSelector({
   className,
   label = "Escola",
   error,
+  selectedPreviewMode = "always",
 }: SchoolSelectorProps) {
   const [inputValue, setInputValue] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -34,6 +36,35 @@ export function SchoolSelector({
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const selectedSchool = useMemo(() => schools.find((school) => school.id === value), [schools, value]);
+  const isSearching = useMemo(() => {
+    const query = inputValue.trim().toLowerCase();
+    if (!query) {
+      return false;
+    }
+
+    if (!selectedSchool) {
+      return true;
+    }
+
+    return query !== selectedSchool.name.trim().toLowerCase();
+  }, [inputValue, selectedSchool]);
+
+  const shouldShowSelectedPreview = useMemo(() => {
+    if (!selectedSchool) {
+      return false;
+    }
+
+    if (selectedPreviewMode === "never") {
+      return false;
+    }
+
+    if (selectedPreviewMode === "while-searching") {
+      return isSearching;
+    }
+
+    return true;
+  }, [isSearching, selectedPreviewMode, selectedSchool]);
+
   const filteredSchools = useMemo(() => {
     const query = inputValue.trim().toLowerCase();
     if (!query) return schools;
@@ -144,7 +175,7 @@ export function SchoolSelector({
   return (
     <div className={className} ref={rootRef}>
       {label && <Label htmlFor="school-selector">{label}</Label>}
-      {selectedSchool && (
+      {shouldShowSelectedPreview && selectedSchool && (
         <div className="mt-2 flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1.5">
           <Avatar className="h-6 w-6">
             <AvatarImage src={selectedSchool.profileImageUrl || ""} alt={selectedSchool.name} />

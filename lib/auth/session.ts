@@ -59,7 +59,7 @@ export function isRoleAllowedForPath(pathname: string, profile: SessionUserProfi
   }
 
   if (pathname === "/tutor" || pathname.startsWith("/tutor/")) {
-    return role === "tutor";
+    return role === "tutor" && profile.estado === "ativo";
   }
 
   if (pathname === "/school-admin" || pathname.startsWith("/school-admin/")) {

@@ -1,10 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, getDocs, query, where, doc, updateDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+} from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { ensureOrgMemberIndexByUserId } from "@/lib/chat/realtime-chat";
+import { resolveStudentCourseId, resolveStudentCourseName } from "@/lib/course-enrollment";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,8 +26,17 @@ type PendingStudent = {
   nome: string;
   email: string;
   curso: string;
+  courseId: string;
   dataNascimento: string;
   createdAt: string;
+};
+
+type CourseAccess = {
+  id: string;
+  name: string;
+  teacherIds: string[];
+  supportingTeacherIds: string[];
+  courseDirectorId: string | null;
 };
 
 export function PendingStudentsManager() {
@@ -25,6 +44,7 @@ export function PendingStudentsManager() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [schoolCourses, setSchoolCourses] = useState<Array<{ id: string; name: string }>>([]);
 
   const loadStudents = async () => {
     setLoading(true);
@@ -32,13 +52,68 @@ export function PendingStudentsManager() {
       const auth = await getAuthRuntime();
       const db = await getDbRuntime();
       const user = auth.currentUser;
-      if (!user) return;
+      if (!user) {
+        setStudents([]);
+        setSchoolCourses([]);
+        return;
+      }
 
-      const { getDoc } = await import("firebase/firestore");
       const userSnap = await getDoc(doc(db, "users", user.uid));
-      if (!userSnap.exists()) return;
+      if (!userSnap.exists()) {
+        setStudents([]);
+        setSchoolCourses([]);
+        return;
+      }
       const userData = userSnap.data() as { schoolId?: string };
-      if (!userData.schoolId) return;
+      if (!userData.schoolId) {
+        setStudents([]);
+        setSchoolCourses([]);
+        return;
+      }
+
+      const coursesSnap = await getDocs(
+        query(
+          collection(db, "courses"),
+          where("schoolId", "==", userData.schoolId)
+        )
+      );
+
+      const allCourses = coursesSnap.docs.map((docSnap) => {
+        const data = docSnap.data() as {
+          name?: string;
+          teacherIds?: string[];
+          supportingTeacherIds?: string[];
+          courseDirectorId?: string | null;
+        };
+
+        return {
+          id: docSnap.id,
+          name: data.name || "—",
+          teacherIds: Array.isArray(data.teacherIds) ? data.teacherIds : [],
+          supportingTeacherIds: Array.isArray(data.supportingTeacherIds) ? data.supportingTeacherIds : [],
+          courseDirectorId:
+            typeof data.courseDirectorId === "string" && data.courseDirectorId
+              ? data.courseDirectorId
+              : null,
+        };
+      });
+
+      const allowedCourses = allCourses
+        .filter((course) => {
+          if (course.courseDirectorId === user.uid) {
+            return true;
+          }
+
+          return (
+            course.teacherIds.includes(user.uid)
+            || course.supportingTeacherIds.includes(user.uid)
+          );
+        })
+        .map((course) => ({ id: course.id, name: course.name }))
+        .sort((left, right) => left.name.localeCompare(right.name, "pt-PT"));
+
+      setSchoolCourses(allowedCourses);
+      const allowedCourseIds = new Set(allowedCourses.map((course) => course.id));
 
       const pendingSnap = await getDocs(
         query(
@@ -49,23 +124,44 @@ export function PendingStudentsManager() {
         )
       );
 
-      const list: PendingStudent[] = pendingSnap.docs.map((docSnap) => {
+      const list: PendingStudent[] = pendingSnap.docs
+        .map((docSnap) => {
         const data = docSnap.data() as {
           nome?: string;
           email?: string;
           curso?: string;
+          courseId?: string;
           dataNascimento?: string;
           createdAt?: { toDate: () => Date };
         };
+
+        const resolvedCourseId = resolveStudentCourseId(
+          {
+            courseId: data.courseId || "",
+            curso: data.curso || "",
+          },
+          allCourses.map((course) => ({ id: course.id, name: course.name }))
+        );
+
+        if (!resolvedCourseId || !allowedCourseIds.has(resolvedCourseId)) {
+          return null;
+        }
+
         return {
           id: docSnap.id,
           nome: data.nome || "—",
           email: data.email || "—",
-          curso: data.curso || "—",
+          curso: resolveStudentCourseName(
+            resolvedCourseId,
+            allCourses.map((course) => ({ id: course.id, name: course.name })),
+            data.curso || ""
+          ),
+          courseId: resolvedCourseId,
           dataNascimento: data.dataNascimento || "—",
           createdAt: data.createdAt?.toDate?.()?.toLocaleDateString("pt-PT") || "—",
         };
-      });
+      })
+        .filter((student): student is PendingStudent => Boolean(student));
 
       setStudents(list);
     } catch (error) {
@@ -92,7 +188,33 @@ export function PendingStudentsManager() {
     setActionLoading(studentId);
     try {
       const db = await getDbRuntime();
-      await updateDoc(doc(db, "users", studentId), { estado: "ativo" });
+      const student = students.find((item) => item.id === studentId);
+      const resolvedCourseId = resolveStudentCourseId(
+        {
+          courseId: student?.courseId || "",
+          curso: student?.curso || "",
+        },
+        schoolCourses
+      );
+      const resolvedCourseName = resolveStudentCourseName(
+        resolvedCourseId,
+        schoolCourses,
+        student?.curso || ""
+      );
+
+      const payload: Record<string, unknown> = {
+        estado: "ativo",
+        updatedAt: serverTimestamp(),
+      };
+
+      if (resolvedCourseId) {
+        payload.courseId = resolvedCourseId;
+      }
+      if (resolvedCourseName !== "—") {
+        payload.curso = resolvedCourseName;
+      }
+
+      await updateDoc(doc(db, "users", studentId), payload);
       try {
         await ensureOrgMemberIndexByUserId(studentId);
       } catch (syncError) {

@@ -22,7 +22,7 @@ export function getLoginRedirectRoute(role: string, estado: string): string {
     return "/professor";
   }
 
-  if (role === "tutor") {
+  if (role === "tutor" && estado === "ativo") {
     return "/tutor";
   }
 

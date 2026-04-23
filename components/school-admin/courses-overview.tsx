@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { collection, getDocs, orderBy, query, where } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 import { useSchoolAdmin } from "@/components/school-admin/school-admin-context";
+import { buildEnrolledCountByCourse } from "@/lib/course-enrollment";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -24,23 +25,49 @@ export function CoursesOverview({ limit = 4 }: { limit?: number }) {
 
     const load = async () => {
       const db = await getDbRuntime();
-      const snapshot = await getDocs(
+      const coursesSnap = await getDocs(
         query(collection(db, "courses"), where("schoolId", "==", schoolId), orderBy("createdAt", "desc"))
+      );
+
+      const activeStudentsSnap = await getDocs(
+        query(
+          collection(db, "users"),
+          where("schoolId", "==", schoolId),
+          where("role", "==", "aluno"),
+          where("estado", "==", "ativo")
+        )
       );
 
       if (!active) return;
 
+      const mappedCourses = coursesSnap.docs.map((docSnap) => {
+        const data = docSnap.data() as { name?: string; year?: number; maxStudents?: number };
+        return {
+          id: docSnap.id,
+          name: data.name || "—",
+          year: data.year ?? null,
+          maxStudents: data.maxStudents ?? null,
+        };
+      });
+
+      const activeStudents = activeStudentsSnap.docs.map((docSnap) => {
+        const data = docSnap.data() as { courseId?: string; curso?: string };
+        return {
+          courseId: data.courseId || "",
+          curso: data.curso || "",
+        };
+      });
+
+      const enrolledCountByCourse = buildEnrolledCountByCourse(
+        activeStudents,
+        mappedCourses.map((course) => ({ id: course.id, name: course.name }))
+      );
+
       setCourses(
-        snapshot.docs.slice(0, limit).map((docSnap) => {
-          const data = docSnap.data() as { name?: string; year?: number; maxStudents?: number; enrolledCount?: number };
-          return {
-            id: docSnap.id,
-            name: data.name || "—",
-            year: data.year ?? null,
-            maxStudents: data.maxStudents ?? null,
-            enrolledCount: data.enrolledCount ?? 0,
-          };
-        })
+        mappedCourses.slice(0, limit).map((course) => ({
+          ...course,
+          enrolledCount: enrolledCountByCourse[course.id] ?? 0,
+        }))
       );
     };
 
