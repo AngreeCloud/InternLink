@@ -140,7 +140,7 @@ export function SignatureBoxEditor({
         if (!drawingEnabledRef.current) return;
         const role = activeRoleRef.current;
         if (!role) return;
-        const pointer = fabricCanvas.getPointer(opt.e as MouseEvent);
+        const pointer = fabricCanvas.getScenePoint(opt.e as MouseEvent);
         startX = pointer.x;
         startY = pointer.y;
         isDrawing = true;
@@ -165,7 +165,7 @@ export function SignatureBoxEditor({
 
       const onMouseMove = (opt: { e: MouseEvent | TouchEvent }) => {
         if (!isDrawing || !fabricCanvas || !pendingRect) return;
-        const pointer = fabricCanvas.getPointer(opt.e as MouseEvent);
+        const pointer = fabricCanvas.getScenePoint(opt.e as MouseEvent);
         const w = Math.abs(pointer.x - startX);
         const h = Math.abs(pointer.y - startY);
         pendingRect.set({
