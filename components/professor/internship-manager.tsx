@@ -33,7 +33,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Briefcase, DoorOpen, Mail, Pencil, Plus, Search, Trash2, UserPlus, Users } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Briefcase, DoorOpen, Mail, Pencil, Plus, Search, Trash2, UserPlus, Users } from "lucide-react";
 
 type Estagio = {
   id: string;
@@ -973,15 +974,23 @@ export function InternshipManager() {
                       <p className="text-xs text-muted-foreground">Criado em: {estagio.createdAt}</p>
                     </div>
 
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openEditTutorDialog(estagio)}
-                    >
-                      <Pencil className="mr-2 h-4 w-4" />
-                      {estagio.tutorId ? "Alterar tutor" : "Associar tutor"}
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openEditTutorDialog(estagio)}
+                      >
+                        <Pencil className="mr-2 h-4 w-4" />
+                        {estagio.tutorId ? "Alterar tutor" : "Associar tutor"}
+                      </Button>
+                      <Button asChild size="sm">
+                        <Link href={`/professor/estagios/${estagio.id}`}>
+                          Abrir
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </Link>
+                      </Button>
+                    </div>
                   </div>
                     );
                   })()}

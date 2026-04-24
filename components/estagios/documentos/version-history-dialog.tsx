@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore"
 import { ref as storageRef, getDownloadURL } from "firebase/storage"
-import { getFirebaseDb, getFirebaseStorage } from "@/lib/firebase-runtime"
+import { getDbRuntime, getStorageRuntime } from "@/lib/firebase-runtime"
 import {
   Dialog,
   DialogContent,
@@ -27,6 +27,8 @@ type VersionRow = {
   version: number
   createdAt?: number
   pdfPath: string
+  fileUrl?: string
+  notes?: string
 }
 
 export function VersionHistoryDialog({
@@ -42,30 +44,58 @@ export function VersionHistoryDialog({
   useEffect(() => {
     if (!open) return
     setLoading(true)
-    const db = getFirebaseDb()
-    const q = query(
-      collection(db, "estagios", estagioId, "documentos", documentId, "versoes"),
-      orderBy("version", "desc"),
-    )
-    const unsub = onSnapshot(q, (snap) => {
-      const list: VersionRow[] = snap.docs.map((d) => {
-        const data = d.data() as Record<string, unknown>
-        return {
-          id: d.id,
-          version: typeof data.version === "number" ? (data.version as number) : 0,
-          createdAt: typeof data.createdAt === "number" ? (data.createdAt as number) : undefined,
-          pdfPath: (data.pdfPath as string) ?? "",
-        }
+    let unsub: (() => void) | undefined
+    let cancelled = false
+    ;(async () => {
+      const db = await getDbRuntime()
+      if (cancelled) return
+      const q = query(
+        collection(db, "estagios", estagioId, "documentos", documentId, "versoes"),
+        orderBy("version", "desc"),
+      )
+      unsub = onSnapshot(q, (snap) => {
+        const list: VersionRow[] = snap.docs.map((d) => {
+          const data = d.data() as Record<string, unknown>
+          const uploadedAt =
+            typeof data.uploadedAt === "object" && data.uploadedAt
+              ? (data.uploadedAt as { toMillis?: () => number }).toMillis?.()
+              : typeof data.createdAt === "object" && data.createdAt
+                ? (data.createdAt as { toMillis?: () => number }).toMillis?.()
+                : typeof data.createdAt === "number"
+                  ? (data.createdAt as number)
+                  : undefined
+          const pdfPath =
+            (data.filePath as string | undefined) ??
+            (data.pdfPath as string | undefined) ??
+            ""
+          const fileUrl = (data.fileUrl as string | undefined) ?? ""
+          return {
+            id: d.id,
+            version: typeof data.version === "number" ? (data.version as number) : 0,
+            createdAt: uploadedAt,
+            pdfPath,
+            fileUrl,
+            notes: typeof data.notes === "string" ? (data.notes as string) : "",
+          }
+        })
+        setVersions(list)
+        setLoading(false)
       })
-      setVersions(list)
-      setLoading(false)
-    })
-    return () => unsub()
+    })()
+    return () => {
+      cancelled = true
+      unsub?.()
+    }
   }, [open, estagioId, documentId])
 
   const openVersion = async (v: VersionRow) => {
     try {
-      const storage = getFirebaseStorage()
+      if (v.fileUrl) {
+        window.open(v.fileUrl, "_blank", "noopener,noreferrer")
+        return
+      }
+      if (!v.pdfPath) return
+      const storage = await getStorageRuntime()
       const url = await getDownloadURL(storageRef(storage, v.pdfPath))
       window.open(url, "_blank", "noopener,noreferrer")
     } catch (err) {

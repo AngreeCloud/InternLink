@@ -26,6 +26,7 @@ import {
   History,
   Upload,
   Loader2,
+  Plus,
 } from "lucide-react";
 import { UploadWizard, type UploadWizardDoc } from "./upload-wizard";
 import { DocumentPreviewDialog } from "./document-preview-dialog";
@@ -193,6 +194,40 @@ export function DocumentList({
     }
   };
 
+  const createBlankDoc = async () => {
+    if (!canManage) return;
+    try {
+      const res = await fetch(`/api/estagios/${estagioId}/documentos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nome: "Novo documento",
+          descricao: "",
+          categoria: "outros",
+          accessRoles: ["diretor", "professor", "tutor", "aluno"],
+          signatureRoles: [],
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; id?: string; error?: string };
+      if (!res.ok || !data.ok || !data.id) {
+        console.error("[v0] create doc failed", data.error);
+        return;
+      }
+      // Abrir wizard para o documento recém-criado.
+      setUploadDoc({
+        id: data.id,
+        nome: "Novo documento",
+        descricao: "",
+        categoria: "outros",
+        signatureBoxes: [],
+        signatureRoles: [],
+        accessRoles: ["diretor", "professor", "tutor", "aluno"],
+      });
+    } catch (err) {
+      console.error("[v0] create doc error", err);
+    }
+  };
+
   const signerRequirementMet = (d: EstagioDocument): boolean => {
     const canSign = canSignDoc(currentUserId, currentUserRole, d as DocumentoEstagio);
     if (!canSign) return false;
@@ -220,6 +255,12 @@ export function DocumentList({
               <TabsTrigger value="signed">Assinados</TabsTrigger>
             </TabsList>
           </Tabs>
+          {canManage && (
+            <Button size="sm" onClick={createBlankDoc}>
+              <Plus className="mr-1.5 h-4 w-4" />
+              Novo documento
+            </Button>
+          )}
         </div>
       </div>
 
@@ -228,11 +269,17 @@ export function DocumentList({
           <Loader2 className="mr-2 h-4 w-4 animate-spin" /> A carregar documentos...
         </div>
       ) : filtered.length === 0 ? (
-        <Card className="flex flex-col items-center justify-center gap-2 border-dashed py-12 text-center">
+        <Card className="flex flex-col items-center justify-center gap-3 border-dashed py-12 text-center">
           <FileText className="h-10 w-10 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
             Ainda não há documentos para este estágio.
           </p>
+          {canManage && (
+            <Button size="sm" onClick={createBlankDoc}>
+              <Plus className="mr-1.5 h-4 w-4" />
+              Carregar documento
+            </Button>
+          )}
         </Card>
       ) : (
         <div className="overflow-hidden rounded-lg border bg-card">

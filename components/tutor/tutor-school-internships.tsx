@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ArrowLeft, FileText, FileUp, User } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileText, FileUp, User } from "lucide-react";
 
 type Estagio = {
   id: string;
@@ -203,10 +203,18 @@ export function TutorSchoolInternships({ schoolId }: { schoolId: string }) {
                       </Button>
                       <Button
                         size="sm"
+                        variant="outline"
                         onClick={() => router.push(`/tutor/estagios/${schoolId}/${estagio.id}/relatorios`)}
                       >
                         <FileUp className="mr-2 h-4 w-4" />
                         Relatório
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => router.push(`/tutor/estagios/${schoolId}/${estagio.id}`)}
+                      >
+                        Abrir estágio
+                        <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
                     </div>
                   </div>
