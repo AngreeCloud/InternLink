@@ -70,6 +70,12 @@ export function EstagioDetailView({
           setLoading(false);
         },
         (err) => {
+          // Ignora permission-denied que ocorre durante o logout quando o
+          // listener ainda está vivo mas o utilizador já perdeu sessão.
+          const code = (err as { code?: string })?.code;
+          if (code === "permission-denied") {
+            return;
+          }
           console.error("[v0] estagio snapshot error", err);
           setNotFound(true);
           setLoading(false);
@@ -82,58 +88,65 @@ export function EstagioDetailView({
     };
   }, [estagioId]);
 
-  // Load participants + course once we have the estagio
+  // Load participants via server API (bypasses rules for tutors from other schools).
   useEffect(() => {
     if (!estagio) return;
     let cancelled = false;
     (async () => {
-      const db = await getDbRuntime();
-      const ids = [estagio.alunoId, estagio.professorId, estagio.tutorId].filter(
-        (x): x is string => !!x && typeof x === "string"
-      );
-      const entries: [string, Participant][] = [];
-      await Promise.all(
-        ids.map(async (uid) => {
-          try {
-            const u = await getDoc(doc(db, "users", uid));
-            if (u.exists()) {
-              const data = u.data() as Record<string, unknown>;
-              entries.push([
-                uid,
-                {
-                  name: (data.nome as string) || (data.displayName as string) || uid,
-                  role: (data.role as EstagioRole) || "aluno",
-                  email: typeof data.email === "string" ? (data.email as string) : undefined,
-                },
-              ]);
-            }
-          } catch (err) {
-            console.error("[v0] load participant failed", uid, err);
-          }
-        })
-      );
-      if (cancelled) return;
-      setParticipants(Object.fromEntries(entries));
+      try {
+        const res = await fetch(`/api/estagios/${estagio.id}/participants`, {
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          console.error("[v0] participants api failed", res.status);
+          return;
+        }
+        const data = (await res.json()) as {
+          ok?: boolean;
+          participants?: Record<
+            string,
+            { name: string; email?: string; role: EstagioRole }
+          >;
+        };
+        if (cancelled || !data.ok || !data.participants) return;
+        const entries: Record<string, Participant> = {};
+        for (const [uid, p] of Object.entries(data.participants)) {
+          entries[uid] = { name: p.name, role: p.role, email: p.email };
+        }
+        setParticipants(entries);
+      } catch (err) {
+        console.error("[v0] load participants failed", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [estagio]);
 
+  // Load course data (public) to determine director role.
+  useEffect(() => {
+    if (!estagio) return;
+    let cancelled = false;
+    (async () => {
       const rawCourseId =
         (estagio.alunoCourseId as string | undefined) ??
         (estagio.courseId as string | undefined);
-      if (typeof rawCourseId === "string" && rawCourseId.length > 0) {
-        try {
-          const c = await getDoc(doc(db, "courses", rawCourseId));
-          if (c.exists() && !cancelled) {
-            const raw = c.data() as Record<string, unknown>;
-            setCourse({
-              id: c.id,
-              schoolId: raw.schoolId as string | undefined,
-              courseDirectorId: raw.courseDirectorId as string | undefined,
-              teacherIds: raw.teacherIds as string[] | undefined,
-              supportingTeacherIds: raw.supportingTeacherIds as string[] | undefined,
-            });
-          }
-        } catch (err) {
-          console.error("[v0] load course failed", err);
+      if (typeof rawCourseId !== "string" || rawCourseId.length === 0) return;
+      try {
+        const db = await getDbRuntime();
+        const c = await getDoc(doc(db, "courses", rawCourseId));
+        if (c.exists() && !cancelled) {
+          const raw = c.data() as Record<string, unknown>;
+          setCourse({
+            id: c.id,
+            schoolId: raw.schoolId as string | undefined,
+            courseDirectorId: raw.courseDirectorId as string | undefined,
+            teacherIds: raw.teacherIds as string[] | undefined,
+            supportingTeacherIds: raw.supportingTeacherIds as string[] | undefined,
+          });
         }
+      } catch (err) {
+        console.error("[v0] load course failed", err);
       }
     })();
     return () => {
@@ -149,7 +162,9 @@ export function EstagioDetailView({
     return null;
   }, [estagio, currentUserId, course]);
 
-  const canManage = isDirectorRole(effectiveRole);
+  // Diretor e Professor orientador podem gerir documentos do estágio.
+  const canManage = effectiveRole === "diretor" || effectiveRole === "professor";
+  void isDirectorRole;
 
   if (loading) {
     return (

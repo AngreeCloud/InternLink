@@ -33,7 +33,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FileText, Upload, Eye, EyeOff, PenTool } from "lucide-react";
+import { FileText, Upload, Eye, EyeOff, PenTool, Megaphone } from "lucide-react";
+import { BroadcastDialog } from "@/components/estagios/documentos/broadcast-dialog";
 
 type Documento = {
   id: string;
@@ -57,7 +58,12 @@ export function DocumentManager() {
   const [estagios, setEstagios] = useState<Estagio[]>([]);
   const [loading, setLoading] = useState(true);
   const [schoolId, setSchoolId] = useState("");
+  const [userId, setUserId] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [broadcastOpen, setBroadcastOpen] = useState(false);
+  const [broadcastResult, setBroadcastResult] = useState<
+    { created: number; total: number } | null
+  >(null);
 
   // Form state
   const [docNome, setDocNome] = useState("");
@@ -75,6 +81,7 @@ export function DocumentManager() {
       const db = await getDbRuntime();
       const user = auth.currentUser;
       if (!user) return;
+      setUserId(user.uid);
 
       const userSnap = await getDoc(doc(db, "users", user.uid));
       if (!userSnap.exists()) return;
@@ -236,13 +243,22 @@ export function DocumentManager() {
         </p>
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Gestão de Documentos</h1>
           <p className="text-muted-foreground">
             Carregar documentos e definir visibilidade e assinaturas digitais.
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setBroadcastOpen(true)}
+            disabled={!userId || !schoolId}
+          >
+            <Megaphone className="mr-2 h-4 w-4" />
+            Difundir por turma
+          </Button>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button disabled>
@@ -358,7 +374,27 @@ export function DocumentManager() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
+
+      {broadcastResult ? (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+          Documento difundido com sucesso em {broadcastResult.created} de {broadcastResult.total}
+          {" "}estágio(s) da turma selecionada.
+        </div>
+      ) : null}
+
+      {userId && schoolId ? (
+        <BroadcastDialog
+          professorUid={userId}
+          schoolId={schoolId}
+          open={broadcastOpen}
+          onOpenChange={setBroadcastOpen}
+          onSuccess={(r) =>
+            setBroadcastResult({ created: r.created, total: r.total })
+          }
+        />
+      ) : null}
 
       <Card>
         <CardHeader>

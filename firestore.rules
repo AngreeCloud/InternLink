@@ -442,6 +442,23 @@ service cloud.firestore {
         );
     }
 
+    // Professor orientador do estágio (qualquer professor, não só o Diretor).
+    function isEstagioProfessor(estagioData) {
+      return isSignedIn()
+        && estagioData.professorId == request.auth.uid;
+    }
+
+    // Quem pode gerir documentos do estágio: Diretor de Curso, Professor
+    // orientador ou admin escolar da mesma escola.
+    function canManageEstagioDocs(estagioData) {
+      return isSignedIn()
+        && (
+          isEstagioDirector(estagioData)
+          || isEstagioProfessor(estagioData)
+          || (estagioData.schoolId != null && isSchoolAdminFor(estagioData.schoolId))
+        );
+    }
+
     function isCourseDirectorOf(courseId) {
       return courseExists(courseId)
         && courseData(courseId).courseDirectorId is string
@@ -464,16 +481,19 @@ service cloud.firestore {
       match /documentos/{documentoId} {
         allow read: if isEstagioMember(get(/databases/$(database)/documents/estagios/$(estagioId)).data);
 
-        // Criação/edição reservada ao Diretor de Curso (via API route com admin SDK).
-        // Na UI client-side permitimos o Diretor de Curso (professor + courseDirectorId).
-        allow create, update, delete: if isSignedIn()
-          && isEstagioDirector(get(/databases/$(database)/documents/estagios/$(estagioId)).data);
+        // Criação/edição permitida ao Diretor de Curso, Professor orientador
+        // ou admin escolar. A maior parte das operações passa pelo API route
+        // (admin SDK), mas mantemos a equivalência client-side.
+        allow create, update, delete: if canManageEstagioDocs(
+          get(/databases/$(database)/documents/estagios/$(estagioId)).data
+        );
 
         // Histórico imutável de versões.
         match /versoes/{versionId} {
           allow read: if isEstagioMember(get(/databases/$(database)/documents/estagios/$(estagioId)).data);
-          allow create: if isSignedIn()
-            && isEstagioDirector(get(/databases/$(database)/documents/estagios/$(estagioId)).data);
+          allow create: if canManageEstagioDocs(
+            get(/databases/$(database)/documents/estagios/$(estagioId)).data
+          );
           allow update, delete: if false;
         }
 

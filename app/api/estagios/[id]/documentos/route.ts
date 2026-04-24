@@ -76,7 +76,15 @@ export async function POST(
 ) {
   try {
     const { id } = await context.params;
-    const session = await assertEstagioAccess(id, "director");
+    // Diretor de Curso OU Professor orientador podem criar documentos.
+    const session = await assertEstagioAccess(id, "member");
+    if (session.role !== "diretor" && session.role !== "professor") {
+      throw new EstagioAccessError(
+        403,
+        "not_manager",
+        "Apenas o Diretor de Curso ou o Professor orientador podem criar documentos."
+      );
+    }
 
     const body = (await request.json()) as CreateDocBody;
 

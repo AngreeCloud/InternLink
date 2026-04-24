@@ -1,8 +1,22 @@
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getFirebaseAdminDb } from "@/lib/firebase-admin";
-import { assertEstagioAccess, toApiErrorResponse } from "@/lib/estagios/estagio-access";
+import {
+  assertEstagioAccess,
+  EstagioAccessError,
+  toApiErrorResponse,
+} from "@/lib/estagios/estagio-access";
 import type { EstagioRole } from "@/lib/estagios/permissions";
+
+function assertManagerRole(role: EstagioRole) {
+  if (role !== "diretor" && role !== "professor") {
+    throw new EstagioAccessError(
+      403,
+      "not_manager",
+      "Apenas o Diretor de Curso ou o Professor orientador podem gerir este documento."
+    );
+  }
+}
 
 export const runtime = "nodejs";
 
@@ -74,7 +88,8 @@ export async function PATCH(
 ) {
   try {
     const { id, docId } = await context.params;
-    await assertEstagioAccess(id, "director");
+    const session = await assertEstagioAccess(id, "member");
+    assertManagerRole(session.role);
 
     const body = (await request.json()) as PatchDocBody;
     const db = getFirebaseAdminDb();
@@ -144,7 +159,8 @@ export async function DELETE(
 ) {
   try {
     const { id, docId } = await context.params;
-    await assertEstagioAccess(id, "director");
+    const session = await assertEstagioAccess(id, "member");
+    assertManagerRole(session.role);
 
     const db = getFirebaseAdminDb();
     const docRef = db.collection("estagios").doc(id).collection("documentos").doc(docId);

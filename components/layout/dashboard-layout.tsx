@@ -23,6 +23,7 @@ import {
   Home,
   Upload,
   User,
+  Briefcase,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
@@ -38,6 +39,7 @@ import { TRANSITION_PORTAL_MS } from "@/components/layout/access-validation-over
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
+  { name: "Estágio", href: "/dashboard/estagio", icon: Briefcase },
   { name: "Protocolos", href: "/dashboard/protocols", icon: FileText },
   { name: "Relatórios", href: "/dashboard/reports", icon: Upload },
   { name: "Chat", href: "/dashboard/chat", icon: MessageSquare },
