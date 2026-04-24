@@ -1,11 +1,11 @@
-"use client"
+"use client";
 
-import { useEffect, useMemo, useState } from "react"
-import Link from "next/link"
-import { doc, getDoc, onSnapshot } from "firebase/firestore"
-import { getFirebaseDb } from "@/lib/firebase-runtime"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Button } from "@/components/ui/button"
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import { getDbRuntime } from "@/lib/firebase-runtime";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import {
   ArrowLeft,
   ClipboardList,
@@ -14,129 +14,149 @@ import {
   NotebookPen,
   Star,
   Loader2,
-} from "lucide-react"
-import { OverviewTab } from "./overview-tab"
-import { DocumentList } from "./documentos/document-list"
-import { ComingSoonTab } from "./coming-soon-tab"
-import type { EstagioRole, EstagioRecord } from "@/lib/estagios/permissions"
-import { resolveEstagioPermissions } from "@/lib/estagios/permissions"
+} from "lucide-react";
+import { OverviewTab } from "./overview-tab";
+import { DocumentList } from "./documentos/document-list";
+import { ComingSoonTab } from "./coming-soon-tab";
+import {
+  getUserRoleInEstagio,
+  isDirectorRole,
+  type EstagioRole,
+  type EstagioDoc,
+  type CourseDoc,
+} from "@/lib/estagios/permissions";
 
 type Props = {
-  estagioId: string
-  currentUserId: string
-  currentUserRole: EstagioRole
-  backHref?: string
-  backLabel?: string
-}
+  estagioId: string;
+  currentUserId: string;
+  currentUserRole: EstagioRole | "admin_escolar";
+  backHref?: string;
+  backLabel?: string;
+};
 
-type Participant = { name: string; role: EstagioRole; email?: string }
+type Participant = { name: string; role: EstagioRole; email?: string };
+
+type EstagioData = EstagioDoc & Record<string, unknown>;
 
 export function EstagioDetailView({
   estagioId,
   currentUserId,
-  currentUserRole,
   backHref,
   backLabel = "Voltar",
 }: Props) {
-  const [estagio, setEstagio] = useState<(EstagioRecord & Record<string, unknown>) | null>(null)
-  const [participants, setParticipants] = useState<Record<string, Participant>>({})
-  const [courseDirectorId, setCourseDirectorId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [notFound, setNotFound] = useState(false)
+  const [estagio, setEstagio] = useState<EstagioData | null>(null);
+  const [participants, setParticipants] = useState<Record<string, Participant>>({});
+  const [course, setCourse] = useState<CourseDoc | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
   // Subscribe to estagio doc
   useEffect(() => {
-    const db = getFirebaseDb()
-    const unsub = onSnapshot(
-      doc(db, "estagios", estagioId),
-      (snap) => {
-        if (!snap.exists()) {
-          setNotFound(true)
-          setLoading(false)
-          return
+    let unsub: (() => void) | undefined;
+    let cancelled = false;
+    (async () => {
+      const db = await getDbRuntime();
+      if (cancelled) return;
+      unsub = onSnapshot(
+        doc(db, "estagios", estagioId),
+        (snap) => {
+          if (!snap.exists()) {
+            setNotFound(true);
+            setLoading(false);
+            return;
+          }
+          const data = snap.data() as Record<string, unknown>;
+          setEstagio({ id: snap.id, ...data } as EstagioData);
+          setLoading(false);
+        },
+        (err) => {
+          console.error("[v0] estagio snapshot error", err);
+          setNotFound(true);
+          setLoading(false);
         }
-        setEstagio({ id: snap.id, ...(snap.data() as Record<string, unknown>) } as EstagioRecord & Record<string, unknown>)
-        setLoading(false)
-      },
-      (err) => {
-        console.error("[v0] estagio snapshot error", err)
-        setNotFound(true)
-        setLoading(false)
-      },
-    )
-    return () => unsub()
-  }, [estagioId])
+      );
+    })();
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
+  }, [estagioId]);
 
-  // Load participants + course director once we have the estagio
+  // Load participants + course once we have the estagio
   useEffect(() => {
-    if (!estagio) return
-    let cancelled = false
-    ;(async () => {
-      const db = getFirebaseDb()
+    if (!estagio) return;
+    let cancelled = false;
+    (async () => {
+      const db = await getDbRuntime();
       const ids = [estagio.alunoId, estagio.professorId, estagio.tutorId].filter(
-        (x): x is string => !!x,
-      )
-      const entries: [string, Participant][] = []
+        (x): x is string => !!x && typeof x === "string"
+      );
+      const entries: [string, Participant][] = [];
       await Promise.all(
         ids.map(async (uid) => {
           try {
-            const u = await getDoc(doc(db, "users", uid))
+            const u = await getDoc(doc(db, "users", uid));
             if (u.exists()) {
-              const data = u.data() as Record<string, unknown>
+              const data = u.data() as Record<string, unknown>;
               entries.push([
                 uid,
                 {
-                  name: (data.name as string) || (data.displayName as string) || uid,
+                  name: (data.nome as string) || (data.displayName as string) || uid,
                   role: (data.role as EstagioRole) || "aluno",
                   email: typeof data.email === "string" ? (data.email as string) : undefined,
                 },
-              ])
+              ]);
             }
           } catch (err) {
-            console.error("[v0] load participant failed", uid, err)
+            console.error("[v0] load participant failed", uid, err);
           }
-        }),
-      )
-      if (cancelled) return
-      setParticipants(Object.fromEntries(entries))
+        })
+      );
+      if (cancelled) return;
+      setParticipants(Object.fromEntries(entries));
 
-      // Load course director if we have a courseId
       const rawCourseId =
-        (estagio as Record<string, unknown>).alunoCourseId ??
-        (estagio as Record<string, unknown>).courseId
+        (estagio.alunoCourseId as string | undefined) ??
+        (estagio.courseId as string | undefined);
       if (typeof rawCourseId === "string" && rawCourseId.length > 0) {
         try {
-          const c = await getDoc(doc(db, "courses", rawCourseId))
+          const c = await getDoc(doc(db, "courses", rawCourseId));
           if (c.exists() && !cancelled) {
-            const cd = (c.data() as Record<string, unknown>).courseDirectorId
-            setCourseDirectorId(typeof cd === "string" ? cd : null)
+            const raw = c.data() as Record<string, unknown>;
+            setCourse({
+              id: c.id,
+              schoolId: raw.schoolId as string | undefined,
+              courseDirectorId: raw.courseDirectorId as string | undefined,
+              teacherIds: raw.teacherIds as string[] | undefined,
+              supportingTeacherIds: raw.supportingTeacherIds as string[] | undefined,
+            });
           }
         } catch (err) {
-          console.error("[v0] load course director failed", err)
+          console.error("[v0] load course failed", err);
         }
       }
-    })()
+    })();
     return () => {
-      cancelled = true
-    }
-  }, [estagio])
+      cancelled = true;
+    };
+  }, [estagio]);
 
-  const permissions = useMemo(() => {
-    if (!estagio) return null
-    return resolveEstagioPermissions({
-      currentUserId,
-      currentUserRole,
-      estagio: estagio as EstagioRecord,
-      courseDirectorId,
-    })
-  }, [estagio, currentUserId, currentUserRole, courseDirectorId])
+  const effectiveRole = useMemo<EstagioRole | null>(() => {
+    if (!estagio) return null;
+    const role = getUserRoleInEstagio(currentUserId, estagio, course);
+    if (role) return role;
+    // admin_escolar da mesma escola é tratado como diretor.
+    return null;
+  }, [estagio, currentUserId, course]);
+
+  const canManage = isDirectorRole(effectiveRole);
 
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center text-muted-foreground">
         <Loader2 className="mr-2 h-4 w-4 animate-spin" /> A carregar estágio...
       </div>
-    )
+    );
   }
 
   if (notFound || !estagio) {
@@ -149,41 +169,45 @@ export function EstagioDetailView({
           </Button>
         )}
       </div>
-    )
+    );
   }
 
-  if (!permissions?.canView) {
+  if (!effectiveRole) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-        <p className="text-sm text-muted-foreground">Não tens permissão para ver este estágio.</p>
+        <p className="text-sm text-muted-foreground">Não tem permissão para aceder a este estágio.</p>
         {backHref && (
           <Button asChild variant="outline">
             <Link href={backHref}>{backLabel}</Link>
           </Button>
         )}
       </div>
-    )
+    );
   }
 
-  const raw = estagio as Record<string, unknown>
+  const raw = estagio as Record<string, unknown>;
   const overviewData = {
     id: estagio.id,
-    title: (raw.title as string | undefined) ?? (raw.titulo as string | undefined),
-    alunoId: estagio.alunoId,
-    professorId: estagio.professorId,
-    tutorId: estagio.tutorId,
+    title: (raw.titulo as string | undefined) ?? (raw.title as string | undefined),
+    alunoId: estagio.alunoId ?? "",
+    professorId: estagio.professorId ?? "",
+    tutorId: estagio.tutorId ?? "",
     schoolId: estagio.schoolId,
     schoolName: raw.schoolName as string | undefined,
-    companyName: (raw.companyName as string | undefined) ?? (raw.empresa as string | undefined),
-    courseName: raw.courseName as string | undefined,
+    companyName:
+      (raw.entidadeAcolhimento as string | undefined) ??
+      (raw.empresa as string | undefined) ??
+      (raw.companyName as string | undefined),
+    courseName:
+      (raw.courseNome as string | undefined) ?? (raw.courseName as string | undefined),
     dataInicio: raw.dataInicio as string | undefined,
-    dataFim: raw.dataFim as string | undefined,
-    horasPorDia: raw.horasPorDia as number | undefined,
-    diasSemana: raw.diasSemana as number[] | undefined,
+    dataFim: (raw.dataFimEstimada as string | undefined) ?? (raw.dataFim as string | undefined),
+    horasPorDia: raw.horasDiarias as number | undefined,
     totalHoras: raw.totalHoras as number | undefined,
-    totalDias: raw.totalDias as number | undefined,
-    status: (raw.status as string | undefined) ?? (raw.estado as string | undefined),
-  }
+    horasRealizadas: raw.horasRealizadas as number | undefined,
+    diasSemana: normalizeDiasSemana(raw.diasSemana),
+    status: (raw.estadoEstagio as string | undefined) ?? (raw.estado as string | undefined),
+  };
 
   return (
     <div className="space-y-6">
@@ -218,10 +242,12 @@ export function EstagioDetailView({
             <NotebookPen className="mr-2 h-4 w-4" />
             Sumários
           </TabsTrigger>
-          <TabsTrigger value="avaliacao">
-            <Star className="mr-2 h-4 w-4" />
-            Avaliação
-          </TabsTrigger>
+          {effectiveRole !== "aluno" && (
+            <TabsTrigger value="avaliacao">
+              <Star className="mr-2 h-4 w-4" />
+              Avaliação
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="overview">
@@ -232,8 +258,8 @@ export function EstagioDetailView({
           <DocumentList
             estagioId={estagio.id}
             currentUserId={currentUserId}
-            currentUserRole={currentUserRole}
-            canManage={permissions.isCourseDirector}
+            currentUserRole={effectiveRole}
+            canManage={canManage}
             participants={participants}
           />
         </TabsContent>
@@ -254,14 +280,35 @@ export function EstagioDetailView({
           />
         </TabsContent>
 
-        <TabsContent value="avaliacao">
-          <ComingSoonTab
-            title="Avaliação final"
-            description="Ficha de avaliação a preencher pelo tutor e pelo professor orientador no final do estágio, com cálculo automático da classificação FCT."
-            icon={Star}
-          />
-        </TabsContent>
+        {effectiveRole !== "aluno" && (
+          <TabsContent value="avaliacao">
+            <ComingSoonTab
+              title="Avaliação final"
+              description="Ficha de avaliação a preencher pelo tutor e pelo professor orientador no final do estágio, com cálculo automático da classificação FCT."
+              icon={Star}
+            />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
-  )
+  );
+}
+
+function normalizeDiasSemana(raw: unknown): number[] | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const map = raw as Record<string, unknown>;
+  const order: [string, number][] = [
+    ["dom", 0],
+    ["seg", 1],
+    ["ter", 2],
+    ["qua", 3],
+    ["qui", 4],
+    ["sex", 5],
+    ["sab", 6],
+  ];
+  const result: number[] = [];
+  for (const [key, idx] of order) {
+    if (map[key] === true) result.push(idx);
+  }
+  return result;
 }

@@ -1,59 +1,84 @@
-"use client"
+"use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Calendar, Building2, User, GraduationCap, ShieldCheck, Clock } from "lucide-react"
-import type { EstagioRole } from "@/lib/estagios/permissions"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Calendar,
+  Building2,
+  User,
+  GraduationCap,
+  ShieldCheck,
+  Clock,
+} from "lucide-react";
+import type { EstagioRole } from "@/lib/estagios/permissions";
 
-type ParticipantInfo = { name: string; role: EstagioRole; email?: string }
+type ParticipantInfo = { name: string; role: EstagioRole; email?: string };
 
 type Props = {
   estagio: {
-    id: string
-    title?: string
-    alunoId: string
-    professorId: string
-    tutorId: string
-    schoolId?: string
-    schoolName?: string
-    companyName?: string
-    courseName?: string
-    dataInicio?: string // ISO
-    dataFim?: string // ISO
-    horasPorDia?: number
-    diasSemana?: number[] // 0-6 (Sunday=0)
-    totalHoras?: number
-    totalDias?: number
-    status?: string
-  }
-  participants: Record<string, ParticipantInfo>
-}
+    id: string;
+    title?: string;
+    alunoId: string;
+    professorId: string;
+    tutorId: string;
+    schoolId?: string;
+    schoolName?: string;
+    companyName?: string;
+    courseName?: string;
+    dataInicio?: string;
+    dataFim?: string;
+    horasPorDia?: number;
+    diasSemana?: number[];
+    totalHoras?: number;
+    horasRealizadas?: number;
+    status?: string;
+  };
+  participants: Record<string, ParticipantInfo>;
+};
 
-const DIAS_LABEL = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
+const DIAS_LABEL = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 function formatDate(iso?: string) {
-  if (!iso) return "—"
+  if (!iso) return "—";
   try {
     return new Date(iso).toLocaleDateString("pt-PT", {
       day: "2-digit",
       month: "long",
       year: "numeric",
-    })
+    });
   } catch {
-    return iso
+    return iso;
+  }
+}
+
+function statusLabel(status?: string) {
+  switch (status) {
+    case "concluido":
+      return { label: "Concluído", variant: "secondary" as const };
+    case "suspenso":
+      return { label: "Suspenso", variant: "outline" as const };
+    case "em_curso":
+    case "ativo":
+    default:
+      return { label: "Em curso", variant: "default" as const };
   }
 }
 
 export function OverviewTab({ estagio, participants }: Props) {
-  const aluno = participants[estagio.alunoId]
-  const professor = participants[estagio.professorId]
-  const tutor = participants[estagio.tutorId]
+  const aluno = participants[estagio.alunoId];
+  const professor = participants[estagio.professorId];
+  const tutor = participants[estagio.tutorId];
 
   const dias = (estagio.diasSemana ?? [])
     .slice()
     .sort((a, b) => a - b)
     .map((d) => DIAS_LABEL[d])
-    .join(", ")
+    .join(", ");
+
+  const total = Math.max(0, estagio.totalHoras ?? 0);
+  const done = Math.max(0, Math.min(total, estagio.horasRealizadas ?? 0));
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const status = statusLabel(estagio.status);
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -69,11 +94,7 @@ export function OverviewTab({ estagio, participants }: Props) {
                 {estagio.schoolName ?? ""}
               </p>
             </div>
-            {estagio.status && (
-              <Badge variant="secondary" className="capitalize">
-                {estagio.status}
-              </Badge>
-            )}
+            <Badge variant={status.variant}>{status.label}</Badge>
           </div>
         </CardHeader>
         <CardContent className="grid gap-6 sm:grid-cols-2">
@@ -84,7 +105,7 @@ export function OverviewTab({ estagio, participants }: Props) {
           />
           <Detail
             icon={<Calendar className="h-4 w-4" />}
-            label="Fim"
+            label="Fim previsto"
             value={formatDate(estagio.dataFim)}
           />
           <Detail
@@ -95,11 +116,7 @@ export function OverviewTab({ estagio, participants }: Props) {
           <Detail
             icon={<Clock className="h-4 w-4" />}
             label="Total"
-            value={
-              estagio.totalHoras
-                ? `${estagio.totalHoras}h • ${estagio.totalDias ?? 0} dias úteis`
-                : "—"
-            }
+            value={total > 0 ? `${total}h obrigatórias` : "—"}
           />
           <Detail
             icon={<Calendar className="h-4 w-4" />}
@@ -107,6 +124,29 @@ export function OverviewTab({ estagio, participants }: Props) {
             value={dias || "—"}
             className="sm:col-span-2"
           />
+
+          <div className="sm:col-span-2 space-y-2">
+            <div className="flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground">
+              <span className="flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                Progresso de horas
+              </span>
+              <span>{pct}%</span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${pct}%` }}
+                aria-valuenow={pct}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                role="progressbar"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {done}h realizadas {total > 0 ? `• ${Math.max(0, total - done)}h restantes` : ""}
+            </p>
+          </div>
         </CardContent>
       </Card>
 
@@ -142,7 +182,7 @@ export function OverviewTab({ estagio, participants }: Props) {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
 
 function Detail({
@@ -151,10 +191,10 @@ function Detail({
   value,
   className,
 }: {
-  icon: React.ReactNode
-  label: string
-  value: string
-  className?: string
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  className?: string;
 }) {
   return (
     <div className={className}>
@@ -164,7 +204,7 @@ function Detail({
       </div>
       <p className="mt-1 text-sm font-medium">{value}</p>
     </div>
-  )
+  );
 }
 
 function Person({
@@ -172,9 +212,9 @@ function Person({
   label,
   person,
 }: {
-  icon: React.ReactNode
-  label: string
-  person?: { name: string; email?: string }
+  icon: React.ReactNode;
+  label: string;
+  person?: { name: string; email?: string };
 }) {
   return (
     <div className="flex items-start gap-3 rounded-md border bg-muted/20 px-3 py-2">
@@ -187,5 +227,5 @@ function Person({
         )}
       </div>
     </div>
-  )
+  );
 }
