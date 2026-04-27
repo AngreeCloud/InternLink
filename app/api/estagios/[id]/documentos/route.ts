@@ -37,6 +37,8 @@ type CreateDocBody = {
   signatureBoxes?: SignatureBox[];
   currentFileUrl?: string;
   currentFilePath?: string;
+  fileMimeType?: string;
+  fileExtension?: string;
 };
 
 const ALLOWED_ROLES: EstagioRole[] = ["diretor", "professor", "tutor", "aluno"];
@@ -107,6 +109,9 @@ export async function POST(
     const now = FieldValue.serverTimestamp();
     const hasFile =
       typeof body.currentFileUrl === "string" && body.currentFileUrl.length > 0;
+    const signatureRoles = sanitizeRoles(body.signatureRoles);
+    const signatureBoxes = sanitizeBoxes(body.signatureBoxes);
+    const hasSignatureFlow = signatureRoles.length > 0 && signatureBoxes.length > 0;
 
     const docRef = docsCol.doc();
     await docRef.set({
@@ -117,7 +122,7 @@ export async function POST(
       ordem: maxOrdem + 1,
       pinned: Boolean(body.pinned),
       pinnedAt: body.pinned ? now : null,
-      estado: hasFile ? "aguarda_assinatura" : "pendente",
+      estado: hasFile && hasSignatureFlow ? "aguarda_assinatura" : "pendente",
       prazoAssinatura:
         body.prazoAssinatura === null
           ? null
@@ -126,12 +131,15 @@ export async function POST(
             : null,
       accessRoles: sanitizeRoles(body.accessRoles),
       accessUserIds: Array.isArray(body.accessUserIds) ? body.accessUserIds : [],
-      signatureRoles: sanitizeRoles(body.signatureRoles),
+      signatureRoles: hasSignatureFlow ? signatureRoles : [],
       signatureUserIds: Array.isArray(body.signatureUserIds) ? body.signatureUserIds : [],
-      signatureBoxes: sanitizeBoxes(body.signatureBoxes),
+      signatureBoxes: hasSignatureFlow ? signatureBoxes : [],
       currentVersion: hasFile ? 1 : 0,
       currentFileUrl: typeof body.currentFileUrl === "string" ? body.currentFileUrl : "",
       currentFilePath: typeof body.currentFilePath === "string" ? body.currentFilePath : "",
+      fileMimeType: typeof body.fileMimeType === "string" ? body.fileMimeType : "",
+      fileExtension:
+        typeof body.fileExtension === "string" ? body.fileExtension.toLowerCase() : "",
       createdAt: now,
       updatedAt: now,
       createdBy: session.uid,

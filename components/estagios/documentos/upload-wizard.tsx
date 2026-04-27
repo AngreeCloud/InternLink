@@ -33,6 +33,8 @@ export type UploadWizardDoc = {
   accessRoles: EstagioRole[];
   currentFileUrl?: string;
   currentFilePath?: string;
+  fileMimeType?: string;
+  fileExtension?: string;
   estado?: string;
 };
 
@@ -58,13 +60,47 @@ const COLOR_BY_ROLE: Record<EstagioRole, string> = {
   aluno: "#7c3aed",
 };
 
+const MIME_BY_EXTENSION: Record<"pdf" | "docx" | "xlsx", string> = {
+  pdf: "application/pdf",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+};
+
+function resolveExtension(fileName: string): "pdf" | "docx" | "xlsx" | null {
+  const match = fileName.toLowerCase().match(/\.([a-z0-9]{2,8})$/);
+  if (!match?.[1]) return null;
+  const ext = match[1];
+  if (ext === "pdf" || ext === "docx" || ext === "xlsx") return ext;
+  return null;
+}
+
+function resolveFileMeta(file: File): { mimeType: string; extension: "pdf" | "docx" | "xlsx"; isPdf: boolean } | null {
+  const extension = resolveExtension(file.name);
+
+  if (file.type === MIME_BY_EXTENSION.pdf || extension === "pdf") {
+    return { mimeType: MIME_BY_EXTENSION.pdf, extension: "pdf", isPdf: true };
+  }
+  if (file.type === MIME_BY_EXTENSION.docx || extension === "docx") {
+    return { mimeType: MIME_BY_EXTENSION.docx, extension: "docx", isPdf: false };
+  }
+  if (file.type === MIME_BY_EXTENSION.xlsx || extension === "xlsx") {
+    return { mimeType: MIME_BY_EXTENSION.xlsx, extension: "xlsx", isPdf: false };
+  }
+  return null;
+}
+
 export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: UploadWizardProps) {
   const [step, setStep] = useState<"meta" | "position">("meta");
   const [file, setFile] = useState<File | null>(null);
   const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null);
+  const [fileMimeType, setFileMimeType] = useState(doc.fileMimeType ?? "");
+  const [fileExtension, setFileExtension] = useState((doc.fileExtension ?? "").toLowerCase());
 
   const [nome, setNome] = useState(doc.nome);
   const [descricao, setDescricao] = useState(doc.descricao);
+  const [enableSignatureFlow, setEnableSignatureFlow] = useState(
+    (doc.signatureRoles?.length ?? 0) > 0 || (doc.signatureBoxes?.length ?? 0) > 0
+  );
   const [signatureRoles, setSignatureRoles] = useState<EstagioRole[]>(doc.signatureRoles);
   const [boxes, setBoxes] = useState<SignatureBoxModel[]>(doc.signatureBoxes ?? []);
   const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
@@ -81,8 +117,11 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
       setStep("meta");
       setFile(null);
       setFileBytes(null);
+      setFileMimeType(doc.fileMimeType ?? "");
+      setFileExtension((doc.fileExtension ?? "").toLowerCase());
       setNome(doc.nome);
       setDescricao(doc.descricao);
+      setEnableSignatureFlow((doc.signatureRoles?.length ?? 0) > 0 || (doc.signatureBoxes?.length ?? 0) > 0);
       setSignatureRoles(doc.signatureRoles);
       setBoxes(doc.signatureBoxes ?? []);
       setSelectedBoxId(null);
@@ -97,8 +136,9 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
     if (!selected) return;
-    if (selected.type !== "application/pdf") {
-      setError("Apenas ficheiros PDF são aceites.");
+    const meta = resolveFileMeta(selected);
+    if (!meta) {
+      setError("Apenas ficheiros PDF, DOCX ou XLSX são aceites.");
       return;
     }
     if (selected.size > 20 * 1024 * 1024) {
@@ -108,6 +148,17 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
     const buffer = new Uint8Array(await selected.arrayBuffer());
     setFile(selected);
     setFileBytes(buffer);
+    setFileMimeType(meta.mimeType);
+    setFileExtension(meta.extension);
+
+    if (!meta.isPdf) {
+      setEnableSignatureFlow(false);
+      setSignatureRoles([]);
+      setBoxes([]);
+      setSelectedBoxId(null);
+      setActiveRole(null);
+    }
+
     setError(null);
   };
 
@@ -127,6 +178,8 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
   };
 
   const selectedBox = useMemo(() => boxes.find((b) => b.id === selectedBoxId) ?? null, [boxes, selectedBoxId]);
+  const isPdfFile = fileExtension === "pdf";
+  const shouldConfigureSignatures = isPdfFile && enableSignatureFlow;
 
   const goToPosition = () => {
     if (!file) {
@@ -137,7 +190,7 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
       setError("Indique o nome do documento.");
       return;
     }
-    if (signatureRoles.length === 0) {
+    if (shouldConfigureSignatures && signatureRoles.length === 0) {
       setError("Selecione pelo menos um cargo que tem de assinar.");
       return;
     }
@@ -147,13 +200,20 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
 
   const handleSubmit = async () => {
     if (!fileBytes || !file) {
-      setError("Ficheiro PDF em falta.");
+      setError("Ficheiro em falta.");
       return;
     }
-    if (boxes.length === 0) {
+    if (shouldConfigureSignatures && signatureRoles.length === 0) {
+      setError("Selecione pelo menos um cargo que tem de assinar.");
+      return;
+    }
+    if (shouldConfigureSignatures && boxes.length === 0) {
       setError("Adicione pelo menos uma caixa de assinatura.");
       return;
     }
+
+    const effectiveSignatureRoles = shouldConfigureSignatures ? signatureRoles : [];
+    const effectiveBoxes = shouldConfigureSignatures ? boxes : [];
 
     setSubmitting(true);
     setError(null);
@@ -161,9 +221,12 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
       // 1) Upload ao Storage: path por versão.
       const storage = await getStorageRuntime();
       const newVersion = (doc.estado === "pendente" ? 1 : 0) + 1; // placeholder para nomear o ficheiro
-      const storagePath = `estagios/${estagioId}/documentos/${doc.id}/v${Date.now()}.pdf`;
+      const extension = fileExtension || resolveExtension(file.name) || "pdf";
+      const storagePath = `estagios/${estagioId}/documentos/${doc.id}/v${Date.now()}.${extension}`;
       const sRef = ref(storage, storagePath);
-      await uploadBytes(sRef, fileBytes, { contentType: "application/pdf" });
+      await uploadBytes(sRef, fileBytes, {
+        contentType: fileMimeType || file.type || "application/octet-stream",
+      });
       const downloadUrl = await getDownloadURL(sRef);
 
       // 2) Atualiza o documento com novo PDF + caixas.
@@ -173,13 +236,17 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
         body: JSON.stringify({
           nome: nome.trim(),
           descricao: descricao,
-          signatureRoles,
-          signatureBoxes: boxes,
+          signatureRoles: effectiveSignatureRoles,
+          signatureBoxes: effectiveBoxes,
           currentFileUrl: downloadUrl,
           currentFilePath: storagePath,
+          fileMimeType: fileMimeType || file.type || "application/octet-stream",
+          fileExtension: extension,
           bumpVersion: true,
-          estado: "aguarda_assinatura",
-          versionNotes: `Versão inicial carregada pelo Diretor de Curso.`,
+          estado: shouldConfigureSignatures ? "aguarda_assinatura" : "pendente",
+          versionNotes: shouldConfigureSignatures
+            ? "Versão com assinatura digital configurada."
+            : "Versão carregada sem assinatura digital obrigatória.",
         }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; newVersion?: number };
@@ -202,7 +269,7 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-6xl flex flex-col">
         <DialogHeader>
           <DialogTitle>
             {step === "meta" ? "Carregar documento" : "Posicionar caixas de assinatura"}
@@ -231,30 +298,69 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
             </div>
 
             <div className="space-y-2">
-              <Label>Cargos que assinam</Label>
-              <div className="flex flex-wrap gap-2">
-                {(["diretor", "professor", "tutor", "aluno"] as EstagioRole[]).map((role) => (
-                  <Button
-                    key={role}
-                    type="button"
-                    size="sm"
-                    variant={signatureRoles.includes(role) ? "default" : "outline"}
-                    onClick={() => toggleRole(role)}
-                    style={
-                      signatureRoles.includes(role)
-                        ? { backgroundColor: COLOR_BY_ROLE[role], color: "white" }
-                        : undefined
+              <Label>Assinatura digital</Label>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  id="wizard-signatures-enabled"
+                  checked={enableSignatureFlow}
+                  disabled={!file || !isPdfFile}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setEnableSignatureFlow(next);
+                    if (next) {
+                      setActiveRole(signatureRoles[0] ?? null);
+                    } else {
+                      setSelectedBoxId(null);
+                      setActiveRole(null);
                     }
-                  >
-                    {ROLE_LABEL[role]}
-                  </Button>
-                ))}
+                  }}
+                />
+                <label htmlFor="wizard-signatures-enabled">Ativar caixas de assinatura (apenas PDF)</label>
               </div>
+              {!file ? (
+                <p className="text-xs text-muted-foreground">
+                  Selecione primeiro um ficheiro para configurar a assinatura digital.
+                </p>
+              ) : !isPdfFile ? (
+                <p className="text-xs text-muted-foreground">
+                  Ficheiros DOCX e XLSX são carregados sem caixas de assinatura.
+                </p>
+              ) : null}
             </div>
 
+            {shouldConfigureSignatures ? (
+              <div className="space-y-2">
+                <Label>Cargos que assinam</Label>
+                <div className="flex flex-wrap gap-2">
+                  {(["diretor", "professor", "tutor", "aluno"] as EstagioRole[]).map((role) => (
+                    <Button
+                      key={role}
+                      type="button"
+                      size="sm"
+                      variant={signatureRoles.includes(role) ? "default" : "outline"}
+                      onClick={() => toggleRole(role)}
+                      style={
+                        signatureRoles.includes(role)
+                          ? { backgroundColor: COLOR_BY_ROLE[role], color: "white" }
+                          : undefined
+                      }
+                    >
+                      {ROLE_LABEL[role]}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             <div className="space-y-2">
-              <Label htmlFor="wizard-file">PDF Original</Label>
-              <Input id="wizard-file" type="file" accept="application/pdf" onChange={handleFileChange} />
+              <Label htmlFor="wizard-file">Ficheiro (PDF, DOCX ou XLSX)</Label>
+              <Input
+                id="wizard-file"
+                type="file"
+                accept=".pdf,.docx,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                onChange={handleFileChange}
+              />
               {file ? (
                 <p className="text-xs text-muted-foreground">
                   Selecionado: <strong>{file.name}</strong> ({Math.round(file.size / 1024)} KB)
@@ -270,8 +376,8 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
           </div>
         ) : (
           <div className="flex-1 overflow-hidden">
-            <div className="flex h-full gap-3">
-              <div className="flex-1 overflow-y-auto bg-muted/30 py-3">
+            <div className="flex h-full min-h-0 flex-col gap-3 lg:flex-row">
+              <div className="min-h-0 min-w-0 flex-1 overflow-auto rounded-lg bg-muted/30 p-3">
                 <PdfViewer
                   ref={viewerRef}
                   fileBytes={fileBytes ?? undefined}
@@ -292,7 +398,7 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
                   )}
                 />
               </div>
-              <aside className="w-72 shrink-0 space-y-4 overflow-y-auto rounded-lg border border-border bg-card p-3">
+              <aside className="w-full shrink-0 space-y-4 overflow-y-auto rounded-lg border border-border bg-card p-3 lg:w-80">
                 <div>
                   <p className="text-sm font-semibold">Cargo a desenhar</p>
                   <div className="mt-2 flex flex-wrap gap-1">
@@ -400,10 +506,25 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
             <span />
           )}
           {step === "meta" ? (
-            <Button type="button" onClick={goToPosition} disabled={!file}>
-              <ArrowRight className="mr-2 h-4 w-4" />
-              Continuar
-            </Button>
+            shouldConfigureSignatures ? (
+              <Button type="button" onClick={goToPosition} disabled={!file || submitting}>
+                <ArrowRight className="mr-2 h-4 w-4" />
+                Continuar
+              </Button>
+            ) : (
+              <Button type="button" onClick={handleSubmit} disabled={!file || submitting}>
+                {submitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />A guardar...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Publicar documento
+                  </>
+                )}
+              </Button>
+            )
           ) : (
             <Button type="button" onClick={handleSubmit} disabled={submitting}>
               {submitting ? (

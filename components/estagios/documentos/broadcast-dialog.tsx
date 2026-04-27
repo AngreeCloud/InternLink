@@ -17,13 +17,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ArrowLeft, ArrowRight, Loader2, Megaphone, Trash2, Upload } from "lucide-react";
 import { PdfViewer, type PdfPageInfo, type PdfViewerHandle } from "@/components/estagios/pdf/pdf-viewer";
 import { SignatureBoxEditor } from "@/components/estagios/pdf/signature-box-editor";
@@ -44,6 +37,35 @@ const COLOR_BY_ROLE: Record<EstagioRole, string> = {
   aluno: "#7c3aed",
 };
 
+const MIME_BY_EXTENSION: Record<"pdf" | "docx" | "xlsx", string> = {
+  pdf: "application/pdf",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+};
+
+function resolveExtension(fileName: string): "pdf" | "docx" | "xlsx" | null {
+  const match = fileName.toLowerCase().match(/\.([a-z0-9]{2,8})$/);
+  if (!match?.[1]) return null;
+  const ext = match[1];
+  if (ext === "pdf" || ext === "docx" || ext === "xlsx") return ext;
+  return null;
+}
+
+function resolveFileMeta(file: File): { mimeType: string; extension: "pdf" | "docx" | "xlsx"; isPdf: boolean } | null {
+  const extension = resolveExtension(file.name);
+
+  if (file.type === MIME_BY_EXTENSION.pdf || extension === "pdf") {
+    return { mimeType: MIME_BY_EXTENSION.pdf, extension: "pdf", isPdf: true };
+  }
+  if (file.type === MIME_BY_EXTENSION.docx || extension === "docx") {
+    return { mimeType: MIME_BY_EXTENSION.docx, extension: "docx", isPdf: false };
+  }
+  if (file.type === MIME_BY_EXTENSION.xlsx || extension === "xlsx") {
+    return { mimeType: MIME_BY_EXTENSION.xlsx, extension: "xlsx", isPdf: false };
+  }
+  return null;
+}
+
 type CourseOption = {
   id: string;
   nome: string;
@@ -55,7 +77,7 @@ export type BroadcastDialogProps = {
   schoolId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess?: (result: { courseId: string; created: number; total: number }) => void;
+  onSuccess?: (result: { courseIds: string[]; created: number; total: number }) => void;
 };
 
 export function BroadcastDialog({
@@ -68,10 +90,12 @@ export function BroadcastDialog({
   const [step, setStep] = useState<"meta" | "position">("meta");
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [loadingCourses, setLoadingCourses] = useState(true);
-  const [courseId, setCourseId] = useState<string>("");
+  const [courseIds, setCourseIds] = useState<string[]>([]);
 
   const [file, setFile] = useState<File | null>(null);
   const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null);
+  const [fileMimeType, setFileMimeType] = useState("");
+  const [fileExtension, setFileExtension] = useState("");
 
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -82,6 +106,7 @@ export function BroadcastDialog({
     "tutor",
     "aluno",
   ]);
+  const [enableSignatureFlow, setEnableSignatureFlow] = useState(false);
   const [signatureRoles, setSignatureRoles] = useState<EstagioRole[]>([]);
   const [boxes, setBoxes] = useState<SignatureBoxModel[]>([]);
   const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
@@ -147,13 +172,16 @@ export function BroadcastDialog({
   useEffect(() => {
     if (!open) {
       setStep("meta");
-      setCourseId("");
+      setCourseIds([]);
       setFile(null);
       setFileBytes(null);
+      setFileMimeType("");
+      setFileExtension("");
       setNome("");
       setDescricao("");
       setCategoria("outros");
       setAccessRoles(["diretor", "professor", "tutor", "aluno"]);
+      setEnableSignatureFlow(false);
       setSignatureRoles([]);
       setBoxes([]);
       setSelectedBoxId(null);
@@ -165,16 +193,22 @@ export function BroadcastDialog({
     }
   }, [open]);
 
-  const selectedCourse = useMemo(
-    () => courses.find((c) => c.id === courseId) ?? null,
-    [courses, courseId]
+  const selectedCourses = useMemo(
+    () => courses.filter((c) => courseIds.includes(c.id)),
+    [courses, courseIds]
+  );
+
+  const selectedEstagiosCount = useMemo(
+    () => selectedCourses.reduce((sum, c) => sum + c.estagiosCount, 0),
+    [selectedCourses]
   );
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
     if (!selected) return;
-    if (selected.type !== "application/pdf") {
-      setError("Apenas ficheiros PDF são aceites.");
+    const meta = resolveFileMeta(selected);
+    if (!meta) {
+      setError("Apenas ficheiros PDF, DOCX ou XLSX são aceites.");
       return;
     }
     if (selected.size > 20 * 1024 * 1024) {
@@ -184,7 +218,24 @@ export function BroadcastDialog({
     const buffer = new Uint8Array(await selected.arrayBuffer());
     setFile(selected);
     setFileBytes(buffer);
+    setFileMimeType(meta.mimeType);
+    setFileExtension(meta.extension);
+
+    if (!meta.isPdf) {
+      setEnableSignatureFlow(false);
+      setSignatureRoles([]);
+      setBoxes([]);
+      setSelectedBoxId(null);
+      setActiveRole(null);
+    }
+
     setError(null);
+  };
+
+  const toggleCourse = (courseId: string) => {
+    setCourseIds((prev) =>
+      prev.includes(courseId) ? prev.filter((id) => id !== courseId) : [...prev, courseId]
+    );
   };
 
   const toggleRole = (
@@ -204,9 +255,12 @@ export function BroadcastDialog({
     if (selectedBoxId === boxId) setSelectedBoxId(null);
   };
 
+  const isPdfFile = fileExtension === "pdf";
+  const shouldConfigureSignatures = isPdfFile && enableSignatureFlow;
+
   const goToPosition = () => {
-    if (!courseId) {
-      setError("Selecione a turma (curso) de destino.");
+    if (courseIds.length === 0) {
+      setError("Selecione pelo menos uma turma (curso) de destino.");
       return;
     }
     if (!nome.trim()) {
@@ -214,10 +268,10 @@ export function BroadcastDialog({
       return;
     }
     if (!file) {
-      setError("Selecione um PDF para avançar.");
+      setError("Selecione um ficheiro para avançar.");
       return;
     }
-    if (signatureRoles.length === 0) {
+    if (shouldConfigureSignatures && signatureRoles.length === 0) {
       setError("Selecione pelo menos um cargo que tem de assinar.");
       return;
     }
@@ -227,19 +281,33 @@ export function BroadcastDialog({
 
   const handleSubmit = async () => {
     if (!file || !fileBytes) {
-      setError("Ficheiro PDF em falta.");
+      setError("Ficheiro em falta.");
       return;
     }
-    if (boxes.length === 0) {
+    if (courseIds.length === 0) {
+      setError("Selecione pelo menos uma turma (curso) de destino.");
+      return;
+    }
+    if (shouldConfigureSignatures && signatureRoles.length === 0) {
+      setError("Selecione pelo menos um cargo que tem de assinar.");
+      return;
+    }
+    if (shouldConfigureSignatures && boxes.length === 0) {
       setError("Adicione pelo menos uma caixa de assinatura.");
       return;
     }
+
+    const effectiveSignatureRoles = shouldConfigureSignatures ? signatureRoles : [];
+    const effectiveBoxes = shouldConfigureSignatures ? boxes : [];
+
     setSubmitting(true);
     setError(null);
     try {
       // 1) Upload do PDF partilhado (um só ficheiro, reutilizado em todos os estágios).
       const storage = await getStorageRuntime();
-      const storagePath = `broadcast/${schoolId}/${courseId}/${Date.now()}.pdf`;
+      const extension = fileExtension || resolveExtension(file.name) || "pdf";
+      const primaryCourseId = courseIds[0] ?? "multi";
+      const storagePath = `broadcast/${schoolId}/${primaryCourseId}/${Date.now()}.${extension}`;
       // Nota: caminhos fora de /estagios/{id}/documentos são bloqueados pelas
       // storage rules, pelo que usamos o path de estágios do próprio professor
       // como prefixo neutral. Como fallback simples, guardamos no estagio do
@@ -249,37 +317,46 @@ export function BroadcastDialog({
       // cada estágio (o backend grava apenas a URL e o path original).
       const sRef = ref(
         storage,
-        `estagios/__broadcast__/${courseId}/${Date.now()}.pdf`
+        `estagios/__broadcast__/${primaryCourseId}/${Date.now()}.${extension}`
       );
-      await uploadBytes(sRef, fileBytes, { contentType: "application/pdf" });
+      await uploadBytes(sRef, fileBytes, {
+        contentType: fileMimeType || file.type || "application/octet-stream",
+      });
       const downloadUrl = await getDownloadURL(sRef);
 
       const res = await fetch("/api/estagios/broadcast/documentos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          courseId,
+          courseIds,
           nome: nome.trim(),
           descricao,
           categoria,
           accessRoles,
-          signatureRoles,
-          signatureBoxes: boxes,
+          signatureRoles: effectiveSignatureRoles,
+          signatureBoxes: effectiveBoxes,
           currentFileUrl: downloadUrl,
           currentFilePath: sRef.fullPath,
+          fileMimeType: fileMimeType || file.type || "application/octet-stream",
+          fileExtension: extension,
         }),
       });
       const data = (await res.json()) as {
         ok?: boolean;
         created?: number;
         total?: number;
+        courseIds?: string[];
         error?: string;
       };
       if (!res.ok || !data.ok) {
         setError(data.error || "Falha a difundir o documento.");
         return;
       }
-      onSuccess?.({ courseId, created: data.created ?? 0, total: data.total ?? 0 });
+      onSuccess?.({
+        courseIds: Array.isArray(data.courseIds) ? data.courseIds : courseIds,
+        created: data.created ?? 0,
+        total: data.total ?? 0,
+      });
       onOpenChange(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro inesperado.");
@@ -290,7 +367,7 @@ export function BroadcastDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-6xl flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Megaphone className="h-5 w-5 text-primary" />
@@ -300,15 +377,15 @@ export function BroadcastDialog({
           </DialogTitle>
           <DialogDescription>
             {step === "meta"
-              ? "Carrega o mesmo documento em todos os estágios ativos de uma turma, com as mesmas caixas de assinatura e permissões."
-              : "Desenhe sobre o PDF onde cada cargo deve assinar. Estas caixas serão aplicadas em TODOS os estágios da turma."}
+              ? "Carrega o mesmo documento em todos os estágios ativos das turmas selecionadas, com as mesmas permissões."
+              : "Desenhe sobre o PDF onde cada cargo deve assinar. Estas caixas serão aplicadas em TODOS os estágios das turmas selecionadas."}
           </DialogDescription>
         </DialogHeader>
 
         {step === "meta" ? (
           <div className="space-y-4 overflow-y-auto pr-1">
             <div className="space-y-2">
-              <Label>Turma (curso) de destino</Label>
+              <Label>Turmas (cursos) de destino</Label>
               {loadingCourses ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> A carregar cursos...
@@ -319,23 +396,30 @@ export function BroadcastDialog({
                   escolar para o associar.
                 </p>
               ) : (
-                <Select value={courseId} onValueChange={setCourseId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o curso..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {courses.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.nome} • {c.estagiosCount} estágio(s)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="grid max-h-44 grid-cols-1 gap-2 overflow-y-auto pr-1 md:grid-cols-2">
+                  {courses.map((c) => {
+                    const selected = courseIds.includes(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => toggleCourse(c.id)}
+                        className={`rounded-md border px-3 py-2 text-left transition-colors ${
+                          selected
+                            ? "border-primary bg-primary/10"
+                            : "border-border hover:bg-muted/40"
+                        }`}
+                      >
+                        <p className="text-sm font-medium">{c.nome}</p>
+                        <p className="text-xs text-muted-foreground">{c.estagiosCount} estágio(s)</p>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
-              {selectedCourse ? (
+              {selectedCourses.length > 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  Vai difundir para {selectedCourse.estagiosCount} estágio(s) associado(s)
-                  a <strong>{selectedCourse.nome}</strong>.
+                  Vai difundir para {selectedEstagiosCount} estágio(s) em {selectedCourses.length} turma(s) selecionada(s).
                 </p>
               ) : null}
             </div>
@@ -389,33 +473,67 @@ export function BroadcastDialog({
             </div>
 
             <div className="space-y-2">
-              <Label>Quem assina</Label>
-              <div className="flex flex-wrap gap-2">
-                {(["diretor", "professor", "tutor", "aluno"] as EstagioRole[]).map((role) => (
-                  <Button
-                    key={role}
-                    type="button"
-                    size="sm"
-                    variant={signatureRoles.includes(role) ? "default" : "outline"}
-                    onClick={() => toggleRole(role, signatureRoles, setSignatureRoles)}
-                    style={
-                      signatureRoles.includes(role)
-                        ? { backgroundColor: COLOR_BY_ROLE[role], color: "white" }
-                        : undefined
+              <Label>Assinatura digital</Label>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  id="broadcast-signatures-enabled"
+                  type="checkbox"
+                  checked={enableSignatureFlow}
+                  disabled={!file || !isPdfFile}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setEnableSignatureFlow(next);
+                    if (next) {
+                      setActiveRole(signatureRoles[0] ?? null);
+                    } else {
+                      setSelectedBoxId(null);
+                      setActiveRole(null);
                     }
-                  >
-                    {ROLE_LABEL[role]}
-                  </Button>
-                ))}
+                  }}
+                />
+                <label htmlFor="broadcast-signatures-enabled">Ativar caixas de assinatura (apenas PDF)</label>
               </div>
+              {!file ? (
+                <p className="text-xs text-muted-foreground">
+                  Selecione primeiro um ficheiro para configurar assinatura digital.
+                </p>
+              ) : !isPdfFile ? (
+                <p className="text-xs text-muted-foreground">
+                  Ficheiros DOCX e XLSX são difundidos sem caixas de assinatura.
+                </p>
+              ) : null}
             </div>
 
+            {shouldConfigureSignatures ? (
+              <div className="space-y-2">
+                <Label>Quem assina</Label>
+                <div className="flex flex-wrap gap-2">
+                  {(["diretor", "professor", "tutor", "aluno"] as EstagioRole[]).map((role) => (
+                    <Button
+                      key={role}
+                      type="button"
+                      size="sm"
+                      variant={signatureRoles.includes(role) ? "default" : "outline"}
+                      onClick={() => toggleRole(role, signatureRoles, setSignatureRoles)}
+                      style={
+                        signatureRoles.includes(role)
+                          ? { backgroundColor: COLOR_BY_ROLE[role], color: "white" }
+                          : undefined
+                      }
+                    >
+                      {ROLE_LABEL[role]}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             <div className="space-y-2">
-              <Label htmlFor="broadcast-file">PDF</Label>
+              <Label htmlFor="broadcast-file">Ficheiro (PDF, DOCX ou XLSX)</Label>
               <Input
                 id="broadcast-file"
                 type="file"
-                accept="application/pdf"
+                accept=".pdf,.docx,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 onChange={handleFileChange}
               />
               {file ? (
@@ -433,8 +551,8 @@ export function BroadcastDialog({
           </div>
         ) : (
           <div className="flex-1 overflow-hidden">
-            <div className="flex h-full gap-3">
-              <div className="flex-1 overflow-y-auto bg-muted/30 py-3">
+            <div className="flex h-full min-h-0 flex-col gap-3 lg:flex-row">
+              <div className="min-h-0 min-w-0 flex-1 overflow-auto rounded-lg bg-muted/30 p-3">
                 <PdfViewer
                   ref={viewerRef}
                   fileBytes={fileBytes ?? undefined}
@@ -455,7 +573,7 @@ export function BroadcastDialog({
                   )}
                 />
               </div>
-              <aside className="w-72 shrink-0 space-y-4 overflow-y-auto rounded-lg border border-border bg-card p-3">
+              <aside className="w-full shrink-0 space-y-4 overflow-y-auto rounded-lg border border-border bg-card p-3 lg:w-80">
                 <div>
                   <p className="text-sm font-semibold">Cargo a desenhar</p>
                   <div className="mt-2 flex flex-wrap gap-1">
@@ -537,9 +655,9 @@ export function BroadcastDialog({
                   </div>
                 </div>
 
-                {selectedCourse ? (
+                {selectedCourses.length > 0 ? (
                   <Badge variant="secondary" className="w-full justify-center">
-                    {selectedCourse.estagiosCount} estágio(s) serão processados
+                    {selectedEstagiosCount} estágio(s) em {selectedCourses.length} turma(s)
                   </Badge>
                 ) : null}
 
@@ -568,10 +686,33 @@ export function BroadcastDialog({
             <span />
           )}
           {step === "meta" ? (
-            <Button type="button" onClick={goToPosition} disabled={!file || !courseId}>
-              <ArrowRight className="mr-2 h-4 w-4" />
-              Continuar
-            </Button>
+            shouldConfigureSignatures ? (
+              <Button
+                type="button"
+                onClick={goToPosition}
+                disabled={!file || courseIds.length === 0 || submitting}
+              >
+                <ArrowRight className="mr-2 h-4 w-4" />
+                Continuar
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                onClick={handleSubmit}
+                disabled={!file || courseIds.length === 0 || submitting}
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />A difundir...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Difundir documento
+                  </>
+                )}
+              </Button>
+            )
           ) : (
             <Button type="button" onClick={handleSubmit} disabled={submitting}>
               {submitting ? (

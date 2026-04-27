@@ -47,6 +47,8 @@ type PatchDocBody = {
   signatureBoxes?: SignatureBox[];
   currentFileUrl?: string;
   currentFilePath?: string;
+  fileMimeType?: string;
+  fileExtension?: string;
   bumpVersion?: boolean;
   versionNotes?: string;
 };
@@ -122,6 +124,10 @@ export async function PATCH(
 
     if (typeof body.currentFileUrl === "string") updates.currentFileUrl = body.currentFileUrl;
     if (typeof body.currentFilePath === "string") updates.currentFilePath = body.currentFilePath;
+    if (typeof body.fileMimeType === "string") updates.fileMimeType = body.fileMimeType;
+    if (typeof body.fileExtension === "string") {
+      updates.fileExtension = body.fileExtension.toLowerCase();
+    }
 
     let newVersion: number | null = null;
     if (body.bumpVersion) {

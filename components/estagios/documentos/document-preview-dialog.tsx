@@ -34,6 +34,25 @@ type Props = {
   currentUserId: string;
 };
 
+function isPdfDocument(doc: EstagioDocument): boolean {
+  const mimeType = (doc.fileMimeType ?? "").toLowerCase();
+  if (mimeType === "application/pdf") return true;
+
+  const extension = (doc.fileExtension ?? "").toLowerCase();
+  if (extension === "pdf") return true;
+
+  const path = doc.currentFilePath ?? "";
+  const url = doc.currentFileUrl ?? "";
+  return /\.pdf(\?|$)/i.test(path) || /\.pdf(\?|$)/i.test(url);
+}
+
+function getDownloadExtension(doc: EstagioDocument): string {
+  const extension = (doc.fileExtension ?? "").toLowerCase();
+  if (extension) return extension;
+  if (isPdfDocument(doc)) return "pdf";
+  return "file";
+}
+
 export function DocumentPreviewDialog({
   doc,
   open,
@@ -45,6 +64,8 @@ export function DocumentPreviewDialog({
   const totalSigners = doc.signatureUserIds.length || doc.signatureRoles.length;
   const signedCount = signedByUsers.length;
   const boxes: SignatureBoxModel[] = doc.signatureBoxes ?? [];
+  const canRenderPdf = isPdfDocument(doc);
+  const downloadExtension = getDownloadExtension(doc);
 
   // Listagem de signatários: combina userIds explicitos + os participantes cuja role é exigida.
   const signersList: Array<{ uid?: string; label: string; role?: EstagioRole; signed: boolean; mine: boolean }> = [];
@@ -101,27 +122,33 @@ export function DocumentPreviewDialog({
         {doc.currentFileUrl ? (
           <div className="grid min-h-0 flex-1 gap-4 overflow-hidden md:grid-cols-[1fr_280px]">
             <div className="min-h-0 overflow-auto rounded-lg border bg-muted/20 p-3">
-              <PdfViewer
-                fileUrl={doc.currentFileUrl}
-                scale={1.1}
-                renderPageOverlay={(info) => (
-                  <SignatureBoxesOverlay
-                    boxes={boxes}
-                    pageNumber={info.pageNumber}
-                    pageWidth={info.width}
-                    pageHeight={info.height}
-                    signedBoxIds={boxes
-                      .filter((b) =>
-                        b.role
-                          ? (doc.signedByRoles ?? []).includes(b.role)
-                          : b.userId
-                            ? signedByUsers.includes(b.userId)
-                            : false,
-                      )
-                      .map((b) => b.id)}
-                  />
-                )}
-              />
+              {canRenderPdf ? (
+                <PdfViewer
+                  fileUrl={doc.currentFileUrl}
+                  scale={1.1}
+                  renderPageOverlay={(info) => (
+                    <SignatureBoxesOverlay
+                      boxes={boxes}
+                      pageNumber={info.pageNumber}
+                      pageWidth={info.width}
+                      pageHeight={info.height}
+                      signedBoxIds={boxes
+                        .filter((b) =>
+                          b.role
+                            ? (doc.signedByRoles ?? []).includes(b.role)
+                            : b.userId
+                              ? signedByUsers.includes(b.userId)
+                              : false,
+                        )
+                        .map((b) => b.id)}
+                    />
+                  )}
+                />
+              ) : (
+                <div className="flex min-h-56 items-center justify-center rounded-md border border-dashed bg-card px-4 text-center text-sm text-muted-foreground">
+                  Pré-visualização disponível apenas para PDF. Use o botão de descarregar para abrir este ficheiro.
+                </div>
+              )}
             </div>
 
             <div className="space-y-4 overflow-y-auto">
@@ -165,10 +192,10 @@ export function DocumentPreviewDialog({
                   href={doc.currentFileUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  download={`${doc.nome}.pdf`}
+                  download={`${doc.nome}.${downloadExtension}`}
                 >
                   <Download className="mr-2 h-4 w-4" />
-                  Descarregar PDF
+                  {canRenderPdf ? "Descarregar PDF" : "Descarregar ficheiro"}
                 </a>
               </Button>
 

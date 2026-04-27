@@ -27,6 +27,7 @@ import {
   Upload,
   Loader2,
   Plus,
+  Trash2,
 } from "lucide-react";
 import { UploadWizard, type UploadWizardDoc } from "./upload-wizard";
 import { DocumentPreviewDialog } from "./document-preview-dialog";
@@ -62,6 +63,9 @@ export type EstagioDocument = {
   currentVersion?: number;
   currentFileUrl?: string;
   currentFilePath?: string;
+  fileMimeType?: string;
+  fileExtension?: string;
+  broadcastCourseId?: string;
   createdAt?: number;
   updatedAt?: number;
 };
@@ -107,6 +111,8 @@ export function DocumentList({
   const [previewDoc, setPreviewDoc] = useState<EstagioDocument | null>(null);
   const [signDoc, setSignDoc] = useState<EstagioDocument | null>(null);
   const [historyDoc, setHistoryDoc] = useState<EstagioDocument | null>(null);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let unsub: (() => void) | undefined;
@@ -149,6 +155,9 @@ export function DocumentList({
               currentVersion: typeof data.currentVersion === "number" ? (data.currentVersion as number) : 0,
               currentFileUrl: (data.currentFileUrl as string | undefined) ?? "",
               currentFilePath: (data.currentFilePath as string | undefined) ?? "",
+              fileMimeType: (data.fileMimeType as string | undefined) ?? "",
+              fileExtension: (data.fileExtension as string | undefined) ?? "",
+              broadcastCourseId: (data.broadcastCourseId as string | undefined) ?? "",
               createdAt,
               updatedAt,
             };
@@ -183,6 +192,7 @@ export function DocumentList({
 
   const togglePin = async (d: EstagioDocument) => {
     if (!canManage) return;
+    setActionError(null);
     try {
       await fetch(`/api/estagios/${estagioId}/documentos/${d.id}`, {
         method: "PATCH",
@@ -191,6 +201,35 @@ export function DocumentList({
       });
     } catch (err) {
       console.error("[v0] toggle pin failed", err);
+    }
+  };
+
+  const deleteDoc = async (d: EstagioDocument) => {
+    if (!canManage || deletingDocId) return;
+    const confirmed = window.confirm(`Eliminar o documento "${d.nome}"? Esta ação é irreversível.`);
+    if (!confirmed) return;
+
+    setActionError(null);
+    setDeletingDocId(d.id);
+    try {
+      const res = await fetch(`/api/estagios/${estagioId}/documentos/${d.id}`, {
+        method: "DELETE",
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setActionError(data.error || "Não foi possível eliminar o documento.");
+        return;
+      }
+
+      if (previewDoc?.id === d.id) setPreviewDoc(null);
+      if (signDoc?.id === d.id) setSignDoc(null);
+      if (historyDoc?.id === d.id) setHistoryDoc(null);
+      if (uploadDoc?.id === d.id) setUploadDoc(null);
+    } catch (err) {
+      console.error("[v0] delete doc error", err);
+      setActionError("Erro inesperado ao eliminar o documento.");
+    } finally {
+      setDeletingDocId(null);
     }
   };
 
@@ -299,6 +338,7 @@ export function DocumentList({
                 const signedCount = d.signedBy?.length ?? 0;
                 const totalSigners = d.signatureUserIds.length || d.signatureRoles.length || 0;
                 const hasFile = !!d.currentFileUrl;
+                const isDeleting = deletingDocId === d.id;
                 return (
                   <tr key={d.id} className="hover:bg-muted/30">
                     <td className="px-4 py-3">
@@ -355,6 +395,8 @@ export function DocumentList({
                                 accessRoles: d.accessRoles,
                                 currentFileUrl: d.currentFileUrl,
                                 currentFilePath: d.currentFilePath,
+                                fileMimeType: d.fileMimeType,
+                                fileExtension: d.fileExtension,
                                 estado: d.estado,
                               })
                             }
@@ -377,13 +419,17 @@ export function DocumentList({
                         )}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button size="sm" variant="ghost">
-                              <MoreHorizontal className="h-4 w-4" />
+                            <Button size="sm" variant="ghost" disabled={isDeleting}>
+                              {isDeleting ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <MoreHorizontal className="h-4 w-4" />
+                              )}
                               <span className="sr-only">Mais ações</span>
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setHistoryDoc(d)}>
+                            <DropdownMenuItem onClick={() => setHistoryDoc(d)} disabled={isDeleting}>
                               <History className="mr-2 h-4 w-4" />
                               Histórico de versões
                             </DropdownMenuItem>
@@ -403,6 +449,18 @@ export function DocumentList({
                                     </>
                                   )}
                                 </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => void deleteDoc(d)}
+                                  disabled={isDeleting}
+                                >
+                                  {isDeleting ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                  )}
+                                  Eliminar documento
+                                </DropdownMenuItem>
                               </>
                             )}
                           </DropdownMenuContent>
@@ -416,6 +474,12 @@ export function DocumentList({
           </table>
         </div>
       )}
+
+      {actionError ? (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {actionError}
+        </div>
+      ) : null}
 
       {uploadDoc && (
         <UploadWizard

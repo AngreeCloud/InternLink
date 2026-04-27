@@ -87,6 +87,8 @@ service firebase.storage {
         && request.resource.size < 25 * 1024 * 1024
         && (
           request.resource.contentType == 'application/pdf'
+          || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
           || request.resource.contentType.matches('image/.*')
         );
       // Documentos assinados são escritos server-side pelo API route (admin).
@@ -106,7 +108,11 @@ service firebase.storage {
       allow read: if isSignedIn();
       allow create, update: if isProfessorActive()
         && request.resource.size < 25 * 1024 * 1024
-        && request.resource.contentType == 'application/pdf';
+        && (
+          request.resource.contentType == 'application/pdf'
+          || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        );
       allow delete: if false;
     }
 
