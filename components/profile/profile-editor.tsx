@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ArrowLeft, Save, Camera, Mail } from "lucide-react";
 import Link from "next/link";
+import { SignatureSettings } from "@/components/profile/signature-settings";
 
 type ProfileData = {
   nome: string;
@@ -443,6 +444,8 @@ export function ProfileEditor() {
           </Button>
         </CardContent>
       </Card>
+
+      <SignatureSettings />
     </div>
   );
 }

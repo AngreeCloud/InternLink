@@ -49,6 +49,73 @@ service firebase.storage {
       allow delete: if isChatParticipant(conversationId);
     }
 
+    // Assinatura pessoal do utilizador (settings privadas).
+    match /signatures/{userId}/{allPaths=**} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isOwner(userId);
+    }
+
+    // Documentos de estágio (PDFs canónicos + versões imutáveis).
+    function estagioData(estagioId) {
+      return firestore.get(/databases/(default)/documents/estagios/$(estagioId)).data;
+    }
+
+    function isEstagioMember(estagioId) {
+      return isSignedIn()
+        && (
+          estagioData(estagioId).alunoId == request.auth.uid
+          || estagioData(estagioId).professorId == request.auth.uid
+          || estagioData(estagioId).tutorId == request.auth.uid
+          || (estagioData(estagioId).schoolId != null && isSchoolAdminFor(estagioData(estagioId).schoolId))
+        );
+    }
+
+    function canManageEstagioStorage(estagioId) {
+      return isSignedIn()
+        && (
+          estagioData(estagioId).professorId == request.auth.uid
+          || (estagioData(estagioId).schoolId != null && isSchoolAdminFor(estagioData(estagioId).schoolId))
+        );
+    }
+
+    match /estagios/{estagioId}/documentos/{allPaths=**} {
+      allow read: if isEstagioMember(estagioId);
+      allow create, update: if canManageEstagioStorage(estagioId)
+        && request.resource.size < 25 * 1024 * 1024
+        && (
+          request.resource.contentType == 'application/pdf'
+          || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          || request.resource.contentType.matches('image/.*')
+        );
+      // Documentos assinados são escritos server-side pelo API route (admin).
+      // Mantemos delete fechado para preservar o histórico.
+      allow delete: if false;
+    }
+
+    // Difusão (broadcast): um único PDF partilhado por todos os estágios de
+    // uma turma. O path é validado pelo API route server-side.
+    function isProfessorActive() {
+      return isSignedIn()
+        && currentUserData().role == "professor"
+        && currentUserData().estado == "ativo";
+    }
+
+    match /estagios/__broadcast__/{courseId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow create, update: if isProfessorActive()
+        && request.resource.size < 25 * 1024 * 1024
+        && (
+          request.resource.contentType == 'application/pdf'
+          || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        );
+      allow delete: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }
