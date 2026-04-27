@@ -217,8 +217,6 @@ schools/{schoolId}/folders/{folderId}/{filename}
 
 ## 8. Capturas de Ecrã
 
-> As imagens abaixo são placeholders. Para adicionar capturas, coloca os ficheiros em `docs/screenshots/` com os nomes indicados.
-
 ### 8.1. Landing page
 ![Landing page](docs/screenshots/01-landing.png)
 
