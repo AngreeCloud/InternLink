@@ -88,7 +88,7 @@ export function StudentProtocolView() {
         <CardHeader>
           <CardTitle>Documento do protocolo</CardTitle>
           <CardDescription>
-            TODO: o carregamento do protocolo pela dashboard do professor será implementado futuramente.
+            Disponibilizado pelo Diretor de Curso assim que o protocolo for carregado.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

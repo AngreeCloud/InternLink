@@ -96,6 +96,20 @@ service firebase.storage {
       allow delete: if false;
     }
 
+    // Relatório final do estágio. O aluno pode fazer upload aqui; o API route
+    // valida horas mínimas/período de espera e fixa-o no documento de estágio.
+    match /estagios/{estagioId}/relatorios/{allPaths=**} {
+      allow read: if isEstagioMember(estagioId);
+      allow create, update: if isSignedIn()
+        && estagioData(estagioId).alunoId == request.auth.uid
+        && request.resource.size < 25 * 1024 * 1024
+        && (
+          request.resource.contentType == 'application/pdf'
+          || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        );
+      allow delete: if false;
+    }
+
     // Difusão (broadcast): um único PDF partilhado por todos os estágios de
     // uma turma. O path é validado pelo API route server-side.
     function isProfessorActive() {

@@ -215,3 +215,41 @@ body.transition-overlay-active .grecaptcha-badge {
     opacity: 0;
   }
 }
+
+.docx-preview h1,
+.docx-preview h2,
+.docx-preview h3,
+.docx-preview h4 {
+  font-weight: 600;
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+  line-height: 1.3;
+  color: hsl(var(--foreground));
+}
+.docx-preview h1 { font-size: 1.5rem; }
+.docx-preview h2 { font-size: 1.25rem; }
+.docx-preview h3 { font-size: 1.125rem; }
+.docx-preview p { margin: 0.75em 0; }
+.docx-preview ul,
+.docx-preview ol {
+  margin: 0.75em 0;
+  padding-left: 1.5rem;
+}
+.docx-preview li { margin: 0.25em 0; }
+.docx-preview strong { font-weight: 600; }
+.docx-preview table {
+  border-collapse: collapse;
+  margin: 0.75em 0;
+  width: 100%;
+}
+.docx-preview th,
+.docx-preview td {
+  border: 1px solid hsl(var(--border));
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+}
+.docx-preview img {
+  max-width: 100%;
+  height: auto;
+}
+.docx-preview a { color: hsl(var(--primary)); text-decoration: underline; }
