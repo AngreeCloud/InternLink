@@ -24,7 +24,11 @@ export function DocxPreview({ fileBytes, className }: Props) {
 
     (async () => {
       try {
-        const mammoth = await import("mammoth/mammoth.browser");
+        const mammoth = (await import(
+          /* webpackIgnore: true */ "mammoth/mammoth.browser" as string
+        )) as {
+          convertToHtml: (input: { arrayBuffer: ArrayBuffer }) => Promise<{ value: string }>;
+        };
         const arrayBuffer = fileBytes.buffer.slice(
           fileBytes.byteOffset,
           fileBytes.byteOffset + fileBytes.byteLength,
