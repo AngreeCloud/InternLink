@@ -54,13 +54,16 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const load = async () => {
-    if (!rootRef.current) return;
-    const root = rootRef.current;
-    root.innerHTML = "";
     pagesRef.current = [];
     setPages([]);
     setLoading(true);
     setErrorMessage(null);
+
+    // Let React unmount portal overlays before clearing the container.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+    if (!rootRef.current) return;
+    rootRef.current.replaceChildren();
 
     const source = fileBytes
       ? { data: fileBytes }

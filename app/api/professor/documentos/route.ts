@@ -68,8 +68,17 @@ type AccessibleEstagio = {
 
 function timestampToMillis(value: unknown): number | null {
   if (!value || typeof value !== "object") return null;
-  const toMillis = (value as { toMillis?: () => number }).toMillis;
-  return typeof toMillis === "function" ? toMillis() : null;
+  const timestamp = value as { toMillis?: () => number; _seconds?: number; seconds?: number };
+  if (typeof timestamp.toMillis === "function") {
+    return timestamp.toMillis();
+  }
+  if (typeof timestamp._seconds === "number") {
+    return timestamp._seconds * 1000;
+  }
+  if (typeof timestamp.seconds === "number") {
+    return timestamp.seconds * 1000;
+  }
+  return null;
 }
 
 function inferExtension(path: string, mimeType: string): string {

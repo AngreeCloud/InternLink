@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { getDbRuntime, getStorageRuntime } from "@/lib/firebase-runtime";
+import { getStorageRuntime } from "@/lib/firebase-runtime";
 import {
   Dialog,
   DialogContent,
@@ -73,7 +72,6 @@ type CourseOption = {
 };
 
 export type BroadcastDialogProps = {
-  professorUid: string;
   schoolId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -81,7 +79,6 @@ export type BroadcastDialogProps = {
 };
 
 export function BroadcastDialog({
-  professorUid,
   schoolId,
   open,
   onOpenChange,
@@ -90,6 +87,7 @@ export function BroadcastDialog({
   const [step, setStep] = useState<"meta" | "position">("meta");
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [loadingCourses, setLoadingCourses] = useState(true);
+  const [coursesError, setCoursesError] = useState<string | null>(null);
   const [courseIds, setCourseIds] = useState<string[]>([]);
 
   const [file, setFile] = useState<File | null>(null);
@@ -124,42 +122,23 @@ export function BroadcastDialog({
     let cancelled = false;
     (async () => {
       setLoadingCourses(true);
+      setCoursesError(null);
       try {
-        const db = await getDbRuntime();
-        const courseSnaps = await getDocs(
-          query(collection(db, "courses"), where("schoolId", "==", schoolId))
-        );
-        const relevant = courseSnaps.docs.filter((c) => {
-          const data = c.data() as {
-            courseDirectorId?: string;
-            teacherIds?: string[];
-            supportingTeacherIds?: string[];
-          };
-          return (
-            data.courseDirectorId === professorUid ||
-            (Array.isArray(data.teacherIds) && data.teacherIds.includes(professorUid)) ||
-            (Array.isArray(data.supportingTeacherIds) &&
-              data.supportingTeacherIds.includes(professorUid))
-          );
-        });
-        const counts = await Promise.all(
-          relevant.map(async (c) => {
-            const countSnap = await getDocs(
-              query(collection(db, "estagios"), where("alunoCourseId", "==", c.id))
-            );
-            return countSnap.size;
-          })
-        );
+        const res = await fetch("/api/professor/broadcast-courses", { cache: "no-store" });
+        const data = (await res.json()) as {
+          ok?: boolean;
+          courses?: CourseOption[];
+          error?: string;
+        };
+        if (!res.ok || !data.ok) {
+          setCoursesError(data.error || "Não foi possível carregar as turmas.");
+          return;
+        }
         if (cancelled) return;
-        setCourses(
-          relevant.map((c, idx) => ({
-            id: c.id,
-            nome: (c.data() as { nome?: string }).nome ?? c.id,
-            estagiosCount: counts[idx] ?? 0,
-          }))
-        );
+        setCourses(Array.isArray(data.courses) ? data.courses : []);
       } catch (err) {
         console.error("[v0] broadcast courses load failed", err);
+        if (!cancelled) setCoursesError("Não foi possível carregar as turmas.");
       } finally {
         if (!cancelled) setLoadingCourses(false);
       }
@@ -167,7 +146,7 @@ export function BroadcastDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, professorUid, schoolId]);
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -189,6 +168,7 @@ export function BroadcastDialog({
       setDrawing(true);
       setPdfPages([]);
       setError(null);
+      setCoursesError(null);
       setSubmitting(false);
     }
   }, [open]);
@@ -390,6 +370,8 @@ export function BroadcastDialog({
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> A carregar cursos...
                 </div>
+              ) : coursesError ? (
+                <p className="text-sm text-destructive">{coursesError}</p>
               ) : courses.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   Ainda não está associado a nenhum curso. Peça ao administrador

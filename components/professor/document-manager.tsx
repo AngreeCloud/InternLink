@@ -342,7 +342,6 @@ export function DocumentManager() {
 
       {userId && schoolId ? (
         <BroadcastDialog
-          professorUid={userId}
           schoolId={schoolId}
           open={broadcastOpen}
           onOpenChange={setBroadcastOpen}

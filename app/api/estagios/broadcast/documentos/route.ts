@@ -184,15 +184,20 @@ export async function POST(request: Request) {
         );
       }
 
-      const estagiosSnap = await db
-        .collection("estagios")
-        .where("alunoCourseId", "==", courseId)
-        .get();
+      const [alunoSnap, courseSnap] = await Promise.all([
+        db.collection("estagios").where("alunoCourseId", "==", courseId).get(),
+        db.collection("estagios").where("courseId", "==", courseId).get(),
+      ]);
+
+      const estagiosMap = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+      for (const doc of alunoSnap.docs) estagiosMap.set(doc.id, doc);
+      for (const doc of courseSnap.docs) estagiosMap.set(doc.id, doc);
+      const estagiosList = Array.from(estagiosMap.values());
 
       let createdInCourse = 0;
       let skippedInCourse = 0;
 
-      for (const estagioSnap of estagiosSnap.docs) {
+      for (const estagioSnap of estagiosList) {
         const estagioData = estagioSnap.data() as {
           professorId?: string;
           schoolId?: string;
@@ -260,7 +265,7 @@ export async function POST(request: Request) {
 
       perCourse.push({
         courseId,
-        total: estagiosSnap.size,
+        total: estagiosMap.size,
         created: createdInCourse,
         skipped: skippedInCourse,
       });
