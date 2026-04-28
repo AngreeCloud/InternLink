@@ -184,14 +184,14 @@ export async function POST(request: Request) {
         );
       }
 
-      const [alunoSnap, courseSnap] = await Promise.all([
+      const [alunoSnap, estagioCourseSnap] = await Promise.all([
         db.collection("estagios").where("alunoCourseId", "==", courseId).get(),
         db.collection("estagios").where("courseId", "==", courseId).get(),
       ]);
 
       const estagiosMap = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
       for (const doc of alunoSnap.docs) estagiosMap.set(doc.id, doc);
-      for (const doc of courseSnap.docs) estagiosMap.set(doc.id, doc);
+      for (const doc of estagioCourseSnap.docs) estagiosMap.set(doc.id, doc);
       const estagiosList = Array.from(estagiosMap.values());
 
       let createdInCourse = 0;
