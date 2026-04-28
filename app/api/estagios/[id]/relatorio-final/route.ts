@@ -60,7 +60,8 @@ async function sumPresencasHours(
   const snap = await db.collection("estagios").doc(estagioId).collection("presencas").get();
   let total = 0;
   snap.forEach((d) => {
-    const horas = Number((d.data() as { horas?: number })?.horas ?? 0);
+    const data = d.data() as { hoursWorked?: number; horas?: number };
+    const horas = Number(data.hoursWorked ?? data.horas ?? 0);
     if (Number.isFinite(horas) && horas > 0) total += horas;
   });
   return total;
