@@ -520,6 +520,7 @@ service cloud.firestore {
           && (
             isEstagioDirector(get(/databases/$(database)/documents/estagios/$(estagioId)).data)
             || get(/databases/$(database)/documents/estagios/$(estagioId)).data.tutorId == request.auth.uid
+            || get(/databases/$(database)/documents/estagios/$(estagioId)).data.alunoId == request.auth.uid
           );
       }
 

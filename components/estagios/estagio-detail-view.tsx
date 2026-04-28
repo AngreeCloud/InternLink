@@ -10,7 +10,7 @@ import {
   ArrowLeft,
   ClipboardList,
   FileText,
-  CheckSquare,
+  CalendarClock,
   NotebookPen,
   Star,
   Loader2,
@@ -18,6 +18,8 @@ import {
 import { OverviewTab } from "./overview-tab";
 import { DocumentList } from "./documentos/document-list";
 import { ComingSoonTab } from "./coming-soon-tab";
+import { HorarioTab } from "./horario-tab";
+import { SumariosTab } from "./sumarios-tab";
 import {
   getUserRoleInEstagio,
   isDirectorRole,
@@ -249,9 +251,9 @@ export function EstagioDetailView({
             <FileText className="mr-2 h-4 w-4" />
             Documentos
           </TabsTrigger>
-          <TabsTrigger value="presencas">
-            <CheckSquare className="mr-2 h-4 w-4" />
-            Presenças
+          <TabsTrigger value="horario">
+            <CalendarClock className="mr-2 h-4 w-4" />
+            Horário
           </TabsTrigger>
           <TabsTrigger value="sumarios">
             <NotebookPen className="mr-2 h-4 w-4" />
@@ -279,19 +281,21 @@ export function EstagioDetailView({
           />
         </TabsContent>
 
-        <TabsContent value="presencas">
-          <ComingSoonTab
-            title="Registo de presenças"
-            description="Em breve poderás registar aqui as presenças diárias do aluno, com validação pelo tutor de estágio e visibilidade pelo Diretor de Curso."
-            icon={CheckSquare}
+        <TabsContent value="horario">
+          <HorarioTab
+            estagioId={estagio.id}
+            estagio={estagio as Record<string, unknown>}
+            currentUserId={currentUserId}
+            currentUserRole={effectiveRole}
           />
         </TabsContent>
 
         <TabsContent value="sumarios">
-          <ComingSoonTab
-            title="Sumários semanais"
-            description="Espaço para o aluno descrever as atividades realizadas semanalmente, com validação pelo tutor e revisão pelo Diretor de Curso."
-            icon={NotebookPen}
+          <SumariosTab
+            estagioId={estagio.id}
+            estagio={estagio as Record<string, unknown>}
+            currentUserId={currentUserId}
+            currentUserRole={effectiveRole}
           />
         </TabsContent>
 
