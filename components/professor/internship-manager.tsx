@@ -33,19 +33,30 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Briefcase, DoorOpen, Mail, Pencil, Plus, Search, Trash2, UserPlus, Users } from "lucide-react";
+import { DoorOpen, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import {
+  calcularDataFimEstimada,
+  DEFAULT_DIAS_SEMANA,
+  formatIsoDatePt,
+  type DiasSemana,
+} from "@/lib/estagios/date-calc";
+import { EstagiosSection } from "@/components/professor/estagios-section";
+import { EditEstagioDialog } from "@/components/estagios/edit-estagio-dialog";
+import type { EstagioListItem } from "@/components/professor/estagio-types";
 
-type Estagio = {
-  id: string;
-  titulo: string;
-  alunoId: string;
-  alunoNome: string;
-  alunoEmail: string;
-  tutorId: string;
-  empresa: string;
-  estado: string;
-  createdAt: string;
+const DAY_LABEL: Record<keyof DiasSemana, string> = {
+  seg: "Segunda",
+  ter: "Terça",
+  qua: "Quarta",
+  qui: "Quinta",
+  sex: "Sexta",
+  sab: "Sábado",
+  dom: "Domingo",
 };
+
+const DAY_ORDER: (keyof DiasSemana)[] = ["seg", "ter", "qua", "qui", "sex", "sab", "dom"];
+
+type Estagio = EstagioListItem;
 
 type SimpleUser = {
   id: string;
@@ -99,6 +110,13 @@ export function InternshipManager() {
   const [empresa, setEmpresa] = useState("");
   const [alunoId, setAlunoId] = useState("");
   const [tutorId, setTutorId] = useState("");
+  const [createDataInicio, setCreateDataInicio] = useState("");
+  const [createTotalHoras, setCreateTotalHoras] = useState<number>(600);
+  const [createHorasDiarias, setCreateHorasDiarias] = useState<number>(7);
+  const [createDiasSemana, setCreateDiasSemana] = useState<DiasSemana>(DEFAULT_DIAS_SEMANA);
+
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingScheduleEstagio, setEditingScheduleEstagio] = useState<EstagioListItem | null>(null);
 
   const [inviteTutorEmail, setInviteTutorEmail] = useState("");
   const [inviteTutorName, setInviteTutorName] = useState("");
@@ -223,18 +241,29 @@ export function InternshipManager() {
             tutorEmail?: string;
             tutorPhotoURL?: string;
             empresa?: string;
+            entidadeAcolhimento?: string;
             estado?: string;
+            courseId?: string;
+            alunoCourseId?: string;
+            courseNome?: string;
+            courseName?: string;
+            dataInicio?: string;
+            dataFimEstimada?: string;
+            dataFim?: string;
+            totalHoras?: number;
+            horasDiarias?: number;
+            diasSemana?: Partial<DiasSemana>;
             createdAt?: { toDate: () => Date };
           };
 
           if (
             Object.prototype.hasOwnProperty.call(data, "alunoPhotoURL") ||
-            Object.prototype.hasOwnProperty.call(data, "tutorPhotoURL") ||
-            Object.prototype.hasOwnProperty.call(data, "tutorNome") ||
-            Object.prototype.hasOwnProperty.call(data, "tutorEmail")
+            Object.prototype.hasOwnProperty.call(data, "tutorPhotoURL")
           ) {
             estagiosToNormalize.push(docSnap.id);
           }
+
+          const createdAtDate = data.createdAt?.toDate?.() || null;
 
           return {
             id: docSnap.id,
@@ -243,9 +272,20 @@ export function InternshipManager() {
             alunoNome: data.alunoNome || "—",
             alunoEmail: data.alunoEmail || "—",
             tutorId: data.tutorId || "",
-            empresa: data.empresa || "—",
+            tutorNome: data.tutorNome || "",
+            tutorEmail: data.tutorEmail || "",
+            empresa: data.entidadeAcolhimento || data.empresa || "—",
             estado: data.estado || "ativo",
-            createdAt: data.createdAt?.toDate?.()?.toLocaleDateString("pt-PT") || "—",
+            courseId: data.courseId || data.alunoCourseId || "",
+            courseNome: data.courseNome || data.courseName || "Sem turma",
+            dataInicio: data.dataInicio || undefined,
+            dataFimEstimada: data.dataFimEstimada || data.dataFim || undefined,
+            totalHoras: typeof data.totalHoras === "number" ? data.totalHoras : undefined,
+            horasDiarias:
+              typeof data.horasDiarias === "number" ? data.horasDiarias : undefined,
+            diasSemana: data.diasSemana || undefined,
+            createdAt: createdAtDate?.toLocaleDateString("pt-PT") || "—",
+            createdAtMs: createdAtDate?.getTime() || 0,
           };
         });
         setEstagios(list);
@@ -255,8 +295,6 @@ export function InternshipManager() {
           for (const estagioId of estagiosToNormalize) {
             batch.update(doc(db, "estagios", estagioId), {
               alunoPhotoURL: deleteField(),
-              tutorNome: deleteField(),
-              tutorEmail: deleteField(),
               tutorPhotoURL: deleteField(),
               updatedAt: serverTimestamp(),
             });
@@ -385,10 +423,19 @@ export function InternshipManager() {
     setTutorSearch("");
     setStudentListOpen(false);
     setTutorListOpen(false);
+    setCreateDataInicio("");
+    setCreateTotalHoras(600);
+    setCreateHorasDiarias(7);
+    setCreateDiasSemana(DEFAULT_DIAS_SEMANA);
   };
 
   const handleCreateEstagio = async () => {
     if (!titulo.trim() || !alunoId) return;
+    if (!createDataInicio) return;
+    if (!Number.isFinite(createTotalHoras) || createTotalHoras <= 0) return;
+    if (!Number.isFinite(createHorasDiarias) || createHorasDiarias <= 0 || createHorasDiarias > 24) return;
+    if (!DAY_ORDER.some((k) => createDiasSemana[k])) return;
+
     setSubmitting(true);
     try {
       const db = await getDbRuntime();
@@ -397,16 +444,35 @@ export function InternshipManager() {
       if (!user) return;
 
       const selectedTutorById = schoolTutors.find((tutor) => tutor.id === tutorId) || null;
+      const empresaTrim = empresa.trim();
+      const calc = calcularDataFimEstimada({
+        dataInicio: createDataInicio,
+        totalHoras: createTotalHoras,
+        horasDiarias: createHorasDiarias,
+        diasSemana: createDiasSemana,
+      });
 
       await addDoc(collection(db, "estagios"), {
         titulo: titulo.trim(),
         schoolId,
         professorId: user.uid,
+        professorNome: professorName,
         alunoId,
         alunoNome: selectedStudent?.nome || "",
         alunoEmail: selectedStudent?.email || "",
         tutorId: selectedTutorById?.id || "",
-        empresa: empresa.trim(),
+        tutorNome: selectedTutorById?.nome || "",
+        tutorEmail: selectedTutorById?.email || "",
+        tutorEmpresa: selectedTutorById?.empresa || empresaTrim,
+        empresa: empresaTrim,
+        entidadeAcolhimento: empresaTrim,
+        dataInicio: createDataInicio,
+        totalHoras: createTotalHoras,
+        horasDiarias: createHorasDiarias,
+        diasSemana: createDiasSemana,
+        dataFimEstimada: calc.dataFimEstimada,
+        horasRealizadas: 0,
+        estadoEstagio: "em_curso",
         estado: "ativo",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -421,6 +487,20 @@ export function InternshipManager() {
       setSubmitting(false);
     }
   };
+
+  const toggleCreateDay = (key: keyof DiasSemana) => {
+    setCreateDiasSemana((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const createDateResult =
+    createDataInicio && createTotalHoras > 0 && createHorasDiarias > 0
+      ? calcularDataFimEstimada({
+          dataInicio: createDataInicio,
+          totalHoras: createTotalHoras,
+          horasDiarias: createHorasDiarias,
+          diasSemana: createDiasSemana,
+        })
+      : null;
 
   const handleInviteTutor = async () => {
     if (!inviteTutorEmail.trim()) return;
@@ -705,6 +785,73 @@ export function InternshipManager() {
                   />
                 </div>
 
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="estagioDataInicio">Data de início</Label>
+                    <Input
+                      id="estagioDataInicio"
+                      type="date"
+                      value={createDataInicio}
+                      onChange={(event) => setCreateDataInicio(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="estagioTotalHoras">Total de horas</Label>
+                    <Input
+                      id="estagioTotalHoras"
+                      type="number"
+                      min={1}
+                      value={createTotalHoras}
+                      onChange={(event) => setCreateTotalHoras(Number(event.target.value))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="estagioHorasDiarias">Horas por dia</Label>
+                    <Input
+                      id="estagioHorasDiarias"
+                      type="number"
+                      min={1}
+                      max={24}
+                      step={0.5}
+                      value={createHorasDiarias}
+                      onChange={(event) => setCreateHorasDiarias(Number(event.target.value))}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Dias da semana ativos</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {DAY_ORDER.map((key) => (
+                      <Button
+                        key={key}
+                        type="button"
+                        size="sm"
+                        variant={createDiasSemana[key] ? "default" : "outline"}
+                        onClick={() => toggleCreateDay(key)}
+                      >
+                        {DAY_LABEL[key]}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+                  {createDateResult && createDateResult.diasUteis > 0 ? (
+                    <span>
+                      Data estimada de fim:{" "}
+                      <strong>{formatIsoDatePt(createDateResult.dataFimEstimada)}</strong>
+                      <span className="ml-2 text-muted-foreground">
+                        ({createDateResult.diasUteis} dias úteis • feriados PT excluídos)
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      Preencha data de início, total de horas e horário para ver a previsão.
+                    </span>
+                  )}
+                </div>
+
                 <Button onClick={handleCreateEstagio} disabled={submitting} className="w-full">
                   {submitting ? "A criar..." : "Criar Estágio"}
                 </Button>
@@ -903,94 +1050,30 @@ export function InternshipManager() {
         </DialogContent>
       </Dialog>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Briefcase className="h-5 w-5" />
-            Estágios
-          </CardTitle>
-          <CardDescription>
-            {loading ? "A carregar..." : `${estagios.length} estágio(s) criado(s)`}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <p className="text-sm text-muted-foreground">A carregar estágios...</p>
-          ) : estagios.length === 0 ? (
-            <div className="py-8 text-center">
-              <Briefcase className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-              <h3 className="mb-2 text-lg font-medium text-foreground">Nenhum estágio criado</h3>
-              <p className="text-muted-foreground">
-                Crie um novo estágio e associe o tutor quando quiser.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {estagios.map((estagio) => (
-                <div key={estagio.id} className="rounded-lg border border-border p-4">
-                  {(() => {
-                    const linkedStudent = students.find((student) => student.id === estagio.alunoId) || null;
-                    const linkedTutor = schoolTutors.find((tutor) => estagio.tutorId && tutor.id === estagio.tutorId) || null;
+      <EstagiosSection
+        estagios={estagios}
+        students={students}
+        tutors={schoolTutors}
+        loading={loading}
+        onOpenChangeTutor={(estagio) => openEditTutorDialog(estagio)}
+        onOpenEdit={(estagio) => {
+          setEditingScheduleEstagio(estagio);
+          setEditDialogOpen(true);
+        }}
+      />
 
-                    return (
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-medium text-foreground">{estagio.titulo}</h4>
-                        <Badge variant={estagio.estado === "ativo" ? "default" : "secondary"}>
-                          {estagio.estado}
-                        </Badge>
-                      </div>
-
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Avatar className="h-6 w-6">
-                          <AvatarImage src={linkedStudent?.photoURL || undefined} alt={estagio.alunoNome} />
-                          <AvatarFallback>{estagio.alunoNome.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <span>Aluno: {estagio.alunoNome} ({estagio.alunoEmail})</span>
-                      </div>
-
-                      {estagio.tutorId ? (
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Avatar className="h-6 w-6">
-                            <AvatarImage
-                              src={linkedTutor?.photoURL || undefined}
-                              alt={linkedTutor?.nome || "Tutor"}
-                            />
-                            <AvatarFallback>{(linkedTutor?.nome || "Tutor").charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          <span>
-                            Tutor: {linkedTutor ? `${linkedTutor.nome} (${linkedTutor.email})` : "Associado"}
-                          </span>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-amber-700">Sem tutor associado.</p>
-                      )}
-
-                      {estagio.empresa !== "—" && (
-                        <p className="text-xs text-muted-foreground">Empresa: {estagio.empresa}</p>
-                      )}
-                      <p className="text-xs text-muted-foreground">Criado em: {estagio.createdAt}</p>
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openEditTutorDialog(estagio)}
-                    >
-                      <Pencil className="mr-2 h-4 w-4" />
-                      {estagio.tutorId ? "Alterar tutor" : "Associar tutor"}
-                    </Button>
-                  </div>
-                    );
-                  })()}
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <EditEstagioDialog
+        estagio={editingScheduleEstagio}
+        open={editDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) setEditingScheduleEstagio(null);
+        }}
+        onSaved={() => {
+          setEditingScheduleEstagio(null);
+          loadData();
+        }}
+      />
     </div>
   );
 }
