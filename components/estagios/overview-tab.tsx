@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
+import { collection, onSnapshot } from "firebase/firestore";
+import { getDbRuntime } from "@/lib/firebase-runtime";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -69,6 +72,45 @@ export function OverviewTab({ estagio, participants }: Props) {
   const professor = participants[estagio.professorId];
   const tutor = participants[estagio.tutorId];
 
+  const [presencasSummary, setPresencasSummary] = useState<
+    { total: number; count: number } | null
+  >(null);
+
+  useEffect(() => {
+    if (!estagio.id) return;
+    let unsub: (() => void) | undefined;
+    let cancelled = false;
+    (async () => {
+      const db = await getDbRuntime();
+      if (cancelled) return;
+      unsub = onSnapshot(
+        collection(db, "estagios", estagio.id, "presencas"),
+        (snap) => {
+          let total = 0;
+          let count = 0;
+          snap.forEach((doc) => {
+            const data = doc.data() as { hoursWorked?: number };
+            if (typeof data.hoursWorked === "number") {
+              total += data.hoursWorked;
+              count += 1;
+            }
+          });
+          setPresencasSummary({ total, count });
+        },
+        (err) => {
+          const code = (err as { code?: string })?.code;
+          if (code !== "permission-denied") {
+            console.error("[v0] presencas overview snapshot", err);
+          }
+        }
+      );
+    })();
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
+  }, [estagio.id]);
+
   const dias = (estagio.diasSemana ?? [])
     .slice()
     .sort((a, b) => a - b)
@@ -76,7 +118,14 @@ export function OverviewTab({ estagio, participants }: Props) {
     .join(", ");
 
   const total = Math.max(0, estagio.totalHoras ?? 0);
-  const done = Math.max(0, Math.min(total, estagio.horasRealizadas ?? 0));
+  const horasRegistadas = useMemo(() => {
+    if (!presencasSummary) return null;
+    return presencasSummary.count > 0 ? presencasSummary.total : 0;
+  }, [presencasSummary]);
+  const done = Math.max(
+    0,
+    Math.min(total, horasRegistadas ?? (estagio.horasRealizadas ?? 0))
+  );
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   const status = statusLabel(estagio.status);
 
