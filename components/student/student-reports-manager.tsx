@@ -65,6 +65,7 @@ type ReportSnapshot = {
   currentVersion: number;
   updatedAt: string | null;
   submittedAt: string | null;
+  pageCount?: number | null;
 };
 
 type ManagerState = {
@@ -502,6 +503,9 @@ export function StudentReportsManager() {
               <p className="mt-1 text-xs text-muted-foreground">
                 Formato: {(state.report.fileExtension || "—").toUpperCase()}
               </p>
+              {typeof state.report.pageCount === "number" ? (
+                <p className="mt-1 text-xs text-muted-foreground">Páginas: {state.report.pageCount}</p>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
               {state.report.currentFileUrl && (

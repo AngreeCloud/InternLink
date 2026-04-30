@@ -1,43 +1,59 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { FileText, Upload, Download, Eye, Clock, CheckCircle, AlertCircle } from "lucide-react"
+import { collection, getDocs } from "firebase/firestore"
+import { getDbRuntime } from "@/lib/firebase-runtime"
 
-// Mock data - in real app this would come from Firebase
-const mockDocuments = [
-  {
-    id: "1",
-    title: "Protocolo de Estágio - João Silva",
-    type: "protocol",
-    status: "approved",
-    uploadedBy: "Escola Secundária",
-    uploadedAt: "2024-01-15",
-    size: "2.3 MB",
-  },
-  {
-    id: "2",
-    title: "Relatório de Estágio - João Silva",
-    type: "report",
-    status: "blocked",
-    uploadedBy: "João Silva",
-    uploadedAt: "2024-01-20",
-    size: "1.8 MB",
-    blockedUntil: "2024-02-05",
-  },
-  {
-    id: "3",
-    title: "Protocolo de Estágio - Maria Santos",
-    type: "protocol",
-    status: "pending",
-    uploadedBy: "Escola Técnica",
-    uploadedAt: "2024-01-18",
-    size: "2.1 MB",
-  },
-]
+type DocItem = {
+  id: string
+  title?: string
+  categoria?: string
+  estado?: string
+  uploadedBy?: string
+  uploadedAt?: string
+  size?: string
+  blockedUntil?: string
+}
 
 export function DocumentsOverview() {
+  const [docs, setDocs] = useState<DocItem[]>([])
+  const [counts, setCounts] = useState({ protocols: 0, reports: 0, approvals: 0 })
+
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      try {
+        const db = await getDbRuntime()
+        const snap = await getDocs(collection(db, "documentos"))
+        if (!active) return
+        const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, any>) })) as DocItem[]
+        const protocols = items.filter((i) => {
+          const c = (i.categoria || "" ).toString().toLowerCase()
+          return c.includes("protocol") || c.includes("protocolo")
+        }).length
+        const reports = items.filter((i) => {
+          const c = (i.categoria || "").toString().toLowerCase()
+          return c.includes("report") || c.includes("relat")
+        }).length
+        const approvals = items.filter((i) => ((i.estado || "").toString().toLowerCase() === "aprovado" || (i.estado || "").toString().toLowerCase() === "approved")).length
+
+        setDocs(items.slice(0, 10))
+        setCounts({ protocols, reports, approvals })
+      } catch (err) {
+        console.error("Failed to load documents overview", err)
+      }
+    }
+
+    load()
+    return () => {
+      active = false
+    }
+  }, [])
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "approved":
@@ -86,7 +102,7 @@ export function DocumentsOverview() {
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12</div>
+            <div className="text-2xl font-bold">{counts.protocols}</div>
             <p className="text-xs text-muted-foreground">+2 este mês</p>
           </CardContent>
         </Card>
@@ -97,7 +113,7 @@ export function DocumentsOverview() {
             <Upload className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">8</div>
+            <div className="text-2xl font-bold">{counts.reports}</div>
             <p className="text-xs text-muted-foreground">3 pendentes</p>
           </CardContent>
         </Card>
@@ -108,7 +124,7 @@ export function DocumentsOverview() {
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">15</div>
+            <div className="text-2xl font-bold">{counts.approvals}</div>
             <p className="text-xs text-muted-foreground">+5 esta semana</p>
           </CardContent>
         </Card>
@@ -130,26 +146,26 @@ export function DocumentsOverview() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {mockDocuments.map((doc) => (
+            {docs.map((doc) => (
               <div key={doc.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
                 <div className="flex items-center space-x-4">
-                  {getStatusIcon(doc.status)}
+                  {getStatusIcon((doc.estado || "").toString())}
                   <div>
                     <h4 className="text-sm font-medium text-foreground">{doc.title}</h4>
                     <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                      <span>Por {doc.uploadedBy}</span>
+                      <span>Por {doc.uploadedBy || "—"}</span>
                       <span>•</span>
-                      <span>{doc.uploadedAt}</span>
+                      <span>{doc.uploadedAt || "—"}</span>
                       <span>•</span>
-                      <span>{doc.size}</span>
+                      <span>{doc.size || "—"}</span>
                     </div>
-                    {doc.status === "blocked" && doc.blockedUntil && (
+                    {((doc.estado || "").toString().toLowerCase() === "blocked" || (doc.estado || "").toString().toLowerCase() === "bloqueado") && doc.blockedUntil && (
                       <p className="text-xs text-red-500 mt-1">Bloqueado até {doc.blockedUntil}</p>
                     )}
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  {getStatusBadge(doc.status)}
+                  {getStatusBadge((doc.estado || "").toString())}
                   <Button variant="ghost" size="sm">
                     <Eye className="h-4 w-4" />
                   </Button>

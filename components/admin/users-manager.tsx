@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,66 +8,45 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Users, Search, Filter, UserCheck, UserX, Mail } from "lucide-react"
-
-// Mock users data
-const mockUsers = [
-  {
-    id: "1",
-    name: "João Silva",
-    email: "joao@escola.pt",
-    role: "school",
-    status: "active",
-    school: "Escola Secundária de Lisboa",
-    company: "",
-    joinedAt: "2024-01-15",
-    lastActive: "2024-01-29",
-  },
-  {
-    id: "2",
-    name: "Maria Santos",
-    email: "maria@email.com",
-    role: "student",
-    status: "active",
-    school: "Escola Técnica do Porto",
-    company: "InnovaTech SA",
-    joinedAt: "2024-01-18",
-    lastActive: "2024-01-28",
-  },
-  {
-    id: "3",
-    name: "Eng. Pedro Costa",
-    email: "pedro@empresa.com",
-    role: "company",
-    status: "active",
-    school: "",
-    company: "TechCorp Lda",
-    joinedAt: "2024-01-20",
-    lastActive: "2024-01-29",
-  },
-  {
-    id: "4",
-    name: "Ana Rodrigues",
-    email: "ana@email.com",
-    role: "student",
-    status: "pending",
-    school: "Instituto Politécnico",
-    company: "DataSoft Solutions",
-    joinedAt: "2024-01-28",
-    lastActive: "2024-01-28",
-  },
-]
+import { collection, getDocs } from "firebase/firestore"
+import { getDbRuntime } from "@/lib/firebase-runtime"
 
 export function UsersManager() {
   const [searchTerm, setSearchTerm] = useState("")
   const [roleFilter, setRoleFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [users, setUsers] = useState<Array<Record<string, any>>>([])
 
-  const filteredUsers = mockUsers.filter((user) => {
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      try {
+        const db = await getDbRuntime()
+        const snap = await getDocs(collection(db, "users"))
+        if (!active) return
+        const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, any>) }))
+        setUsers(items)
+      } catch (err) {
+        console.error("Failed to load users", err)
+      }
+    }
+
+    load()
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const filteredUsers = users.filter((user) => {
+    const name = (user.nome || user.name || "").toString()
+    const email = (user.email || "").toString()
     const matchesSearch =
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesRole = roleFilter === "all" || user.role === roleFilter
-    const matchesStatus = statusFilter === "all" || user.status === statusFilter
+      name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      email.toLowerCase().includes(searchTerm.toLowerCase())
+    const role = (user.role || user.roleName || "").toString()
+    const status = (user.estado || user.status || "").toString()
+    const matchesRole = roleFilter === "all" || role === roleFilter
+    const matchesStatus = statusFilter === "all" || status === statusFilter
     return matchesSearch && matchesRole && matchesStatus
   })
 
@@ -191,22 +170,22 @@ export function UsersManager() {
               <div key={user.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
                 <div className="flex items-center space-x-4">
                   <Avatar className="h-10 w-10">
-                    <AvatarImage src={undefined} alt={user.name} />
-                    <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                    <AvatarImage src={undefined} alt={(user.nome || user.name || "").toString()} />
+                    <AvatarFallback>{(user.nome || user.name || "").toString().charAt(0)}</AvatarFallback>
                   </Avatar>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-medium text-foreground">{user.name}</h4>
-                      {getRoleBadge(user.role)}
-                      {getStatusBadge(user.status)}
+                      <h4 className="text-sm font-medium text-foreground">{(user.nome || user.name || "—").toString()}</h4>
+                      {getRoleBadge((user.role || user.roleName || "").toString())}
+                      {getStatusBadge((user.estado || user.status || "").toString())}
                     </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Mail className="h-3 w-3" />
-                      <span>{user.email}</span>
+                      <span>{(user.email || "").toString()}</span>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {user.school && <span>Escola: {user.school}</span>}
-                      {user.company && <span>Empresa: {user.company}</span>}
+                      {(user.school || user.schoolName) && <span>Escola: {(user.school || user.schoolName).toString()}</span>}
+                      {(user.company || user.tutorEmpresa) && <span>Empresa: {(user.company || user.tutorEmpresa).toString()}</span>}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       Registado: {user.joinedAt} • Último acesso: {user.lastActive}
@@ -214,7 +193,7 @@ export function UsersManager() {
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  {user.status === "pending" && (
+                  {((user.estado || user.status) === "pending" || (user.estado || user.status) === "pendente") && (
                     <>
                       <Button variant="outline" size="sm" className="text-green-600 border-green-600 bg-transparent">
                         <UserCheck className="mr-2 h-4 w-4" />
@@ -226,7 +205,7 @@ export function UsersManager() {
                       </Button>
                     </>
                   )}
-                  {user.status === "active" && (
+                  {((user.estado || user.status) === "active" || (user.estado || user.status) === "ativo") && (
                     <Button variant="outline" size="sm">
                       Editar
                     </Button>

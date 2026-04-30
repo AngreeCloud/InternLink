@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
+import { PDFDocument } from "pdf-lib";
 import { getFirebaseAdminDb } from "@/lib/firebase-admin";
 import {
   assertEstagioAccess,
@@ -278,6 +279,22 @@ export async function GET(
         updatedAt: updatedAt?.toDate?.()?.toISOString() ?? null,
         submittedAt: submittedAt?.toDate?.()?.toISOString() ?? null,
       };
+      // Try to compute page count for PDF files (best-effort; will silently fail).
+      try {
+        const ext = (report.fileExtension as string | undefined) ?? "";
+        const url = (report.currentFileUrl as string | undefined) ?? "";
+        if (ext.toLowerCase() === "pdf" && url) {
+          const res = await fetch(url);
+          if (res.ok) {
+            const arr = await res.arrayBuffer();
+            const pdf = await PDFDocument.load(Buffer.from(arr));
+            (report as any).pageCount = pdf.getPageCount();
+          }
+        }
+      } catch (err) {
+        // ignore page count failures
+        console.error("[v0] relatorio pageCount failed", err);
+      }
     }
 
     const dataInicio = parseDate(session.estagio.dataInicio);

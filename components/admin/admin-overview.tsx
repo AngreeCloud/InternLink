@@ -1,19 +1,21 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Users, Building, School, UserCheck, UserX, Clock, CheckCircle, AlertTriangle } from "lucide-react"
+import { collection, getDocs, query, where } from "firebase/firestore"
+import { getDbRuntime } from "@/lib/firebase-runtime"
 
-// Mock data for admin overview
-const mockStats = {
-  totalUsers: 156,
-  pendingApprovals: 12,
-  totalSchools: 8,
-  totalCompanies: 24,
-  activeInternships: 45,
-  completedInternships: 89,
+type AdminStats = {
+  totalUsers: number
+  pendingApprovals: number
+  totalSchools: number
+  totalCompanies: number
+  activeInternships: number
+  completedInternships: number
 }
 
 const mockPendingUsers = [
@@ -104,6 +106,50 @@ const mockCompanies = [
 ]
 
 export function AdminOverview() {
+  const [stats, setStats] = useState<AdminStats | null>(null)
+
+  useEffect(() => {
+    let active = true
+
+    const load = async () => {
+      try {
+        const db = await getDbRuntime()
+
+        const usersSnap = await getDocs(collection(db, "users"))
+        const totalUsers = usersSnap.size
+
+        const pendingSnap = await getDocs(query(collection(db, "users"), where("estado", "==", "pendente")))
+        const pendingApprovals = pendingSnap.size
+
+        const schoolsSnap = await getDocs(collection(db, "schools"))
+        const totalSchools = schoolsSnap.size
+
+        // Count companies by inspecting user.role value client-side (fallback)
+        const allUsers = usersSnap.docs.map((d) => d.data() as Record<string, unknown>)
+        const totalCompanies = allUsers.filter((u) => {
+          const r = (u.role as string | undefined) || ""
+          return r.toLowerCase().includes("empresa") || r.toLowerCase().includes("company")
+        }).length
+
+        const estagiosAll = await getDocs(collection(db, "estagios"))
+        const estagios = estagiosAll.docs.map((d) => d.data() as Record<string, unknown>)
+        const activeInternships = estagios.filter((e) => (e.estadoEstagio as string | undefined) === "em_curso").length
+        const completedInternships = estagios.filter((e) => (e.estadoEstagio as string | undefined) === "concluido").length
+
+        if (!active) return
+        setStats({ totalUsers, pendingApprovals, totalSchools, totalCompanies, activeInternships, completedInternships })
+      } catch (err) {
+        console.error("Failed to load admin stats", err)
+      }
+    }
+
+    load()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
   const getUserTypeBadge = (userType: string) => {
     switch (userType) {
       case "student":
@@ -149,7 +195,7 @@ export function AdminOverview() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockStats.totalUsers}</div>
+            <div className="text-2xl font-bold">{stats ? stats.totalUsers : "—"}</div>
             <p className="text-xs text-muted-foreground">+12 este mês</p>
           </CardContent>
         </Card>
@@ -160,7 +206,7 @@ export function AdminOverview() {
             <Clock className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-500">{mockStats.pendingApprovals}</div>
+            <div className="text-2xl font-bold text-yellow-500">{stats ? stats.pendingApprovals : "—"}</div>
             <p className="text-xs text-muted-foreground">Requer atenção</p>
           </CardContent>
         </Card>
@@ -171,7 +217,7 @@ export function AdminOverview() {
             <School className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockStats.totalSchools}</div>
+            <div className="text-2xl font-bold">{stats ? stats.totalSchools : "—"}</div>
             <p className="text-xs text-muted-foreground">Todas ativas</p>
           </CardContent>
         </Card>
@@ -182,7 +228,7 @@ export function AdminOverview() {
             <Building className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockStats.totalCompanies}</div>
+            <div className="text-2xl font-bold">{stats ? stats.totalCompanies : "—"}</div>
             <p className="text-xs text-muted-foreground">+3 este mês</p>
           </CardContent>
         </Card>
@@ -193,7 +239,7 @@ export function AdminOverview() {
             <CheckCircle className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-500">{mockStats.activeInternships}</div>
+            <div className="text-2xl font-bold text-green-500">{stats ? stats.activeInternships : "—"}</div>
             <p className="text-xs text-muted-foreground">Em progresso</p>
           </CardContent>
         </Card>
@@ -204,7 +250,7 @@ export function AdminOverview() {
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockStats.completedInternships}</div>
+            <div className="text-2xl font-bold">{stats ? stats.completedInternships : "—"}</div>
             <p className="text-xs text-muted-foreground">Total histórico</p>
           </CardContent>
         </Card>

@@ -41,7 +41,7 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
   { name: "Estágio", href: "/dashboard/estagio", icon: Briefcase },
   { name: "Protocolos", href: "/dashboard/protocols", icon: FileText },
-  { name: "Relatórios", href: "/dashboard/reports", icon: Upload },
+  { name: "Relatório", href: "/dashboard/reports", icon: Upload },
   { name: "Chat", href: "/dashboard/chat", icon: MessageSquare },
 ]
 

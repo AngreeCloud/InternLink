@@ -31,3 +31,7 @@ next-env.d.ts
 
 # local scripts
 *.log
+
+# agents
+SKILL.md
+skills-lock.json

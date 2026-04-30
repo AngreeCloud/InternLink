@@ -25,6 +25,10 @@ type DashboardData = {
   estagioId: string;
   estagioTitulo: string;
   estagioEmpresa: string;
+  reportSubmitted: boolean;
+  reportPages: number | null;
+  reportAvailableAt: string | null;
+  reportSubmittedAt: string | null;
 };
 
 const DEFAULT_MIN_HOURS = 80;
@@ -44,6 +48,10 @@ export function StudentDashboardOverview() {
     estagioId: "",
     estagioTitulo: "",
     estagioEmpresa: "",
+    reportSubmitted: false,
+    reportPages: null,
+    reportAvailableAt: null,
+    reportSubmittedAt: null,
   });
 
   useEffect(() => {
@@ -120,7 +128,24 @@ export function StudentDashboardOverview() {
             estagioTitulo = data.titulo || "Estágio FCT";
             estagioEmpresa = data.entidadeAcolhimento || data.empresa || "";
             estagioSchoolId = data.schoolId || "";
-            estagioHoursDone = Number(data.horasRealizadas ?? 0);
+            
+            // Load presencas from subcollection to get actual worked hours
+            let presencasTotal = 0;
+            try {
+              const presencasSnap = await getDocs(
+                collection(db, "estagios", estagioId, "presencas")
+              );
+              presencasSnap.forEach((doc) => {
+                const pdata = doc.data() as { hoursWorked?: number };
+                if (typeof pdata.hoursWorked === "number") {
+                  presencasTotal += pdata.hoursWorked;
+                }
+              });
+            } catch {
+              // permissions denied or collection doesn't exist
+            }
+            
+            estagioHoursDone = presencasTotal > 0 ? presencasTotal : Number(data.horasRealizadas ?? 0);
           }
         } catch (err) {
           console.error("[v0] load estagio failed", err);
@@ -149,6 +174,10 @@ export function StudentDashboardOverview() {
           estagioId,
           estagioTitulo,
           estagioEmpresa,
+          reportSubmitted: false,
+          reportPages: null,
+          reportAvailableAt: null,
+          reportSubmittedAt: null,
         });
       });
     })();
@@ -160,6 +189,35 @@ export function StudentDashboardOverview() {
   }, []);
 
   const reportEligible = useMemo(() => state.completedHours >= state.reportMinHours, [state.completedHours, state.reportMinHours]);
+
+  // Load report metadata (status + page count)
+  useEffect(() => {
+    if (!state.estagioId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/estagios/${state.estagioId}/relatorio-final`, { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          report: { currentFileUrl?: string; fileExtension?: string; pageCount?: number; submittedAt?: string | null } | null;
+          availableAt?: string | null;
+        };
+        if (cancelled) return;
+        setState((prev) => ({
+          ...prev,
+          reportSubmitted: !!data.report,
+          reportPages: data.report ? (data.report.pageCount as number | null) ?? null : null,
+          reportAvailableAt: data.availableAt ?? null,
+          reportSubmittedAt: data.report ? (data.report.submittedAt as string | null) ?? null : null,
+        }));
+      } catch (err) {
+        console.error("[v0] fetch report metadata failed", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [state.estagioId]);
 
   return (
     <div className="space-y-6">
@@ -230,14 +288,42 @@ export function StudentDashboardOverview() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Relatórios</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold">{state.reportsCount}</p>
-                <Badge variant={reportEligible ? "default" : "secondary"}>
-                  {reportEligible ? "Envio disponível" : "Aguardando elegibilidade"}
-                </Badge>
-              </CardContent>
+                  <CardTitle className="text-sm">Relatório</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {state.reportSubmitted ? (
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <Badge variant="default">Enviado</Badge>
+                        {state.reportSubmittedAt ? (
+                          <p className="text-sm text-muted-foreground">Submetido em {new Date(state.reportSubmittedAt).toLocaleDateString("pt-PT")}</p>
+                        ) : null}
+                      </div>
+                      {state.reportPages !== null ? (
+                        <p className="text-xs text-muted-foreground mt-2">Páginas: {state.reportPages}</p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-2xl font-semibold">{state.reportsCount}</p>
+                      {state.reportAvailableAt ? (
+                        (() => {
+                          const available = new Date(state.reportAvailableAt);
+                          const diffMs = available.getTime() - Date.now();
+                          if (diffMs > 0) {
+                            const hours = Math.ceil(diffMs / (1000 * 60 * 60));
+                            return <Badge variant="secondary">Envio desbloqueado em {hours}h</Badge>;
+                          }
+                          return <Badge variant={reportEligible ? "default" : "secondary"}>{reportEligible ? "Envio disponível" : "Aguardando elegibilidade"}</Badge>;
+                        })()
+                      ) : (
+                        <Badge variant={reportEligible ? "default" : "secondary"}>
+                          {reportEligible ? "Envio disponível" : "Aguardando elegibilidade"}
+                        </Badge>
+                      )}
+                    </>
+                  )}
+                </CardContent>
             </Card>
           </div>
 
