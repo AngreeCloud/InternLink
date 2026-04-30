@@ -9,10 +9,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SchoolProfileCard } from "@/components/school/school-profile-card";
-import { ArrowRight, Briefcase } from "lucide-react";
+import { ArrowRight, Briefcase, Loader2 } from "lucide-react";
 
 type DashboardData = {
   loading: boolean;
+  reportLoading: boolean;
   studentName: string;
   courseName: string;
   schoolName: string;
@@ -36,6 +37,7 @@ const DEFAULT_MIN_HOURS = 80;
 export function StudentDashboardOverview() {
   const [state, setState] = useState<DashboardData>({
     loading: true,
+    reportLoading: false,
     studentName: "",
     courseName: "",
     schoolName: "",
@@ -159,6 +161,7 @@ export function StudentDashboardOverview() {
 
         setState({
           loading: false,
+          reportLoading: false,
           studentName: userData.nome || user.displayName || "Aluno",
           schoolName: userData.escola || "—",
           courseName: userData.curso || "—",
@@ -194,6 +197,14 @@ export function StudentDashboardOverview() {
   useEffect(() => {
     if (!state.estagioId) return;
     let cancelled = false;
+    setState((prev) => ({
+      ...prev,
+      reportLoading: true,
+      reportSubmitted: false,
+      reportPages: null,
+      reportAvailableAt: null,
+      reportSubmittedAt: null,
+    }));
     (async () => {
       try {
         const res = await fetch(`/api/estagios/${state.estagioId}/relatorio-final`, { cache: "no-store" });
@@ -209,9 +220,14 @@ export function StudentDashboardOverview() {
           reportPages: data.report ? (data.report.pageCount as number | null) ?? null : null,
           reportAvailableAt: data.availableAt ?? null,
           reportSubmittedAt: data.report ? (data.report.submittedAt as string | null) ?? null : null,
+          reportLoading: false,
         }));
       } catch (err) {
         console.error("[v0] fetch report metadata failed", err);
+        setState((prev) => ({
+          ...prev,
+          reportLoading: false,
+        }));
       }
     })();
     return () => {
@@ -288,42 +304,48 @@ export function StudentDashboardOverview() {
 
             <Card>
               <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Relatório</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {state.reportSubmitted ? (
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <Badge variant="default">Enviado</Badge>
-                        {state.reportSubmittedAt ? (
-                          <p className="text-sm text-muted-foreground">Submetido em {new Date(state.reportSubmittedAt).toLocaleDateString("pt-PT")}</p>
-                        ) : null}
-                      </div>
-                      {state.reportPages !== null ? (
-                        <p className="text-xs text-muted-foreground mt-2">Páginas: {state.reportPages}</p>
+                <CardTitle className="text-sm">Relatório</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {state.reportLoading ? (
+                  <div className="flex min-h-24 items-center justify-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : state.reportSubmitted ? (
+                  <div>
+                    <div className="flex items-center gap-3">
+                      <Badge variant="default">Enviado</Badge>
+                      {state.reportSubmittedAt ? (
+                        <p className="text-sm text-muted-foreground">
+                          Submetido em {new Date(state.reportSubmittedAt).toLocaleDateString("pt-PT")}
+                        </p>
                       ) : null}
                     </div>
-                  ) : (
-                    <>
-                      <p className="text-2xl font-semibold">{state.reportsCount}</p>
-                      {state.reportAvailableAt ? (
-                        (() => {
-                          const available = new Date(state.reportAvailableAt);
-                          const diffMs = available.getTime() - Date.now();
-                          if (diffMs > 0) {
-                            const hours = Math.ceil(diffMs / (1000 * 60 * 60));
-                            return <Badge variant="secondary">Envio desbloqueado em {hours}h</Badge>;
-                          }
-                          return <Badge variant={reportEligible ? "default" : "secondary"}>{reportEligible ? "Envio disponível" : "Aguardando elegibilidade"}</Badge>;
-                        })()
-                      ) : (
-                        <Badge variant={reportEligible ? "default" : "secondary"}>
-                          {reportEligible ? "Envio disponível" : "Aguardando elegibilidade"}
-                        </Badge>
-                      )}
-                    </>
-                  )}
-                </CardContent>
+                    {state.reportPages !== null ? (
+                      <p className="mt-2 text-xs text-muted-foreground">Páginas: {state.reportPages}</p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-2xl font-semibold">{state.reportsCount}</p>
+                    {state.reportAvailableAt ? (
+                      (() => {
+                        const available = new Date(state.reportAvailableAt);
+                        const diffMs = available.getTime() - Date.now();
+                        if (diffMs > 0) {
+                          const hours = Math.ceil(diffMs / (1000 * 60 * 60));
+                          return <Badge variant="secondary">Envio desbloqueado em {hours}h</Badge>;
+                        }
+                        return <Badge variant={reportEligible ? "default" : "secondary"}>{reportEligible ? "Envio disponível" : "Aguardando elegibilidade"}</Badge>;
+                      })()
+                    ) : (
+                      <Badge variant={reportEligible ? "default" : "secondary"}>
+                        {reportEligible ? "Envio disponível" : "Aguardando elegibilidade"}
+                      </Badge>
+                    )}
+                  </>
+                )}
+              </CardContent>
             </Card>
           </div>
 
