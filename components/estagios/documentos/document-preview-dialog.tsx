@@ -129,7 +129,7 @@ export function DocumentPreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] w-[90vw] max-w-5xl flex-col overflow-hidden">
+      <DialogContent className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{doc.nome}</DialogTitle>
           <DialogDescription>
