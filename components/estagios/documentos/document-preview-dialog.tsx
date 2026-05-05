@@ -9,12 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download, FileDown, CheckCircle2, Clock } from "lucide-react";
-import { PdfViewer } from "../pdf/pdf-viewer";
-import {
-  SignatureBoxesOverlay,
-  type SignatureBoxModel,
-} from "../pdf/signature-boxes-overlay";
+import { Download, FileDown, CheckCircle2, Clock, Maximize2 } from "lucide-react";
 import type { EstagioDocument } from "./document-list";
 import type { EstagioRole } from "@/lib/estagios/permissions";
 
@@ -32,6 +27,7 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   participants: Record<string, { name: string; role: EstagioRole; email?: string }>;
   currentUserId: string;
+  onOpenFullscreen?: () => void;
 };
 
 function buildDownloadUrl(estagioId: string, docId: string, raw: boolean): string {
@@ -51,16 +47,17 @@ function isPdfDocument(doc: EstagioDocument): boolean {
 }
 
 export function DocumentPreviewDialog({
+  estagioId,
   doc,
   open,
   onOpenChange,
   participants,
   currentUserId,
+  onOpenFullscreen,
 }: Props) {
   const signedByUsers = doc.signedBy ?? [];
   const totalSigners = doc.signatureUserIds.length || doc.signatureRoles.length;
   const signedCount = signedByUsers.length;
-  const boxes: SignatureBoxModel[] = doc.signatureBoxes ?? [];
   const canRenderPdf = isPdfDocument(doc);
 
   // Listagem de signatários: combina userIds explicitos + os participantes cuja role é exigida.
@@ -105,7 +102,7 @@ export function DocumentPreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>{doc.nome}</DialogTitle>
           <DialogDescription>
@@ -116,38 +113,37 @@ export function DocumentPreviewDialog({
         </DialogHeader>
 
         {doc.currentFileUrl ? (
-          <div className="grid min-h-0 flex-1 gap-4 overflow-hidden md:grid-cols-[1fr_280px]">
-            <div className="min-h-0 overflow-auto rounded-lg border bg-muted/20 p-3">
-              {canRenderPdf ? (
-                <PdfViewer
-                  fileUrl={doc.currentFileUrl}
-                  scale={1.1}
-                  renderPageOverlay={(info) => (
-                    <SignatureBoxesOverlay
-                      boxes={boxes}
-                      pageNumber={info.pageNumber}
-                      pageWidth={info.width}
-                      pageHeight={info.height}
-                      signedBoxIds={boxes
-                        .filter((b) =>
-                          b.role
-                            ? (doc.signedByRoles ?? []).includes(b.role)
-                            : b.userId
-                              ? signedByUsers.includes(b.userId)
-                              : false,
-                        )
-                        .map((b) => b.id)}
-                    />
-                  )}
-                />
-              ) : (
-                <div className="flex min-h-56 items-center justify-center rounded-md border border-dashed bg-card px-4 text-center text-sm text-muted-foreground">
-                  Pré-visualização disponível apenas para PDF. Use o botão de descarregar para abrir este ficheiro.
-                </div>
+          <div className="flex gap-4 overflow-hidden">
+            {/* Thumbnail compacta */}
+            <div className="hidden shrink-0 flex-col gap-2 md:flex">
+              <div className="relative h-52 w-36 overflow-hidden rounded-md border bg-muted/20">
+                {canRenderPdf ? (
+                  <iframe
+                    src={`${doc.currentFileUrl}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`}
+                    className="pointer-events-none h-[300%] w-[300%] origin-top-left scale-[0.333]"
+                    title="Pré-visualização"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                    Sem pré-visualização
+                  </div>
+                )}
+              </div>
+              {onOpenFullscreen && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-36 text-xs"
+                  onClick={onOpenFullscreen}
+                >
+                  <Maximize2 className="mr-1.5 h-3.5 w-3.5" />
+                  Abrir documento
+                </Button>
               )}
             </div>
 
-            <div className="space-y-4 overflow-y-auto">
+            <div className="flex-1 space-y-4 overflow-y-auto">
               <div className="space-y-2">
                 <h4 className="text-sm font-medium">Assinatários</h4>
                 <ul className="space-y-2 text-sm">

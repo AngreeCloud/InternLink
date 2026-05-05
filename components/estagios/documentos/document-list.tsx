@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { UploadWizard, type UploadWizardDoc } from "./upload-wizard";
 import { DocumentPreviewDialog } from "./document-preview-dialog";
+import { FullscreenDocumentViewer } from "./fullscreen-document-viewer";
 import { SignDialog } from "./sign-dialog";
 import { VersionHistoryDialog } from "./version-history-dialog";
 import { cn } from "@/lib/utils";
@@ -111,6 +112,7 @@ export function DocumentList({
 
   const [uploadDoc, setUploadDoc] = useState<UploadWizardDoc | null>(null);
   const [previewDoc, setPreviewDoc] = useState<EstagioDocument | null>(null);
+  const [fullscreenDoc, setFullscreenDoc] = useState<EstagioDocument | null>(null);
   const [signDoc, setSignDoc] = useState<EstagioDocument | null>(null);
   const [historyDoc, setHistoryDoc] = useState<EstagioDocument | null>(null);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
@@ -246,38 +248,19 @@ export function DocumentList({
     document.body.removeChild(a);
   };
 
-  const createBlankDoc = async () => {
+  const createBlankDoc = () => {
     if (!canManage) return;
-    try {
-      const res = await fetch(`/api/estagios/${estagioId}/documentos`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nome: "Novo documento",
-          descricao: "",
-          categoria: "outros",
-          accessRoles: ["diretor", "professor", "tutor", "aluno"],
-          signatureRoles: [],
-        }),
-      });
-      const data = (await res.json()) as { ok?: boolean; id?: string; error?: string };
-      if (!res.ok || !data.ok || !data.id) {
-        console.error("[v0] create doc failed", data.error);
-        return;
-      }
-      // Abrir wizard para o documento recém-criado.
-      setUploadDoc({
-        id: data.id,
-        nome: "Novo documento",
-        descricao: "",
-        categoria: "outros",
-        signatureBoxes: [],
-        signatureRoles: [],
-        accessRoles: ["diretor", "professor", "tutor", "aluno"],
-      });
-    } catch (err) {
-      console.error("[v0] create doc error", err);
-    }
+    // Abre o wizard sem criar nada na BD. O documento só é persistido quando o wizard for submetido.
+    setUploadDoc({
+      id: `new-${Date.now()}`,
+      nome: "Novo documento",
+      descricao: "",
+      categoria: "outros",
+      signatureBoxes: [],
+      signatureRoles: [],
+      accessRoles: ["diretor", "professor", "tutor", "aluno"],
+      isNew: true,
+    });
   };
 
   const signerRequirementMet = (d: EstagioDocument): boolean => {
@@ -524,6 +507,18 @@ export function DocumentList({
           onOpenChange={(o) => !o && setPreviewDoc(null)}
           participants={participants}
           currentUserId={currentUserId}
+          onOpenFullscreen={() => {
+            setPreviewDoc(null);
+            setFullscreenDoc(previewDoc);
+          }}
+        />
+      )}
+      {fullscreenDoc?.currentFileUrl && (
+        <FullscreenDocumentViewer
+          fileUrl={fullscreenDoc.currentFileUrl}
+          fileName={fullscreenDoc.nome}
+          fileType="pdf"
+          onClose={() => setFullscreenDoc(null)}
         />
       )}
       {signDoc && (
