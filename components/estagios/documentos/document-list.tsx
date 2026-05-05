@@ -28,6 +28,8 @@ import {
   Loader2,
   Plus,
   Trash2,
+  Download,
+  FileDown,
 } from "lucide-react";
 import { UploadWizard, type UploadWizardDoc } from "./upload-wizard";
 import { DocumentPreviewDialog } from "./document-preview-dialog";
@@ -233,6 +235,17 @@ export function DocumentList({
     }
   };
 
+  const downloadDoc = async (d: EstagioDocument, raw: boolean) => {
+    if (!d.currentFileUrl) return;
+    const url = `/api/estagios/${estagioId}/documentos/${d.id}/download?raw=${raw}`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = raw ? `${d.nome}.pdf` : `${d.nome}-assinado.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   const createBlankDoc = async () => {
     if (!canManage) return;
     try {
@@ -408,7 +421,7 @@ export function DocumentList({
                         {mustSign && (
                           <Button size="sm" onClick={() => setSignDoc(d)}>
                             <PenLine className="mr-1.5 h-3.5 w-3.5" />
-                            Assinar
+                            Assinar documento
                           </Button>
                         )}
                         {hasFile && (
@@ -433,6 +446,19 @@ export function DocumentList({
                               <History className="mr-2 h-4 w-4" />
                               Histórico de versões
                             </DropdownMenuItem>
+                            {hasFile && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => void downloadDoc(d, false)}>
+                                  <Download className="mr-2 h-4 w-4" />
+                                  Descarregar PDF
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => void downloadDoc(d, true)}>
+                                  <FileDown className="mr-2 h-4 w-4" />
+                                  Descarregar PDF (sem assinaturas)
+                                </DropdownMenuItem>
+                              </>
+                            )}
                             {canManage && (
                               <>
                                 <DropdownMenuSeparator />

@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download, CheckCircle2, Clock } from "lucide-react";
+import { Download, FileDown, CheckCircle2, Clock } from "lucide-react";
 import { PdfViewer } from "../pdf/pdf-viewer";
 import {
   SignatureBoxesOverlay,
@@ -34,6 +34,10 @@ type Props = {
   currentUserId: string;
 };
 
+function buildDownloadUrl(estagioId: string, docId: string, raw: boolean): string {
+  return `/api/estagios/${estagioId}/documentos/${docId}/download?raw=${raw}`;
+}
+
 function isPdfDocument(doc: EstagioDocument): boolean {
   const mimeType = (doc.fileMimeType ?? "").toLowerCase();
   if (mimeType === "application/pdf") return true;
@@ -44,13 +48,6 @@ function isPdfDocument(doc: EstagioDocument): boolean {
   const path = doc.currentFilePath ?? "";
   const url = doc.currentFileUrl ?? "";
   return /\.pdf(\?|$)/i.test(path) || /\.pdf(\?|$)/i.test(url);
-}
-
-function getDownloadExtension(doc: EstagioDocument): string {
-  const extension = (doc.fileExtension ?? "").toLowerCase();
-  if (extension) return extension;
-  if (isPdfDocument(doc)) return "pdf";
-  return "file";
 }
 
 export function DocumentPreviewDialog({
@@ -65,7 +62,6 @@ export function DocumentPreviewDialog({
   const signedCount = signedByUsers.length;
   const boxes: SignatureBoxModel[] = doc.signatureBoxes ?? [];
   const canRenderPdf = isPdfDocument(doc);
-  const downloadExtension = getDownloadExtension(doc);
 
   // Listagem de signatários: combina userIds explicitos + os participantes cuja role é exigida.
   const signersList: Array<{ uid?: string; label: string; role?: EstagioRole; signed: boolean; mine: boolean }> = [];
@@ -187,17 +183,26 @@ export function DocumentPreviewDialog({
                 </ul>
               </div>
 
-              <Button variant="outline" className="w-full" asChild>
-                <a
-                  href={doc.currentFileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download={`${doc.nome}.${downloadExtension}`}
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  {canRenderPdf ? "Descarregar PDF" : "Descarregar ficheiro"}
-                </a>
-              </Button>
+              <div className="space-y-2">
+                <Button variant="default" className="w-full" asChild>
+                  <a
+                    href={buildDownloadUrl(estagioId, doc.id, false)}
+                    download={`${doc.nome}-assinado.pdf`}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Descarregar PDF
+                  </a>
+                </Button>
+                <Button variant="outline" className="w-full" asChild>
+                  <a
+                    href={buildDownloadUrl(estagioId, doc.id, true)}
+                    download={`${doc.nome}.pdf`}
+                  >
+                    <FileDown className="mr-2 h-4 w-4" />
+                    Descarregar PDF (sem assinaturas)
+                  </a>
+                </Button>
+              </div>
 
               <p className="text-xs text-muted-foreground">
                 Versão {doc.currentVersion ?? 0}
