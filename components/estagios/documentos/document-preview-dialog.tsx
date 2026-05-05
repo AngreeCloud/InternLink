@@ -129,26 +129,28 @@ export function DocumentPreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden">
-        <DialogHeader>
-          <DialogTitle>{doc.nome}</DialogTitle>
-          <DialogDescription>
-            {totalSigners > 0
-              ? `${signedCount} de ${totalSigners} assinaturas recolhidas`
-              : "Documento sem assinaturas configuradas"}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="flex max-w-5xl w-[90vw] p-0 max-h-[90vh] flex-col overflow-hidden">
+        <div className="px-6 pt-6">
+          <DialogHeader>
+            <DialogTitle>{doc.nome}</DialogTitle>
+            <DialogDescription>
+              {totalSigners > 0
+                ? `${signedCount} de ${totalSigners} assinaturas recolhidas`
+                : "Documento sem assinaturas configuradas"}
+            </DialogDescription>
+          </DialogHeader>
+        </div>
 
         {doc.currentFileUrl ? (
-          <div className="flex min-h-0 flex-1 gap-6 overflow-hidden">
+          <div className="flex gap-4 h-[70vh] overflow-hidden p-4">
             {/* Painel de pré-visualização — ocupa a maior parte da largura */}
             {canRenderPdf && (
-              <div className="hidden min-h-0 flex-1 flex-col gap-2 md:flex">
-                <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto rounded-md border bg-muted/10 p-1">
+              <div className="hidden min-w-0 flex-1 flex-col gap-2 md:flex overflow-y-auto">
+                <div className="min-w-0 overflow-y-auto rounded-md border bg-muted/10 p-1">
                   <PdfViewer fileUrl={doc.currentFileUrl} scale={0.6} />
                 </div>
                 {onOpenFullscreen && (
-                  <Button size="sm" variant="outline" className="w-full text-xs" onClick={onOpenFullscreen}>
+                  <Button size="sm" variant="outline" className="w-full text-xs shrink-0" onClick={onOpenFullscreen}>
                     <Maximize2 className="mr-1.5 h-3.5 w-3.5" />
                     Abrir documento
                   </Button>
@@ -157,7 +159,7 @@ export function DocumentPreviewDialog({
             )}
 
             {/* Painel lateral direito — largura fixa */}
-            <div className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto">
+            <div className="w-64 shrink-0 overflow-y-auto flex flex-col gap-4">
               <div>
                 <h4 className="text-sm font-medium">Assinatários</h4>
                 <ul className="space-y-2 text-sm">

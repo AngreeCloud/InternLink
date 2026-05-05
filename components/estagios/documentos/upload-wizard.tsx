@@ -288,7 +288,7 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-6xl flex flex-col">
+      <DialogContent className="max-h-[90vh] overflow-hidden max-w-5xl w-[90vw] flex flex-col">
         <DialogHeader>
           <DialogTitle>
             {step === "meta" ? "Carregar documento" : "Posicionar caixas de assinatura"}
@@ -396,7 +396,7 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
         ) : (
           <div className="flex-1 overflow-hidden">
             <div className="flex h-full min-h-0 flex-col gap-3 lg:flex-row">
-              <div className="min-h-0 min-w-0 flex-1 overflow-auto rounded-lg bg-muted/30 p-3">
+              <div className="min-h-0 min-w-0 flex-1 overflow-auto rounded-lg bg-muted/30 p-3" style={{ maxHeight: "65vh" }}>
                 <PdfViewer
                   ref={viewerRef}
                   fileBytes={fileBytes ?? undefined}
