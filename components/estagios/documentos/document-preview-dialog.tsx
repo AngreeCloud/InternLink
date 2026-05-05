@@ -129,7 +129,7 @@ export function DocumentPreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="flex max-h-[90vh] w-[90vw] max-w-5xl flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{doc.nome}</DialogTitle>
           <DialogDescription>
@@ -140,23 +140,15 @@ export function DocumentPreviewDialog({
         </DialogHeader>
 
         {doc.currentFileUrl ? (
-          <div className="flex min-h-0 flex-1 gap-5 overflow-hidden">
-            {/* Painel de pré-visualização */}
+          <div className="flex min-h-0 flex-1 gap-6 overflow-hidden">
+            {/* Painel de pré-visualização — ocupa a maior parte da largura */}
             {canRenderPdf && (
-              <div className="hidden min-h-0 w-64 shrink-0 flex-col gap-2 md:flex">
-                <div className="min-h-0 flex-1 overflow-y-auto rounded-md border bg-muted/10 p-2">
-                  <PdfViewer
-                    fileUrl={doc.currentFileUrl}
-                    scale={0.5}
-                  />
+              <div className="hidden min-h-0 flex-1 flex-col gap-2 md:flex">
+                <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto rounded-md border bg-muted/10 p-1">
+                  <PdfViewer fileUrl={doc.currentFileUrl} scale={0.6} />
                 </div>
                 {onOpenFullscreen && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full text-xs"
-                    onClick={onOpenFullscreen}
-                  >
+                  <Button size="sm" variant="outline" className="w-full text-xs" onClick={onOpenFullscreen}>
                     <Maximize2 className="mr-1.5 h-3.5 w-3.5" />
                     Abrir documento
                   </Button>
@@ -164,8 +156,9 @@ export function DocumentPreviewDialog({
               </div>
             )}
 
-            <div className="flex-1 space-y-4 overflow-y-auto">
-              <div className="space-y-2">
+            {/* Painel lateral direito — largura fixa */}
+            <div className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto">
+              <div>
                 <h4 className="text-sm font-medium">Assinatários</h4>
                 <ul className="space-y-2 text-sm">
                   {signersList.map((s, idx) => (
