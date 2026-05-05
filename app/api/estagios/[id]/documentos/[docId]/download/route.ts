@@ -57,6 +57,8 @@ export async function GET(
     const session = await assertEstagioAccess(id, "member");
     const { searchParams } = new URL(request.url);
     const raw = searchParams.get("raw") === "true";
+    // inline=true → sem Content-Disposition: attachment (para iframes de pré-visualização)
+    const inline = searchParams.get("inline") === "true";
 
     const db = getFirebaseAdminDb();
     const docRef = db.collection("estagios").doc(id).collection("documentos").doc(docId);
@@ -85,7 +87,9 @@ export async function GET(
       return new NextResponse(pdfBytes, {
         headers: {
           "Content-Type": "application/pdf",
-          "Content-Disposition": `attachment; filename="${fileName}.pdf"`,
+          "Content-Disposition": inline
+            ? `inline; filename="${fileName}.pdf"`
+            : `attachment; filename="${fileName}.pdf"`,
         },
       });
     }
