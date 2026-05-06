@@ -90,6 +90,22 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    const clearSelectionOnOutsideClick = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (target?.closest(".textLayer")) return;
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed) {
+        selection.removeAllRanges();
+      }
+    };
+
+    document.addEventListener("pointerdown", clearSelectionOnOutsideClick, true);
+    return () => {
+      document.removeEventListener("pointerdown", clearSelectionOnOutsideClick, true);
+    };
+  }, []);
+
   const load = async () => {
     // mark this load as the active one
     const myLoadToken = ++loadTokenRef.current;
@@ -129,6 +145,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
 
     try {
       const pdfjs = await getPdfJs();
+      const { TextLayerBuilder } = await import("pdfjs-dist/web/pdf_viewer.mjs");
       // If another load started while we awaited pdfjs, abort
       if (loadTokenRef.current !== myLoadToken) return;
       const loadingTask = pdfjs.getDocument(source as Parameters<typeof pdfjs.getDocument>[0]);
@@ -148,6 +165,23 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
         const page = await pdf.getPage(pageNumber);
         const viewport = page.getViewport({ scale });
 
+        const handleTextLayerAppend: (textLayerDiv: HTMLDivElement) => void = (textLayerDiv: HTMLDivElement) => {
+          textLayerDiv.style.position = "absolute";
+          textLayerDiv.style.inset = "0";
+          textLayerDiv.style.width = `${viewport.width}px`;
+          textLayerDiv.style.height = `${viewport.height}px`;
+          textLayerDiv.style.textAlign = "initial";
+          textLayerDiv.style.overflow = "hidden";
+          textLayerDiv.style.userSelect = "text";
+          textLayerDiv.style.pointerEvents = "auto";
+          textLayerDiv.style.color = "transparent";
+          textLayerDiv.style.zIndex = "2";
+        };
+        const appendTextLayerDiv = (textLayerDiv: HTMLDivElement): void => {
+          handleTextLayerAppend(textLayerDiv);
+          pageWrap.appendChild(textLayerDiv);
+        };
+
         const pageWrap = document.createElement("div");
         pageWrap.dataset.pageNumber = String(pageNumber);
         pageWrap.style.position = "relative";
@@ -164,6 +198,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
         canvas.style.width = `${viewport.width}px`;
         canvas.style.height = `${viewport.height}px`;
         canvas.style.display = "block";
+        canvas.style.pointerEvents = "none";
 
         const overlay = document.createElement("div");
         overlay.dataset.overlay = "true";
@@ -172,12 +207,16 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
         overlay.style.pointerEvents = "none";
 
         pageWrap.appendChild(canvas);
+        const textLayerBuilder = new TextLayerBuilder({
+          pdfPage: page,
+          onAppend: appendTextLayerDiv,
+        });
         
           // Links layer for interactive annotations
           const linksLayer = document.createElement("div");
           linksLayer.style.position = "absolute";
           linksLayer.style.inset = "0";
-          linksLayer.style.pointerEvents = "auto";
+          linksLayer.style.pointerEvents = "none";
           pageWrap.appendChild(linksLayer);
         
         pageWrap.appendChild(overlay);
@@ -207,6 +246,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
                 linkEl.style.width = `${Math.abs(vpX2 - vpX1)}px`;
                 linkEl.style.height = `${Math.abs(vpY2 - vpY1)}px`;
                 linkEl.style.cursor = "pointer";
+                linkEl.style.pointerEvents = "auto";
 
                 const url = (annotation as any).url || (annotation as any).URI;
                 const dest = (annotation as any).dest;
@@ -248,6 +288,8 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
               }
             }
           }
+
+          await textLayerBuilder.render({ viewport, images: null as any });
 
         collected.push({
           pageNumber,

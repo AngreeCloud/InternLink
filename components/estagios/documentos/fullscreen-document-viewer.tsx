@@ -105,7 +105,7 @@ export function FullscreenDocumentViewer({
               className="w-full max-w-4xl mx-auto"
             />
           ) : fileType === "docx" && fileBytes ? (
-            <div className="mx-auto max-w-4xl rounded-md border bg-white p-6 shadow-sm">
+            <div className="mx-auto max-w-4xl rounded-md border bg-white p-6 shadow-sm select-text">
               <DocxPreview fileBytes={fileBytes} />
             </div>
           ) : null}

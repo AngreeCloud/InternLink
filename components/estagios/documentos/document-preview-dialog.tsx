@@ -160,7 +160,7 @@ export function DocumentPreviewDialog({
 
             {/* Painel lateral direito — largura fixa */}
             <div className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto">
-              <div>
+z              <div>
                 <h4 className="text-sm font-medium">Assinatários</h4>
                 <ul className="space-y-2 text-sm">
                   {signersList.map((s, idx) => (

@@ -102,7 +102,7 @@ export function DocxPreview({ fileBytes, className }: Props) {
     <article
       ref={containerRef}
       className={[
-        "docx-preview text-sm leading-relaxed text-foreground",
+        "docx-preview select-text text-sm leading-relaxed text-foreground",
         className ?? "rounded-md border bg-card px-6 py-4",
       ].join(" ")}
       dangerouslySetInnerHTML={{ __html: html }}
