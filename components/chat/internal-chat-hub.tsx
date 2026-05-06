@@ -495,13 +495,9 @@ export function InternalChatHub() {
   useEffect(() => {
     if (!isCreateDialogOpen || !profile) return;
 
-    const normalized = memberQuery.trim();
-    if (!normalized) {
-      setMemberResults(suggestedMembersFromConversations);
-      return;
-    }
-
     let canceled = false;
+    const delay = memberQuery.trim() ? 180 : 0;
+
     const timeout = window.setTimeout(async () => {
       const results = await searchInternalMembers(
         profile.orgId ?? null,
@@ -513,13 +509,19 @@ export function InternalChatHub() {
       if (canceled) return;
 
       const recentSet = new Set(suggestedMembersFromConversations.map((item) => item.uid));
+      // Merge search results with recent suggestions; recent contacts first.
+      const merged = new Map<string, ChatUserProfile>();
+      for (const item of suggestedMembersFromConversations) merged.set(item.uid, item);
+      for (const item of results) merged.set(item.uid, item);
+      const all = Array.from(merged.values());
+
       const recentFirst = [
-        ...results.filter((item) => recentSet.has(item.uid)),
-        ...results.filter((item) => !recentSet.has(item.uid)),
+        ...all.filter((item) => recentSet.has(item.uid)),
+        ...all.filter((item) => !recentSet.has(item.uid)),
       ];
 
       setMemberResults(recentFirst);
-    }, 180);
+    }, delay);
 
     return () => {
       canceled = true;
