@@ -22,6 +22,14 @@ describe("course enrollment helpers", () => {
     expect(resolveStudentCourseId({ curso: "informática - sistemas" }, courses)).toBe("c1");
   });
 
+  it("resolveStudentCourseId usa o nome do curso quando o courseId legado não existe", () => {
+    expect(resolveStudentCourseId({ courseId: "legacy-id", curso: "Gestão" }, courses)).toBe("c3");
+  });
+
+  it("resolveStudentCourseId devolve null quando o courseId legado não existe e não há fallback", () => {
+    expect(resolveStudentCourseId({ courseId: "legacy-id" }, courses)).toBeNull();
+  });
+
   it("resolveStudentCourseName devolve o nome da turma pelo id", () => {
     expect(resolveStudentCourseName("c3", courses, "Outro")).toBe("Gestão");
   });

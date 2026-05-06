@@ -23,7 +23,17 @@ export function resolveStudentCourseId(
 ): string | null {
   const rawCourseId = (student.courseId || "").trim();
   if (rawCourseId) {
-    return rawCourseId;
+    const knownCourse = courses.find((course) => course.id === rawCourseId);
+    if (knownCourse) {
+      return rawCourseId;
+    }
+    const normalizedCourseName = normalizeText(student.curso);
+    if (!normalizedCourseName) {
+      return null;
+    }
+
+    const matchedByName = courses.find((course) => normalizeText(course.name) === normalizedCourseName);
+    return matchedByName?.id || null;
   }
 
   const normalizedCourseName = normalizeText(student.curso);

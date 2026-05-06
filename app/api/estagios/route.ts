@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { cookies } from "next/headers";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
+import { resolveStudentCourseId } from "@/lib/course-enrollment";
 import { calcularDataFimEstimada, DEFAULT_DIAS_SEMANA, type DiasSemana } from "@/lib/estagios/date-calc";
 import { ESTAGIO_TEMPLATES } from "@/lib/estagios/templates";
 import { EstagioAccessError, toApiErrorResponse } from "@/lib/estagios/estagio-access";
@@ -95,6 +96,7 @@ export async function POST(request: Request) {
       email?: string;
       schoolId?: string;
       courseId?: string;
+      curso?: string;
       role?: string;
       estado?: string;
     };
@@ -105,15 +107,41 @@ export async function POST(request: Request) {
     if (alunoData.schoolId !== userData.schoolId) {
       throw new EstagioAccessError(403, "different_school", "O aluno pertence a outra escola.");
     }
-    if (!alunoData.courseId) {
+    const coursesSnap = await db
+      .collection("courses")
+      .where("schoolId", "==", userData.schoolId)
+      .get();
+
+    const courseRefs = coursesSnap.docs.map((courseSnap) => {
+      const courseData = courseSnap.data() as {
+        nome?: string;
+        name?: string;
+      };
+
+      return {
+        id: courseSnap.id,
+        name: courseData.nome || courseData.name || courseSnap.id,
+      };
+    });
+
+    const resolvedCourseId = resolveStudentCourseId(
+      {
+        courseId: alunoData.courseId || null,
+        curso: alunoData.curso || null,
+      },
+      courseRefs
+    );
+
+    if (!resolvedCourseId) {
       throw new EstagioAccessError(400, "aluno_sem_curso", "O aluno não tem curso associado.");
     }
 
-    // Diretor de Curso check — só o diretor do curso do aluno pode criar o estágio.
-    const courseSnap = await db.collection("courses").doc(alunoData.courseId).get();
-    if (!courseSnap.exists) {
+    const courseSnap = coursesSnap.docs.find((doc) => doc.id === resolvedCourseId);
+    if (!courseSnap) {
       throw new EstagioAccessError(400, "course_not_found", "Curso do aluno não encontrado.");
     }
+
+    // Diretor de Curso check — só o diretor do curso do aluno pode criar o estágio.
     const courseData = courseSnap.data() as {
       courseDirectorId?: string;
       schoolId?: string;
@@ -162,8 +190,8 @@ export async function POST(request: Request) {
       alunoId,
       alunoNome: alunoData.nome || "",
       alunoEmail: alunoData.email || "",
-      alunoCourseId: alunoData.courseId,
-      courseId: alunoData.courseId,
+      alunoCourseId: resolvedCourseId,
+      courseId: resolvedCourseId,
       courseNome: courseData.nome || courseData.name || "",
       tutorId: tutorInfo?.id || "",
       tutorNome: tutorInfo?.nome || "",
