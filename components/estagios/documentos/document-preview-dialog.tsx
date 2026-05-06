@@ -129,7 +129,7 @@ export function DocumentPreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-w-5xl w-[90vw] p-0 max-h-[90vh] flex-col overflow-hidden">
+      <DialogContent className="flex w-[94vw] max-h-[92vh] flex-col overflow-hidden p-0 sm:max-w-[84rem]">
         <div className="px-6 pt-6">
           <DialogHeader>
             <DialogTitle>{doc.nome}</DialogTitle>
@@ -142,15 +142,15 @@ export function DocumentPreviewDialog({
         </div>
 
         {doc.currentFileUrl ? (
-          <div className="flex gap-4 h-[70vh] overflow-hidden p-4">
+          <div className="flex h-[76vh] min-h-0 gap-5 overflow-hidden px-6 pb-6 pt-4">
             {/* Painel de pré-visualização — ocupa a maior parte da largura */}
             {canRenderPdf && (
-              <div className="hidden min-w-0 flex-1 flex-col gap-2 md:flex overflow-y-auto">
-                <div className="min-w-0 overflow-y-auto rounded-md border bg-muted/10 p-1">
-                  <PdfViewer fileUrl={doc.currentFileUrl} scale={0.6} />
+              <div className="hidden min-w-0 min-h-0 flex-[1.25] flex-col gap-3 overflow-hidden md:flex">
+                <div className="min-h-0 min-w-0 flex-1 overflow-auto rounded-xl border bg-muted/10 p-2">
+                  <PdfViewer fileUrl={doc.currentFileUrl} scale={0.55} className="w-full" />
                 </div>
                 {onOpenFullscreen && (
-                  <Button size="sm" variant="outline" className="w-full text-xs shrink-0" onClick={onOpenFullscreen}>
+                  <Button size="sm" variant="outline" className="w-full shrink-0 text-xs" onClick={onOpenFullscreen}>
                     <Maximize2 className="mr-1.5 h-3.5 w-3.5" />
                     Abrir documento
                   </Button>
@@ -159,7 +159,7 @@ export function DocumentPreviewDialog({
             )}
 
             {/* Painel lateral direito — largura fixa */}
-            <div className="w-64 shrink-0 overflow-y-auto flex flex-col gap-4">
+            <div className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto">
               <div>
                 <h4 className="text-sm font-medium">Assinatários</h4>
                 <ul className="space-y-2 text-sm">
