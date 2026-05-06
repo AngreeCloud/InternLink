@@ -132,6 +132,7 @@ export function InternshipManager() {
   const [editTutorId, setEditTutorId] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
+  const [createErrorMessage, setCreateErrorMessage] = useState<string | null>(null);
   const [inviting, setInviting] = useState(false);
   const [updatingTutor, setUpdatingTutor] = useState(false);
   const [removingInviteId, setRemovingInviteId] = useState<string | null>(null);
@@ -195,6 +196,27 @@ export function InternshipManager() {
       setProfessorName(userData.nome || user.displayName || "Professor");
       setProfessorPhotoURL(userData.photoURL || "");
 
+      const courseNameById = new Map<string, string>();
+      try {
+        const broadcastCoursesResponse = await fetch("/api/professor/broadcast-courses", {
+          cache: "no-store",
+        });
+        const broadcastCoursesData = (await broadcastCoursesResponse.json()) as {
+          ok?: boolean;
+          courses?: Array<{ id: string; nome?: string }>;
+        };
+
+        if (broadcastCoursesResponse.ok && broadcastCoursesData.ok && Array.isArray(broadcastCoursesData.courses)) {
+          for (const course of broadcastCoursesData.courses) {
+            if (course.id && course.nome) {
+              courseNameById.set(course.id, course.nome);
+            }
+          }
+        }
+      } catch {
+        // Ignore and fall back to the course name already stored on the stage.
+      }
+
       const schoolSnap = await getDoc(doc(db, "schools", userData.schoolId));
       if (schoolSnap.exists()) {
         const schoolData = schoolSnap.data() as {
@@ -255,6 +277,12 @@ export function InternshipManager() {
             diasSemana?: Partial<DiasSemana>;
             createdAt?: { toDate: () => Date };
           };
+          const stageCourseId = data.courseId || data.alunoCourseId || "";
+          const stageCourseName =
+            data.courseNome ||
+            data.courseName ||
+            (stageCourseId ? courseNameById.get(stageCourseId) : undefined) ||
+            "Sem turma";
 
           if (
             Object.prototype.hasOwnProperty.call(data, "alunoPhotoURL") ||
@@ -276,8 +304,8 @@ export function InternshipManager() {
             tutorEmail: data.tutorEmail || "",
             empresa: data.entidadeAcolhimento || data.empresa || "—",
             estado: data.estado || "ativo",
-            courseId: data.courseId || data.alunoCourseId || "",
-            courseNome: data.courseNome || data.courseName || "Sem turma",
+            courseId: stageCourseId,
+            courseNome: stageCourseName,
             dataInicio: data.dataInicio || undefined,
             dataFimEstimada: data.dataFimEstimada || data.dataFim || undefined,
             totalHoras: typeof data.totalHoras === "number" ? data.totalHoras : undefined,
@@ -419,6 +447,7 @@ export function InternshipManager() {
     setEmpresa("");
     setAlunoId("");
     setTutorId("");
+    setCreateErrorMessage(null);
     setStudentSearch("");
     setTutorSearch("");
     setStudentListOpen(false);
@@ -437,51 +466,36 @@ export function InternshipManager() {
     if (!DAY_ORDER.some((k) => createDiasSemana[k])) return;
 
     setSubmitting(true);
+    setCreateErrorMessage(null);
     try {
-      const db = await getDbRuntime();
-      const auth = await getAuthRuntime();
-      const user = auth.currentUser;
-      if (!user) return;
-
       const selectedTutorById = schoolTutors.find((tutor) => tutor.id === tutorId) || null;
       const empresaTrim = empresa.trim();
-      const calc = calcularDataFimEstimada({
-        dataInicio: createDataInicio,
-        totalHoras: createTotalHoras,
-        horasDiarias: createHorasDiarias,
-        diasSemana: createDiasSemana,
+      const response = await fetch("/api/estagios", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          alunoId,
+          tutorId: selectedTutorById?.id || undefined,
+          titulo: titulo.trim(),
+          empresa: empresaTrim,
+          dataInicio: createDataInicio,
+          totalHoras: createTotalHoras,
+          horasDiarias: createHorasDiarias,
+          diasSemana: createDiasSemana,
+        }),
       });
 
-      await addDoc(collection(db, "estagios"), {
-        titulo: titulo.trim(),
-        schoolId,
-        professorId: user.uid,
-        professorNome: professorName,
-        alunoId,
-        alunoNome: selectedStudent?.nome || "",
-        alunoEmail: selectedStudent?.email || "",
-        tutorId: selectedTutorById?.id || "",
-        tutorNome: selectedTutorById?.nome || "",
-        tutorEmail: selectedTutorById?.email || "",
-        tutorEmpresa: selectedTutorById?.empresa || empresaTrim,
-        empresa: empresaTrim,
-        entidadeAcolhimento: empresaTrim,
-        dataInicio: createDataInicio,
-        totalHoras: createTotalHoras,
-        horasDiarias: createHorasDiarias,
-        diasSemana: createDiasSemana,
-        dataFimEstimada: calc.dataFimEstimada,
-        horasRealizadas: 0,
-        estadoEstagio: "em_curso",
-        estado: "ativo",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      const data = (await response.json()) as { ok?: boolean; id?: string; error?: string };
+      if (!response.ok || !data.ok || !data.id) {
+        setCreateErrorMessage(data.error || "Não foi possível criar o estágio.");
+        return;
+      }
 
       resetCreateForm();
       setDialogOpen(false);
       await loadData();
     } catch (error) {
+      setCreateErrorMessage(error instanceof Error ? error.message : "Erro inesperado ao criar o estágio.");
       console.error("Erro ao criar estágio:", error);
     } finally {
       setSubmitting(false);
@@ -655,7 +669,15 @@ export function InternshipManager() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <Dialog
+            open={dialogOpen}
+            onOpenChange={(open) => {
+              setDialogOpen(open);
+              if (!open) {
+                setCreateErrorMessage(null);
+              }
+            }}
+          >
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
@@ -851,6 +873,10 @@ export function InternshipManager() {
                     </span>
                   )}
                 </div>
+
+                {createErrorMessage ? (
+                  <p className="text-sm text-destructive">{createErrorMessage}</p>
+                ) : null}
 
                 <Button onClick={handleCreateEstagio} disabled={submitting} className="w-full">
                   {submitting ? "A criar..." : "Criar Estágio"}

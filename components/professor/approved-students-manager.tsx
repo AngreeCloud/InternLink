@@ -1,23 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  serverTimestamp,
-  updateDoc,
-  where,
-} from "firebase/firestore";
+import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
-import {
-  normalizeInternshipState,
-  resolveStudentCourseId,
-  resolveStudentCourseName,
-} from "@/lib/course-enrollment";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -36,17 +22,9 @@ const INTERNSHIP_STATUS_ACTIVE = "Estágio ativo";
 const INTERNSHIP_STATUS_COMPLETED = "Estágio concluido";
 const INTERNSHIP_STATUS_NONE = "Sem estágio associado";
 
-const ACTIVE_INTERNSHIP_STATES = new Set(["ativo", "em curso", "em_curso", "iniciado", "aberto"]);
-const COMPLETED_INTERNSHIP_STATES = new Set(["concluido", "concluído", "finalizado", "terminado", "encerrado"]);
-
 type CourseOption = {
   id: string;
   name: string;
-};
-
-type InternshipRef = {
-  alunoId: string;
-  estado: string;
 };
 
 type InternshipStatusLabel =
@@ -66,6 +44,18 @@ type ApprovedStudent = {
   createdAt: string;
 };
 
+type ApiStudent = ApprovedStudent & {
+  internshipStatus?: InternshipStatusLabel;
+};
+
+type ApiResponse = {
+  ok?: boolean;
+  error?: string;
+  schoolName?: string;
+  courses?: CourseOption[];
+  students?: ApiStudent[];
+};
+
 export function ApprovedStudentsManager() {
   const [students, setStudents] = useState<ApprovedStudent[]>([]);
   const [courses, setCourses] = useState<CourseOption[]>([]);
@@ -82,153 +72,41 @@ export function ApprovedStudentsManager() {
   const [actionError, setActionError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
 
-  const resolveInternshipStatusForStudent = (
-    internships: InternshipRef[],
-    studentId: string
-  ): InternshipStatusLabel => {
-    let hasCompletedInternship = false;
-
-    for (const internship of internships) {
-      if (internship.alunoId !== studentId) {
-        continue;
-      }
-
-      const normalizedState = normalizeInternshipState(internship.estado);
-      if (ACTIVE_INTERNSHIP_STATES.has(normalizedState)) {
-        return INTERNSHIP_STATUS_ACTIVE;
-      }
-
-      if (COMPLETED_INTERNSHIP_STATES.has(normalizedState)) {
-        hasCompletedInternship = true;
-      }
-    }
-
-    return hasCompletedInternship ? INTERNSHIP_STATUS_COMPLETED : INTERNSHIP_STATUS_NONE;
-  };
-
   const loadStudents = async () => {
     setLoading(true);
     setActionError("");
 
     try {
       const auth = await getAuthRuntime();
-      const db = await getDbRuntime();
-      const user = auth.currentUser;
-
-      if (!user) {
+      if (!auth.currentUser) {
         setStudents([]);
         setCourses([]);
+        setSchoolName("");
         setStudentInternshipStatus({});
         return;
       }
 
-      const userSnap = await getDoc(doc(db, "users", user.uid));
+      const response = await fetch("/api/professor/alunos", { cache: "no-store" });
+      const data = (await response.json()) as ApiResponse;
 
-      if (!userSnap.exists()) {
-        setStudents([]);
-        setCourses([]);
-        setStudentInternshipStatus({});
-        return;
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "Não foi possível carregar os alunos aprovados.");
       }
 
-      const userData = userSnap.data() as { schoolId?: string; escola?: string };
-      setSchoolName(userData.escola || "");
-
-      if (!userData.schoolId) {
-        setStudents([]);
-        setCourses([]);
-        setStudentInternshipStatus({});
-        return;
-      }
-
-      const coursesSnap = await getDocs(
-        query(
-          collection(db, "courses"),
-          where("schoolId", "==", userData.schoolId)
+      const nextStudents = Array.isArray(data.students) ? data.students : [];
+      setSchoolName(data.schoolName || "");
+      setCourses(Array.isArray(data.courses) ? data.courses : []);
+      setStudents(nextStudents.map(({ internshipStatus: _internshipStatus, ...student }) => student));
+      setStudentInternshipStatus(
+        Object.fromEntries(
+          nextStudents.map((student) => [student.id, student.internshipStatus || INTERNSHIP_STATUS_NONE])
         )
       );
-
-      const availableCourses: CourseOption[] = coursesSnap.docs.map((docSnap) => {
-        const data = docSnap.data() as { name?: string };
-        return {
-          id: docSnap.id,
-          name: data.name || "—",
-        };
-      }).sort((left, right) => left.name.localeCompare(right.name, "pt-PT"));
-
-      setCourses(availableCourses);
-
-      const approvedSnap = await getDocs(
-        query(
-          collection(db, "users"),
-          where("schoolId", "==", userData.schoolId),
-          where("role", "==", "aluno"),
-          where("estado", "==", "ativo")
-        )
-      );
-
-      const internshipsSnap = await getDocs(
-        query(
-          collection(db, "estagios"),
-          where("professorId", "==", user.uid),
-          where("schoolId", "==", userData.schoolId)
-        )
-      );
-
-      const internships = internshipsSnap.docs.map((docSnap) => {
-        const data = docSnap.data() as { alunoId?: string; estado?: string };
-        return {
-          alunoId: data.alunoId || "",
-          estado: data.estado || "ativo",
-        };
-      });
-
-      const list = approvedSnap.docs
-        .map((docSnap) => {
-          const data = docSnap.data() as {
-            nome?: string;
-            email?: string;
-            courseId?: string;
-            curso?: string;
-            localidade?: string;
-            telefone?: string;
-            dataNascimento?: string;
-            createdAt?: { toDate: () => Date };
-          };
-
-          const resolvedCourseId = resolveStudentCourseId(
-            {
-              courseId: data.courseId || "",
-              curso: data.curso || "",
-            },
-            availableCourses
-          );
-
-          return {
-            id: docSnap.id,
-            nome: data.nome || "—",
-            email: data.email || "—",
-            courseId: resolvedCourseId || "",
-            curso: resolveStudentCourseName(resolvedCourseId, availableCourses, data.curso || ""),
-            localidade: data.localidade || "—",
-            telefone: data.telefone || "—",
-            dataNascimento: data.dataNascimento || "—",
-            createdAt: data.createdAt?.toDate?.()?.toLocaleDateString("pt-PT") || "—",
-          };
-        })
-        .sort((left, right) => left.nome.localeCompare(right.nome, "pt-PT"));
-
-      setStudents(list);
-
-      const statusByStudent: Record<string, InternshipStatusLabel> = {};
-      for (const student of list) {
-        statusByStudent[student.id] = resolveInternshipStatusForStudent(internships, student.id);
-      }
-      setStudentInternshipStatus(statusByStudent);
     } catch (error) {
       console.error("Erro ao carregar alunos aprovados:", error);
       setStudents([]);
       setCourses([]);
+      setSchoolName("");
       setStudentInternshipStatus({});
     } finally {
       setLoading(false);
@@ -241,7 +119,7 @@ export function ApprovedStudentsManager() {
     (async () => {
       const auth = await getAuthRuntime();
       unsubscribe = onAuthStateChanged(auth, () => {
-        loadStudents();
+        void loadStudents();
       });
     })();
 
@@ -373,11 +251,7 @@ export function ApprovedStudentsManager() {
   };
 
   const getStatusBadgeVariant = (status: InternshipStatusLabel): "outline" | "secondary" => {
-    if (status === INTERNSHIP_STATUS_ACTIVE) {
-      return "outline";
-    }
-
-    return "secondary";
+    return status === INTERNSHIP_STATUS_ACTIVE ? "outline" : "secondary";
   };
 
   const filteredStudents = students.filter(
@@ -518,8 +392,8 @@ export function ApprovedStudentsManager() {
                 ) : null}
 
                 {manageMode === "remove-student" && selectedStudent ? (
-                  <div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
-                    <p>
+                  <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3">
+                    <p className="text-sm text-destructive">
                       O aluno selecionado será removido da lista de alunos aprovados desta escola.
                     </p>
                   </div>
@@ -630,7 +504,6 @@ export function ApprovedStudentsManager() {
                       <p>Registado em: {student.createdAt}</p>
                     </div>
                   </div>
-
                 </div>
               ))}
             </div>
