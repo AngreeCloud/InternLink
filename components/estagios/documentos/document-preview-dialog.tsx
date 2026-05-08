@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,14 +10,10 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download, CheckCircle2, Clock } from "lucide-react";
-import { PdfViewer } from "../pdf/pdf-viewer";
-import {
-  SignatureBoxesOverlay,
-  type SignatureBoxModel,
-} from "../pdf/signature-boxes-overlay";
+import { Download, FileDown, CheckCircle2, Clock, Maximize2, Loader2 } from "lucide-react";
 import type { EstagioDocument } from "./document-list";
 import type { EstagioRole } from "@/lib/estagios/permissions";
+import { PdfViewer } from "../pdf/pdf-viewer";
 
 const ROLE_LABEL: Record<EstagioRole, string> = {
   diretor: "Diretor de Curso",
@@ -32,7 +29,12 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   participants: Record<string, { name: string; role: EstagioRole; email?: string }>;
   currentUserId: string;
+  onOpenFullscreen?: () => void;
 };
+
+function buildDownloadUrl(estagioId: string, docId: string, raw: boolean): string {
+  return `/api/estagios/${estagioId}/documentos/${docId}/download?raw=${raw}`;
+}
 
 function isPdfDocument(doc: EstagioDocument): boolean {
   const mimeType = (doc.fileMimeType ?? "").toLowerCase();
@@ -46,26 +48,44 @@ function isPdfDocument(doc: EstagioDocument): boolean {
   return /\.pdf(\?|$)/i.test(path) || /\.pdf(\?|$)/i.test(url);
 }
 
-function getDownloadExtension(doc: EstagioDocument): string {
-  const extension = (doc.fileExtension ?? "").toLowerCase();
-  if (extension) return extension;
-  if (isPdfDocument(doc)) return "pdf";
-  return "file";
+async function triggerDownload(url: string, filename: string) {
+  const res = await fetch(url);
+  if (!res.ok) return;
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(objectUrl);
 }
 
 export function DocumentPreviewDialog({
+  estagioId,
   doc,
   open,
   onOpenChange,
   participants,
   currentUserId,
+  onOpenFullscreen,
 }: Props) {
+  const [downloading, setDownloading] = useState<"signed" | "raw" | null>(null);
   const signedByUsers = doc.signedBy ?? [];
   const totalSigners = doc.signatureUserIds.length || doc.signatureRoles.length;
   const signedCount = signedByUsers.length;
-  const boxes: SignatureBoxModel[] = doc.signatureBoxes ?? [];
   const canRenderPdf = isPdfDocument(doc);
-  const downloadExtension = getDownloadExtension(doc);
+
+  const handleDownload = async (raw: boolean) => {
+    const key = raw ? "raw" : "signed";
+    if (downloading) return;
+    setDownloading(key);
+    const url = buildDownloadUrl(estagioId, doc.id, raw);
+    const filename = raw ? `${doc.nome}.pdf` : `${doc.nome}-assinado.pdf`;
+    await triggerDownload(url, filename).catch(console.error);
+    setDownloading(null);
+  };
 
   // Listagem de signatários: combina userIds explicitos + os participantes cuja role é exigida.
   const signersList: Array<{ uid?: string; label: string; role?: EstagioRole; signed: boolean; mine: boolean }> = [];
@@ -109,50 +129,38 @@ export function DocumentPreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle>{doc.nome}</DialogTitle>
-          <DialogDescription>
-            {totalSigners > 0
-              ? `${signedCount} de ${totalSigners} assinaturas recolhidas`
-              : "Documento sem assinaturas configuradas"}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="flex w-[94vw] max-h-[92vh] flex-col overflow-hidden p-0 sm:max-w-[84rem]">
+        <div className="px-6 pt-6">
+          <DialogHeader>
+            <DialogTitle>{doc.nome}</DialogTitle>
+            <DialogDescription>
+              {totalSigners > 0
+                ? `${signedCount} de ${totalSigners} assinaturas recolhidas`
+                : "Documento sem assinaturas configuradas"}
+            </DialogDescription>
+          </DialogHeader>
+        </div>
 
         {doc.currentFileUrl ? (
-          <div className="grid min-h-0 flex-1 gap-4 overflow-hidden md:grid-cols-[1fr_280px]">
-            <div className="min-h-0 overflow-auto rounded-lg border bg-muted/20 p-3">
-              {canRenderPdf ? (
-                <PdfViewer
-                  fileUrl={doc.currentFileUrl}
-                  scale={1.1}
-                  renderPageOverlay={(info) => (
-                    <SignatureBoxesOverlay
-                      boxes={boxes}
-                      pageNumber={info.pageNumber}
-                      pageWidth={info.width}
-                      pageHeight={info.height}
-                      signedBoxIds={boxes
-                        .filter((b) =>
-                          b.role
-                            ? (doc.signedByRoles ?? []).includes(b.role)
-                            : b.userId
-                              ? signedByUsers.includes(b.userId)
-                              : false,
-                        )
-                        .map((b) => b.id)}
-                    />
-                  )}
-                />
-              ) : (
-                <div className="flex min-h-56 items-center justify-center rounded-md border border-dashed bg-card px-4 text-center text-sm text-muted-foreground">
-                  Pré-visualização disponível apenas para PDF. Use o botão de descarregar para abrir este ficheiro.
+          <div className="flex h-[76vh] min-h-0 gap-5 overflow-hidden px-6 pb-6 pt-4">
+            {/* Painel de pré-visualização — ocupa a maior parte da largura */}
+            {canRenderPdf && (
+              <div className="hidden min-w-0 min-h-0 flex-[1.25] flex-col gap-3 overflow-hidden md:flex">
+                <div className="min-h-0 min-w-0 flex-1 overflow-auto rounded-xl border bg-muted/10 p-2">
+                  <PdfViewer fileUrl={doc.currentFileUrl} scale={0.55} className="w-full" />
                 </div>
-              )}
-            </div>
+                {onOpenFullscreen && (
+                  <Button size="sm" variant="outline" className="w-full shrink-0 text-xs" onClick={onOpenFullscreen}>
+                    <Maximize2 className="mr-1.5 h-3.5 w-3.5" />
+                    Abrir documento
+                  </Button>
+                )}
+              </div>
+            )}
 
-            <div className="space-y-4 overflow-y-auto">
-              <div className="space-y-2">
+            {/* Painel lateral direito — largura fixa */}
+            <div className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto">
+z              <div>
                 <h4 className="text-sm font-medium">Assinatários</h4>
                 <ul className="space-y-2 text-sm">
                   {signersList.map((s, idx) => (
@@ -187,17 +195,34 @@ export function DocumentPreviewDialog({
                 </ul>
               </div>
 
-              <Button variant="outline" className="w-full" asChild>
-                <a
-                  href={doc.currentFileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download={`${doc.nome}.${downloadExtension}`}
+              <div className="space-y-2">
+                <Button
+                  variant="default"
+                  className="w-full"
+                  disabled={!!downloading}
+                  onClick={() => void handleDownload(false)}
                 >
-                  <Download className="mr-2 h-4 w-4" />
-                  {canRenderPdf ? "Descarregar PDF" : "Descarregar ficheiro"}
-                </a>
-              </Button>
+                  {downloading === "signed" ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="mr-2 h-4 w-4" />
+                  )}
+                  Descarregar PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  disabled={!!downloading}
+                  onClick={() => void handleDownload(true)}
+                >
+                  {downloading === "raw" ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileDown className="mr-2 h-4 w-4" />
+                  )}
+                  Descarregar PDF (sem assinaturas)
+                </Button>
+              </div>
 
               <p className="text-xs text-muted-foreground">
                 Versão {doc.currentVersion ?? 0}

@@ -35,6 +35,22 @@ function normalizeDiasSemana(input?: Partial<DiasSemana>): DiasSemana {
   };
 }
 
+export async function DELETE(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params;
+    await assertEstagioAccess(id, "director");
+    const db = getFirebaseAdminDb();
+    await db.collection("estagios").doc(id).delete();
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    const { body, status } = toApiErrorResponse(error);
+    return NextResponse.json(body, { status });
+  }
+}
+
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> }

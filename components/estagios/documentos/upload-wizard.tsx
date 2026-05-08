@@ -36,6 +36,8 @@ export type UploadWizardDoc = {
   fileMimeType?: string;
   fileExtension?: string;
   estado?: string;
+  /** Se verdadeiro, o wizard cria o documento na BD ao submeter (não existe ainda). */
+  isNew?: boolean;
 };
 
 export type UploadWizardProps = {
@@ -229,27 +231,44 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
       });
       const downloadUrl = await getDownloadURL(sRef);
 
-      // 2) Atualiza o documento com novo PDF + caixas.
-      const res = await fetch(`/api/estagios/${estagioId}/documentos/${doc.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nome: nome.trim(),
-          descricao: descricao,
-          signatureRoles: effectiveSignatureRoles,
-          signatureBoxes: effectiveBoxes,
-          currentFileUrl: downloadUrl,
-          currentFilePath: storagePath,
-          fileMimeType: fileMimeType || file.type || "application/octet-stream",
-          fileExtension: extension,
-          bumpVersion: true,
-          estado: shouldConfigureSignatures ? "aguarda_assinatura" : "pendente",
-          versionNotes: shouldConfigureSignatures
-            ? "Versão com assinatura digital configurada."
-            : "Versão carregada sem assinatura digital obrigatória.",
-        }),
-      });
-      const data = (await res.json()) as { ok?: boolean; error?: string; newVersion?: number };
+      // 2) Cria ou atualiza o documento.
+      const body = {
+        nome: nome.trim(),
+        descricao: descricao,
+        signatureRoles: effectiveSignatureRoles,
+        signatureBoxes: effectiveBoxes,
+        currentFileUrl: downloadUrl,
+        currentFilePath: storagePath,
+        fileMimeType: fileMimeType || file.type || "application/octet-stream",
+        fileExtension: extension,
+        bumpVersion: true,
+        estado: shouldConfigureSignatures ? "aguarda_assinatura" : "pendente",
+        versionNotes: shouldConfigureSignatures
+          ? "Versão com assinatura digital configurada."
+          : "Versão carregada sem assinatura digital obrigatória.",
+        // campos adicionais apenas na criação:
+        ...(doc.isNew
+          ? {
+              categoria: doc.categoria || "outros",
+              accessRoles: doc.accessRoles?.length
+                ? doc.accessRoles
+                : ["diretor", "professor", "tutor", "aluno"],
+            }
+          : {}),
+      };
+
+      const res = doc.isNew
+        ? await fetch(`/api/estagios/${estagioId}/documentos`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          })
+        : await fetch(`/api/estagios/${estagioId}/documentos/${doc.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+      const data = (await res.json()) as { ok?: boolean; error?: string; newVersion?: number; id?: string };
       if (!res.ok || !data.ok) {
         setError(data.error || "Falha a gravar o documento.");
         return;
@@ -269,7 +288,7 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-6xl flex flex-col">
+      <DialogContent className="max-h-[90vh] overflow-hidden max-w-5xl w-[90vw] flex flex-col">
         <DialogHeader>
           <DialogTitle>
             {step === "meta" ? "Carregar documento" : "Posicionar caixas de assinatura"}
@@ -377,7 +396,7 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
         ) : (
           <div className="flex-1 overflow-hidden">
             <div className="flex h-full min-h-0 flex-col gap-3 lg:flex-row">
-              <div className="min-h-0 min-w-0 flex-1 overflow-auto rounded-lg bg-muted/30 p-3">
+              <div className="min-h-0 min-w-0 flex-1 overflow-auto rounded-lg bg-muted/30 p-3" style={{ maxHeight: "65vh" }}>
                 <PdfViewer
                   ref={viewerRef}
                   fileBytes={fileBytes ?? undefined}

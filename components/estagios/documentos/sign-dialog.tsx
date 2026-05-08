@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { getStorageRuntime } from "@/lib/firebase-runtime";
 import {
   Dialog,
   DialogContent,
@@ -13,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Loader2, PenTool, Signature, Trash2 } from "lucide-react";
+import { Loader2, PenTool, Signature, Trash2, AlertCircle } from "lucide-react";
 import { SignaturePad, type SignaturePadHandle } from "@/components/estagios/signature-pad";
 
 export type SignDialogProps = {
@@ -66,14 +64,16 @@ export function SignDialog({ open, onOpenChange, estagioId, docId, docNome, onSi
 
   const handleConfirm = async () => {
     setError(null);
+
     let signatureDataUrl: string | null = null;
     if (mode === "saved") {
       signatureDataUrl = savedSignature.dataUrl ?? null;
     } else {
       signatureDataUrl = padRef.current?.toDataUrl() ?? null;
     }
+
     if (!signatureDataUrl) {
-      setError("Assinatura em falta. Desenhe ou guarde uma assinatura no perfil.");
+      setError("Assinatura em falta. Desenhe uma assinatura ou guarde uma no seu perfil.");
       return;
     }
 
@@ -84,44 +84,11 @@ export function SignDialog({ open, onOpenChange, estagioId, docId, docNome, onSi
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ signatureDataUrl }),
       });
-      const data = (await res.json()) as {
-        ok?: boolean;
-        error?: string;
-        pdfBase64?: string;
-        newVersion?: number;
-        allSigned?: boolean;
-      };
-      if (!res.ok || !data.ok || !data.pdfBase64 || !data.newVersion) {
-        setError(data.error || "Falha a aplicar a assinatura.");
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setError(data.error || "Falha ao registar a assinatura.");
         return;
       }
-
-      // Upload do PDF assinado ao Storage
-      const signedBytes = Uint8Array.from(atob(data.pdfBase64), (c) => c.charCodeAt(0));
-      const storage = await getStorageRuntime();
-      const newPath = `estagios/${estagioId}/documentos/${docId}/v${data.newVersion}-signed.pdf`;
-      const sRef = ref(storage, newPath);
-      await uploadBytes(sRef, signedBytes, { contentType: "application/pdf" });
-      const downloadUrl = await getDownloadURL(sRef);
-
-      // PATCH: update currentFileUrl, bumpVersion=false (já subimos), mas registar manualmente o arquivo.
-      const patch = await fetch(`/api/estagios/${estagioId}/documentos/${docId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          currentFileUrl: downloadUrl,
-          currentFilePath: newPath,
-          bumpVersion: true,
-          estado: data.allSigned ? "assinado" : "aguarda_assinatura",
-          versionNotes: data.allSigned ? "Assinado por todos os signatários." : "Assinatura aplicada.",
-        }),
-      });
-      const patchData = (await patch.json()) as { ok?: boolean; error?: string };
-      if (!patch.ok || !patchData.ok) {
-        setError(patchData.error || "Falha a registar a versão assinada.");
-        return;
-      }
-
       onSigned();
       onOpenChange(false);
     } catch (err) {
@@ -135,9 +102,10 @@ export function SignDialog({ open, onOpenChange, estagioId, docId, docNome, onSi
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Assinar: {docNome}</DialogTitle>
+          <DialogTitle>Assinar documento</DialogTitle>
           <DialogDescription>
-            A sua assinatura será aplicada ao documento e arquivada como nova versão.
+            {docNome} — A sua assinatura ficará registada e será incluída na página de assinaturas
+            quando o documento for descarregado.
           </DialogDescription>
         </DialogHeader>
 
@@ -151,7 +119,7 @@ export function SignDialog({ open, onOpenChange, estagioId, docId, docNome, onSi
               onClick={() => setMode("saved")}
             >
               <Signature className="mr-2 h-4 w-4" />
-              Usar guardada
+              Usar assinatura guardada
             </Button>
             <Button
               type="button"
@@ -169,17 +137,21 @@ export function SignDialog({ open, onOpenChange, estagioId, docId, docNome, onSi
           ) : mode === "saved" ? (
             savedSignature.exists && savedSignature.dataUrl ? (
               <div className="rounded-md border border-border bg-muted/30 p-3">
-                <Label className="mb-2 block text-xs">Assinatura guardada</Label>
+                <Label className="mb-2 block text-xs">Assinatura guardada no perfil</Label>
                 <img
-                  src={savedSignature.dataUrl || "/placeholder.svg"}
+                  src={savedSignature.dataUrl}
                   alt="Assinatura guardada"
                   className="max-h-32 rounded bg-white"
                 />
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                Ainda não guardou uma assinatura no perfil. Desenhe abaixo ou aceda ao Perfil para configurar.
-              </p>
+              <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  Ainda não configurou uma assinatura no perfil. Desenhe uma abaixo ou aceda ao
+                  Perfil para configurar uma permanente.
+                </span>
+              </div>
             )
           ) : (
             <div className="space-y-2">
@@ -212,10 +184,10 @@ export function SignDialog({ open, onOpenChange, estagioId, docId, docNome, onSi
             {submitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                A assinar...
+                A registar...
               </>
             ) : (
-              "Confirmar assinatura"
+              "Assinar documento"
             )}
           </Button>
         </DialogFooter>

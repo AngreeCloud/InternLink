@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "Relatórios",
+  title: "Relatório",
 }
 
 export default function ReportsLayout({

@@ -25,6 +25,7 @@ import {
   Pencil,
   Search,
   SlidersHorizontal,
+  Trash2,
 } from "lucide-react";
 import { formatIsoDatePt } from "@/lib/estagios/date-calc";
 import type { EstagioListItem, StudentLite, TutorLite } from "./estagio-types";
@@ -36,6 +37,7 @@ type Props = {
   loading: boolean;
   onOpenChangeTutor: (estagio: EstagioListItem) => void;
   onOpenEdit: (estagio: EstagioListItem) => void;
+  onDelete?: (estagio: EstagioListItem) => void;
 };
 
 type SortMode = "recent" | "title" | "student" | "course";
@@ -49,6 +51,7 @@ export function EstagiosSection({
   loading,
   onOpenChangeTutor,
   onOpenEdit,
+  onDelete,
 }: Props) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -60,7 +63,7 @@ export function EstagiosSection({
     const map = new Map<string, string>();
     for (const e of estagios) {
       const id = e.courseId || `__nome__:${e.courseNome || "Sem turma"}`;
-      const name = e.courseNome || "Sem turma";
+      const name = e.courseNome || e.courseId || "Sem turma";
       if (!map.has(id)) map.set(id, name);
     }
     return Array.from(map.entries())
@@ -111,7 +114,7 @@ export function EstagiosSection({
         copy.sort((a, b) => a.alunoNome.localeCompare(b.alunoNome, "pt-PT"));
         break;
       case "course":
-        copy.sort((a, b) => (a.courseNome || "").localeCompare(b.courseNome || "", "pt-PT"));
+        copy.sort((a, b) => (a.courseNome || a.courseId || "").localeCompare(b.courseNome || b.courseId || "", "pt-PT"));
         break;
       case "recent":
       default:
@@ -125,7 +128,7 @@ export function EstagiosSection({
     const map = new Map<string, { id: string; name: string; items: EstagioListItem[] }>();
     for (const e of sorted) {
       const id = e.courseId || `__nome__:${e.courseNome || "Sem turma"}`;
-      const name = e.courseNome || "Sem turma";
+      const name = e.courseNome || e.courseId || "Sem turma";
       const existing = map.get(id);
       if (existing) {
         existing.items.push(e);
@@ -381,6 +384,18 @@ export function EstagiosSection({
                                 <Pencil className="mr-2 h-4 w-4" />
                                 Editar
                               </Button>
+                              {onDelete && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                  onClick={() => onDelete(estagio)}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Eliminar
+                                </Button>
+                              )}
                               <Button
                                 type="button"
                                 variant="outline"

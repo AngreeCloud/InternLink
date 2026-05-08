@@ -38,13 +38,15 @@ import {
   Upload,
 } from "lucide-react";
 import { PdfViewer } from "@/components/estagios/pdf/pdf-viewer";
-import { DocxPreview } from "@/components/estagios/documentos/docx-preview";
+import { FullscreenDocumentViewer } from "@/components/estagios/documentos/fullscreen-document-viewer";
 
 const MIME_PDF = "application/pdf";
 const MIME_DOCX =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 type FileKind = "pdf" | "docx";
+
+type ReportPreviewKind = FileKind | null;
 
 type EligibilityState = {
   hoursTotal: number;
@@ -65,6 +67,7 @@ type ReportSnapshot = {
   currentVersion: number;
   updatedAt: string | null;
   submittedAt: string | null;
+  pageCount?: number | null;
 };
 
 type ManagerState = {
@@ -97,6 +100,14 @@ function formatDateLabel(value: string | null) {
   return date.toLocaleString("pt-PT");
 }
 
+function getReportPreviewKind(report: ReportSnapshot | null): ReportPreviewKind {
+  if (!report) return null;
+  const extension = report.fileExtension.toLowerCase();
+  if (extension === "pdf" || /\.pdf(\?|$)/i.test(report.currentFileUrl)) return "pdf";
+  if (extension === "docx" || /\.docx(\?|$)/i.test(report.currentFileUrl)) return "docx";
+  return null;
+}
+
 export function StudentReportsManager() {
   const [state, setState] = useState<ManagerState>({
     loading: true,
@@ -115,6 +126,7 @@ export function StudentReportsManager() {
   const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null);
   const [fileKind, setFileKind] = useState<FileKind | null>(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [fullscreenPreview, setFullscreenPreview] = useState<"submitted" | "upload" | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -269,6 +281,8 @@ export function StudentReportsManager() {
     }
     return list;
   }, [eligibility, hoursPassed, waitPeriodPassed, waitDate]);
+
+  const reportPreviewKind = getReportPreviewKind(state.report);
 
   const hoursPercent = eligibility
     ? Math.min(
@@ -502,14 +516,19 @@ export function StudentReportsManager() {
               <p className="mt-1 text-xs text-muted-foreground">
                 Formato: {(state.report.fileExtension || "—").toUpperCase()}
               </p>
+              {typeof state.report.pageCount === "number" ? (
+                <p className="mt-1 text-xs text-muted-foreground">Páginas: {state.report.pageCount}</p>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
               {state.report.currentFileUrl && (
                 <>
-                  <Button asChild size="sm" variant="outline">
-                    <a href={state.report.currentFileUrl} target="_blank" rel="noreferrer">
-                      Visualizar
-                    </a>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => setFullscreenPreview("submitted")}
+                  >
+                    Visualizar
                   </Button>
                   <Button asChild size="sm" variant="outline">
                     <a href={state.report.currentFileUrl} download>
@@ -521,6 +540,27 @@ export function StudentReportsManager() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Fullscreen Document Viewer for submitted report */}
+      {fullscreenPreview === "submitted" && state.report?.currentFileUrl && (
+        <FullscreenDocumentViewer
+          fileUrl={state.report.currentFileUrl}
+          fileName={state.report.nome}
+          fileType={reportPreviewKind as "pdf" | "docx"}
+          onClose={() => setFullscreenPreview(null)}
+        />
+      )}
+
+      {/* Fullscreen Document Viewer for upload preview */}
+      {fullscreenPreview === "upload" && file && fileKind && (
+        <FullscreenDocumentViewer
+          fileBytes={fileKind === "pdf" ? undefined : fileBytes ?? undefined}
+          fileUrl={fileKind === "pdf" && pdfBlobUrl ? pdfBlobUrl : undefined}
+          fileName={file.name}
+          fileType={fileKind}
+          onClose={() => setFullscreenPreview(null)}
+        />
       )}
 
       <Card>
@@ -579,18 +619,25 @@ export function StudentReportsManager() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" /> Pré-visualização
+                  <FileText className="h-4 w-4" /> Ficheiro selecionado
                 </Label>
-                <Button type="button" variant="ghost" size="sm" onClick={clearFile}>
-                  Remover ficheiro
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setFullscreenPreview("upload")}
+                  >
+                    Visualizar em ecrã completo
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={clearFile}>
+                    Remover ficheiro
+                  </Button>
+                </div>
               </div>
-              <div className="max-h-[600px] overflow-auto rounded-md border bg-muted/30 p-3">
-                {fileKind === "pdf" && pdfBlobUrl ? (
-                  <PdfViewer fileBlobUrl={pdfBlobUrl} scale={1.1} />
-                ) : (
-                  <DocxPreview fileBytes={fileBytes} />
-                )}
+              <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                <p><strong>{file.name}</strong> ({Math.round(file.size / 1024)} KB)</p>
+                <p className="mt-1 text-xs">Clique em "Visualizar em ecrã completo" para pré-visualizar o documento com opções de zoom.</p>
               </div>
             </div>
           ) : null}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 type Props = {
@@ -12,6 +12,7 @@ export function DocxPreview({ fileBytes, className }: Props) {
   const [html, setHtml] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!fileBytes) {
@@ -35,7 +36,8 @@ export function DocxPreview({ fileBytes, className }: Props) {
         ) as ArrayBuffer;
         const result = await mammoth.convertToHtml({ arrayBuffer });
         if (cancelled) return;
-        setHtml(result.value || "<p><em>Documento sem conteúdo legível.</em></p>");
+        let sanitizedHtml = result.value || "<p><em>Documento sem conteúdo legível.</em></p>";
+        setHtml(sanitizedHtml);
       } catch (err) {
         console.error("[v0] docx preview error", err);
         if (!cancelled) setError("Não foi possível pré-visualizar este DOCX.");
@@ -49,9 +51,32 @@ export function DocxPreview({ fileBytes, className }: Props) {
     };
   }, [fileBytes]);
 
+  // Interceptar cliques em links para abrir em novo tab
+  useEffect(() => {
+    if (!containerRef.current || !html) return;
+
+    const handleLinkClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const link = target.closest("a");
+      
+      if (link && link.href) {
+        e.preventDefault();
+        const href = link.getAttribute("href");
+        if (href) {
+          window.open(href, "_blank", "noopener,noreferrer");
+        }
+      }
+    };
+
+    containerRef.current.addEventListener("click", handleLinkClick);
+    return () => {
+      containerRef.current?.removeEventListener("click", handleLinkClick);
+    };
+  }, [html]);
+
   if (loading) {
     return (
-      <div className="flex h-full min-h-[200px] items-center justify-center text-sm text-muted-foreground">
+      <div className="flex min-h-[200px] items-center justify-center text-sm text-muted-foreground">
         <Loader2 className="mr-2 h-4 w-4 animate-spin" /> A processar pré-visualização...
       </div>
     );
@@ -67,7 +92,7 @@ export function DocxPreview({ fileBytes, className }: Props) {
 
   if (!html) {
     return (
-      <div className="flex h-full min-h-[200px] items-center justify-center text-sm text-muted-foreground">
+      <div className="flex min-h-[200px] items-center justify-center text-sm text-muted-foreground">
         Selecione um ficheiro para pré-visualizar.
       </div>
     );
@@ -75,9 +100,10 @@ export function DocxPreview({ fileBytes, className }: Props) {
 
   return (
     <article
+      ref={containerRef}
       className={[
-        "docx-preview rounded-md border bg-card px-6 py-4 text-sm leading-relaxed text-foreground",
-        className ?? "",
+        "docx-preview select-text text-sm leading-relaxed text-foreground",
+        className ?? "rounded-md border bg-card px-6 py-4",
       ].join(" ")}
       dangerouslySetInnerHTML={{ __html: html }}
     />

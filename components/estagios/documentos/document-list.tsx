@@ -28,9 +28,12 @@ import {
   Loader2,
   Plus,
   Trash2,
+  Download,
+  FileDown,
 } from "lucide-react";
 import { UploadWizard, type UploadWizardDoc } from "./upload-wizard";
 import { DocumentPreviewDialog } from "./document-preview-dialog";
+import { FullscreenDocumentViewer } from "./fullscreen-document-viewer";
 import { SignDialog } from "./sign-dialog";
 import { VersionHistoryDialog } from "./version-history-dialog";
 import { cn } from "@/lib/utils";
@@ -109,6 +112,7 @@ export function DocumentList({
 
   const [uploadDoc, setUploadDoc] = useState<UploadWizardDoc | null>(null);
   const [previewDoc, setPreviewDoc] = useState<EstagioDocument | null>(null);
+  const [fullscreenDoc, setFullscreenDoc] = useState<EstagioDocument | null>(null);
   const [signDoc, setSignDoc] = useState<EstagioDocument | null>(null);
   const [historyDoc, setHistoryDoc] = useState<EstagioDocument | null>(null);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
@@ -233,38 +237,30 @@ export function DocumentList({
     }
   };
 
-  const createBlankDoc = async () => {
+  const downloadDoc = async (d: EstagioDocument, raw: boolean) => {
+    if (!d.currentFileUrl) return;
+    const url = `/api/estagios/${estagioId}/documentos/${d.id}/download?raw=${raw}`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = raw ? `${d.nome}.pdf` : `${d.nome}-assinado.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const createBlankDoc = () => {
     if (!canManage) return;
-    try {
-      const res = await fetch(`/api/estagios/${estagioId}/documentos`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nome: "Novo documento",
-          descricao: "",
-          categoria: "outros",
-          accessRoles: ["diretor", "professor", "tutor", "aluno"],
-          signatureRoles: [],
-        }),
-      });
-      const data = (await res.json()) as { ok?: boolean; id?: string; error?: string };
-      if (!res.ok || !data.ok || !data.id) {
-        console.error("[v0] create doc failed", data.error);
-        return;
-      }
-      // Abrir wizard para o documento recém-criado.
-      setUploadDoc({
-        id: data.id,
-        nome: "Novo documento",
-        descricao: "",
-        categoria: "outros",
-        signatureBoxes: [],
-        signatureRoles: [],
-        accessRoles: ["diretor", "professor", "tutor", "aluno"],
-      });
-    } catch (err) {
-      console.error("[v0] create doc error", err);
-    }
+    // Abre o wizard sem criar nada na BD. O documento só é persistido quando o wizard for submetido.
+    setUploadDoc({
+      id: `new-${Date.now()}`,
+      nome: "Novo documento",
+      descricao: "",
+      categoria: "outros",
+      signatureBoxes: [],
+      signatureRoles: [],
+      accessRoles: ["diretor", "professor", "tutor", "aluno"],
+      isNew: true,
+    });
   };
 
   const signerRequirementMet = (d: EstagioDocument): boolean => {
@@ -408,7 +404,7 @@ export function DocumentList({
                         {mustSign && (
                           <Button size="sm" onClick={() => setSignDoc(d)}>
                             <PenLine className="mr-1.5 h-3.5 w-3.5" />
-                            Assinar
+                            Assinar documento
                           </Button>
                         )}
                         {hasFile && (
@@ -433,6 +429,19 @@ export function DocumentList({
                               <History className="mr-2 h-4 w-4" />
                               Histórico de versões
                             </DropdownMenuItem>
+                            {hasFile && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => void downloadDoc(d, false)}>
+                                  <Download className="mr-2 h-4 w-4" />
+                                  Descarregar PDF
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => void downloadDoc(d, true)}>
+                                  <FileDown className="mr-2 h-4 w-4" />
+                                  Descarregar PDF (sem assinaturas)
+                                </DropdownMenuItem>
+                              </>
+                            )}
                             {canManage && (
                               <>
                                 <DropdownMenuSeparator />
@@ -498,6 +507,18 @@ export function DocumentList({
           onOpenChange={(o) => !o && setPreviewDoc(null)}
           participants={participants}
           currentUserId={currentUserId}
+          onOpenFullscreen={() => {
+            setPreviewDoc(null);
+            setFullscreenDoc(previewDoc);
+          }}
+        />
+      )}
+      {fullscreenDoc?.currentFileUrl && (
+        <FullscreenDocumentViewer
+          fileUrl={fullscreenDoc.currentFileUrl}
+          fileName={fullscreenDoc.nome}
+          fileType="pdf"
+          onClose={() => setFullscreenDoc(null)}
         />
       )}
       {signDoc && (
