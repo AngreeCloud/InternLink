@@ -35,3 +35,5 @@ next-env.d.ts
 # agents
 SKILL.md
 skills-lock.json
+/.deepseek
+.opencode

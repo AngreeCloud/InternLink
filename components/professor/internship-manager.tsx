@@ -138,6 +138,8 @@ export function InternshipManager() {
   const [removingInviteId, setRemovingInviteId] = useState<string | null>(null);
   const [removingSchoolTutorId, setRemovingSchoolTutorId] = useState<string | null>(null);
   const [confirmRemoveTutor, setConfirmRemoveTutor] = useState<SchoolTutor | null>(null);
+  const [confirmDeleteEstagio, setConfirmDeleteEstagio] = useState<Estagio | null>(null);
+  const [deletingEstagioId, setDeletingEstagioId] = useState<string | null>(null);
 
   const filteredStudents = useMemo(() => {
     const term = studentSearch.trim().toLowerCase();
@@ -555,6 +557,23 @@ export function InternshipManager() {
       console.error("Erro ao convidar tutor:", error);
     } finally {
       setInviting(false);
+    }
+  };
+
+  const handleDeleteEstagio = async (estagio: Estagio) => {
+    setDeletingEstagioId(estagio.id);
+    try {
+      const res = await fetch(`/api/estagios/${estagio.id}`, { method: "DELETE" });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        console.error("Erro ao eliminar estágio:", data.error);
+        return;
+      }
+      setEstagios((prev) => prev.filter((e) => e.id !== estagio.id));
+    } catch (error) {
+      console.error("Erro ao eliminar estágio:", error);
+    } finally {
+      setDeletingEstagioId(null);
     }
   };
 
@@ -1086,7 +1105,40 @@ export function InternshipManager() {
           setEditingScheduleEstagio(estagio);
           setEditDialogOpen(true);
         }}
+        onDelete={(estagio) => setConfirmDeleteEstagio(estagio)}
       />
+
+      <Dialog open={Boolean(confirmDeleteEstagio)} onOpenChange={(open) => !open && setConfirmDeleteEstagio(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Eliminar estágio?</DialogTitle>
+            <DialogDescription>
+              Esta ação elimina permanentemente o estágio de <strong>{confirmDeleteEstagio?.alunoNome || "o aluno"}</strong>
+              {" "}e todos os seus dados associados.
+              <br />
+              <br />
+              <strong>Aviso:</strong> Esta operação é irreversível.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cancelar</Button>
+            </DialogClose>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={!confirmDeleteEstagio || deletingEstagioId === confirmDeleteEstagio.id}
+              onClick={async () => {
+                if (!confirmDeleteEstagio) return;
+                await handleDeleteEstagio(confirmDeleteEstagio);
+                setConfirmDeleteEstagio(null);
+              }}
+            >
+              {confirmDeleteEstagio && deletingEstagioId === confirmDeleteEstagio.id ? "A eliminar..." : "Eliminar estágio"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <EditEstagioDialog
         estagio={editingScheduleEstagio}
