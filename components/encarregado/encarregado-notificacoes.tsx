@@ -63,11 +63,10 @@ export function EncarregadoNotificacoes() {
                   onClick={() => router.push(`/encarregado/chat?conversationId=${n.conversationId}`)}
                 >
                   <MessageSquare className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{n.senderName}</p>
-                    <p className="text-xs text-muted-foreground truncate">{n.lastMessage}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground truncate">{n.title}</p>
+                    <p className="text-xs text-muted-foreground truncate">{n.preview}</p>
                   </div>
-                  <Badge className="ml-auto shrink-0">{n.unreadCount}</Badge>
                 </button>
               ))}
             </div>
