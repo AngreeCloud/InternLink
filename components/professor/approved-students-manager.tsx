@@ -7,6 +7,7 @@ import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,7 +17,29 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, Users } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Search, Users, UserPlus, UserMinus, Copy, Check, ShieldCheck } from "lucide-react";
+
+function calculateAge(dataNascimento: string): number {
+  if (!dataNascimento || dataNascimento === "—") return 99;
+  const birth = new Date(dataNascimento);
+  if (isNaN(birth.getTime())) return 99;
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const monthDiff = now.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birth.getDate())) age--;
+  return age;
+}
 
 const INTERNSHIP_STATUS_ACTIVE = "Estágio ativo";
 const INTERNSHIP_STATUS_COMPLETED = "Estágio concluido";
@@ -42,10 +65,19 @@ type ApprovedStudent = {
   telefone: string;
   dataNascimento: string;
   createdAt: string;
+  encarregadoId: string | null;
+};
+
+type EECredentials = {
+  uid: string;
+  nome: string;
+  email: string;
+  password: string;
 };
 
 type ApiStudent = ApprovedStudent & {
   internshipStatus?: InternshipStatusLabel;
+  encarregadoId?: string | null;
 };
 
 type ApiResponse = {
@@ -65,6 +97,13 @@ export function ApprovedStudentsManager() {
   const [studentInternshipStatus, setStudentInternshipStatus] = useState<Record<string, InternshipStatusLabel>>({});
   const [changingStudentId, setChangingStudentId] = useState<string | null>(null);
   const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
+
+  // EE state
+  const [eeDialogStudentId, setEeDialogStudentId] = useState<string | null>(null);
+  const [eeNome, setEeNome] = useState("");
+  const [eeLoading, setEeLoading] = useState(false);
+  const [eeCredentials, setEeCredentials] = useState<EECredentials | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
   const [manageMode, setManageMode] = useState<"change-course" | "remove-student" | null>(null);
   const [dialogSearchTerm, setDialogSearchTerm] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState("");
@@ -96,7 +135,10 @@ export function ApprovedStudentsManager() {
       const nextStudents = Array.isArray(data.students) ? data.students : [];
       setSchoolName(data.schoolName || "");
       setCourses(Array.isArray(data.courses) ? data.courses : []);
-      setStudents(nextStudents.map(({ internshipStatus: _internshipStatus, ...student }) => student));
+      setStudents(nextStudents.map(({ internshipStatus: _internshipStatus, ...student }) => ({
+        ...student,
+        encarregadoId: student.encarregadoId || null,
+      })));
       setStudentInternshipStatus(
         Object.fromEntries(
           nextStudents.map((student) => [student.id, student.internshipStatus || INTERNSHIP_STATUS_NONE])
@@ -125,6 +167,72 @@ export function ApprovedStudentsManager() {
 
     return () => unsubscribe();
   }, []);
+
+  const openEeDialog = (studentId: string) => {
+    setEeDialogStudentId(studentId);
+    setEeNome("");
+    setEeCredentials(null);
+    setCopiedField(null);
+  };
+
+  const closeEeDialog = () => {
+    setEeDialogStudentId(null);
+    setEeCredentials(null);
+    setEeNome("");
+  };
+
+  const handleCreateEe = async () => {
+    if (!eeDialogStudentId || eeNome.trim().length < 2) return;
+    setEeLoading(true);
+    try {
+      const res = await fetch("/api/encarregado", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId: eeDialogStudentId, nomeEE: eeNome.trim() }),
+      });
+      const data = (await res.json()) as EECredentials & { error?: string };
+      if (!res.ok) {
+        setActionError(data.error || "Erro ao criar conta de E.E.");
+        closeEeDialog();
+        return;
+      }
+      setEeCredentials(data);
+      // Update local student state
+      setStudents((prev) =>
+        prev.map((s) => (s.id === eeDialogStudentId ? { ...s, encarregadoId: data.uid } : s))
+      );
+    } catch {
+      setActionError("Erro ao criar conta de E.E.");
+      closeEeDialog();
+    } finally {
+      setEeLoading(false);
+    }
+  };
+
+  const handleDeleteEe = async (studentId: string) => {
+    try {
+      const res = await fetch(`/api/encarregado?studentId=${studentId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        setActionError(data.error || "Erro ao eliminar conta de E.E.");
+        return;
+      }
+      setStudents((prev) =>
+        prev.map((s) => (s.id === studentId ? { ...s, encarregadoId: null } : s))
+      );
+      setActionSuccess("Conta de E.E. eliminada com sucesso.");
+    } catch {
+      setActionError("Erro ao eliminar conta de E.E.");
+    }
+  };
+
+  const copyToClipboard = async (text: string, field: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch { /* ignore */ }
+  };
 
   const openManageDialog = (mode: "change-course" | "remove-student") => {
     setManageMode(mode);
@@ -460,6 +568,7 @@ export function ApprovedStudentsManager() {
                       <th className="px-4 py-3 text-left">Nascimento</th>
                       <th className="px-4 py-3 text-left">Registo</th>
                       <th className="px-4 py-3 text-left">Estado</th>
+                      <th className="px-4 py-3 text-left">E.E.</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -480,6 +589,39 @@ export function ApprovedStudentsManager() {
                           <td className="px-4 py-3 text-muted-foreground">{student.createdAt}</td>
                           <td className="px-4 py-3">
                             <Badge variant={getStatusBadgeVariant(status)}>{status}</Badge>
+                          </td>
+                          <td className="px-4 py-3">
+                            {student.encarregadoId ? (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive h-7 px-2">
+                                    <UserMinus className="h-3.5 w-3.5 mr-1" />
+                                    Eliminar E.E.
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Eliminar conta de E.E.</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Vai eliminar a conta de Encarregado de Educação associada a <strong>{student.nome}</strong>. Esta ação é irreversível.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => void handleDeleteEe(student.id)}>
+                                      Confirmar
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            ) : calculateAge(student.dataNascimento) < 18 ? (
+                              <Button variant="ghost" size="sm" className="h-7 px-2 text-blue-600 hover:text-blue-700" onClick={() => openEeDialog(student.id)}>
+                                <UserPlus className="h-3.5 w-3.5 mr-1" />
+                                Criar E.E.
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
                           </td>
                         </tr>
                       );
@@ -510,6 +652,72 @@ export function ApprovedStudentsManager() {
           )}
         </CardContent>
       </Card>
+
+      {/* EE Account Creation Dialog */}
+      <Dialog open={!!eeDialogStudentId} onOpenChange={(open) => { if (!open) closeEeDialog(); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Criar conta de Encarregado de Educação</DialogTitle>
+            <DialogDescription>
+              Insira o nome completo do Encarregado de Educação. Serão geradas credenciais de acesso automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+
+          {!eeCredentials ? (
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="ee-nome-approved">Nome do Encarregado de Educação</Label>
+                <Input
+                  id="ee-nome-approved"
+                  placeholder="Ex: Maria da Silva"
+                  value={eeNome}
+                  onChange={(e) => setEeNome(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") void handleCreateEe(); }}
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={closeEeDialog}>Cancelar</Button>
+                <Button onClick={() => void handleCreateEe()} disabled={eeLoading || eeNome.trim().length < 2}>
+                  {eeLoading ? "A criar..." : "Criar conta"}
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <div className="flex items-center gap-2 rounded-md bg-green-50 border border-green-200 p-3">
+                <ShieldCheck className="h-5 w-5 text-green-600 shrink-0" />
+                <p className="text-sm text-green-700 font-medium">
+                  Conta criada para <strong>{eeCredentials.nome}</strong>.
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground">Partilhe estas credenciais com o E.E. A password não poderá ser recuperada após fechar.</p>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Email</Label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 rounded bg-muted px-3 py-2 text-sm font-mono">{eeCredentials.email}</code>
+                    <Button variant="ghost" size="sm" onClick={() => void copyToClipboard(eeCredentials!.email, "email")}>
+                      {copiedField === "email" ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Password</Label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 rounded bg-muted px-3 py-2 text-sm font-mono">{eeCredentials.password}</code>
+                    <Button variant="ghost" size="sm" onClick={() => void copyToClipboard(eeCredentials!.password, "password")}>
+                      {copiedField === "password" ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={closeEeDialog}>Concluído</Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
