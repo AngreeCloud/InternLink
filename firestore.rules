@@ -113,22 +113,8 @@ service cloud.firestore {
         );
     }
 
-    function isTutorInviteReceiverCreate() {
-      return isSignedIn()
-        && (
-          request.resource.data.email == request.auth.token.email
-          || (
-            request.resource.data.email is string
-            && request.auth.token.email is string
-            && request.resource.data.email.lower() == request.auth.token.email.lower()
-          )
-          || (
-            request.resource.data.emailNormalized is string
-            && request.auth.token.email is string
-            && request.resource.data.emailNormalized == request.auth.token.email.lower()
-          )
-        );
-    }
+    // isTutorInviteReceiver (create-time variant) — currently unused, kept for reference.
+    // function isTutorInviteReceiverCreate() { ... }
 
     function isProfessorPendingFor(schoolId, userId) {
       return isSelf(userId)
@@ -430,6 +416,10 @@ service cloud.firestore {
           || estagioData.professorId == request.auth.uid
           || estagioData.tutorId == request.auth.uid
           || (estagioData.schoolId != null && isSchoolAdminFor(estagioData.schoolId))
+          || (currentUserExists()
+            && currentUserData().role == "encarregado"
+            && currentUserData().educandoIds is list
+            && currentUserData().educandoIds.hasAny([estagioData.alunoId]))
         );
     }
 

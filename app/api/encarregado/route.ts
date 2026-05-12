@@ -139,6 +139,17 @@ export async function POST(request: Request) {
       encarregadoId: userRecord.uid,
     });
 
+    // Sync encarregadoId to all estagios for this student (for rules-based access)
+    const estagiosSnap = await db
+      .collection("estagios")
+      .where("alunoId", "==", studentId)
+      .get();
+    const estagioBatch = db.batch();
+    for (const docSnap of estagiosSnap.docs) {
+      estagioBatch.update(docSnap.ref, { encarregadoId: userRecord.uid });
+    }
+    await estagioBatch.commit();
+
     return NextResponse.json({
       uid: userRecord.uid,
       nome: nomeEE.trim(),
@@ -207,6 +218,17 @@ export async function DELETE(request: Request) {
     await db.collection("users").doc(targetStudentId).update({
       encarregadoId: null,
     });
+
+    // Clear encarregadoId from estagios for this student
+    const estagiosSnap = await db
+      .collection("estagios")
+      .where("alunoId", "==", targetStudentId)
+      .get();
+    const estagioBatch = db.batch();
+    for (const docSnap of estagiosSnap.docs) {
+      estagioBatch.update(docSnap.ref, { encarregadoId: null });
+    }
+    await estagioBatch.commit();
 
     return NextResponse.json({ success: true });
   } catch (error) {

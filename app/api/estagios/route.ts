@@ -97,6 +97,7 @@ export async function POST(request: Request) {
       courseId?: string;
       role?: string;
       estado?: string;
+      encarregadoId?: string | null;
     };
 
     if (alunoData.role !== "aluno") {
@@ -162,6 +163,7 @@ export async function POST(request: Request) {
       alunoId,
       alunoNome: alunoData.nome || "",
       alunoEmail: alunoData.email || "",
+      encarregadoId: alunoData.encarregadoId || null,
       alunoCourseId: alunoData.courseId,
       courseId: alunoData.courseId,
       courseNome: courseData.nome || courseData.name || "",

@@ -644,6 +644,40 @@ export function ApprovedStudentsManager() {
                       <p>Telefone: {student.telefone}</p>
                       <p>Nascimento: {student.dataNascimento}</p>
                       <p>Registado em: {student.createdAt}</p>
+                      <p>E.E.: {student.encarregadoId ? "Associado" : "Não associado"}</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border">
+                      {student.encarregadoId ? (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive h-7 px-2">
+                              <UserMinus className="h-3.5 w-3.5 mr-1" />
+                              Eliminar E.E.
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Eliminar conta de E.E.</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Vai eliminar a conta de Encarregado de Educação associada a <strong>{student.nome}</strong>. Esta ação é irreversível.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => void handleDeleteEe(student.id)}>
+                                Confirmar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      ) : calculateAge(student.dataNascimento) < 18 ? (
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-blue-600 hover:text-blue-700" onClick={() => openEeDialog(student.id)}>
+                          <UserPlus className="h-3.5 w-3.5 mr-1" />
+                          Criar E.E.
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground px-2">—</span>
+                      )}
                     </div>
                   </div>
                 </div>
