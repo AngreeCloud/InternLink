@@ -270,7 +270,7 @@ export function ScheduleChangeRequestThread({
                       {labelForRole(c.authorRole)}
                       {c.createdAt && (
                         <span className="ml-2 font-normal">
-                          {formatCreatedAt(c.createdAt as import("firebase/firestore").Timestamp | string | null)}
+                          {String(formatCreatedAt(c.createdAt))}
                         </span>
                       )}
                     </p>
