@@ -9,7 +9,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SchoolProfileCard } from "@/components/school/school-profile-card";
-import { ArrowRight, Briefcase, Loader2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { ArrowRight, Briefcase, Loader2, UserMinus } from "lucide-react";
 
 type DashboardData = {
   loading: boolean;
@@ -30,6 +41,8 @@ type DashboardData = {
   reportPages: number | null;
   reportAvailableAt: string | null;
   reportSubmittedAt: string | null;
+  encarregadoId: string | null;
+  studentId: string;
 };
 
 const DEFAULT_MIN_HOURS = 80;
@@ -54,7 +67,10 @@ export function StudentDashboardOverview() {
     reportPages: null,
     reportAvailableAt: null,
     reportSubmittedAt: null,
+    encarregadoId: null,
+    studentId: "",
   });
+  const [eeDeleteLoading, setEeDeleteLoading] = useState(false);
 
   useEffect(() => {
     let unsubscribe = () => {};
@@ -79,6 +95,7 @@ export function StudentDashboardOverview() {
               escola?: string;
               curso?: string;
               courseId?: string;
+              encarregadoId?: string | null;
             })
           : {};
 
@@ -181,6 +198,8 @@ export function StudentDashboardOverview() {
           reportPages: null,
           reportAvailableAt: null,
           reportSubmittedAt: null,
+          encarregadoId: userData.encarregadoId || null,
+          studentId: user.uid,
         });
       });
     })();
@@ -192,6 +211,24 @@ export function StudentDashboardOverview() {
   }, []);
 
   const reportEligible = useMemo(() => state.completedHours >= state.reportMinHours, [state.completedHours, state.reportMinHours]);
+
+  const handleRequestEeDelete = async () => {
+    if (!state.studentId) return;
+    setEeDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/encarregado?studentId=${state.studentId}`, { method: "DELETE" });
+      if (res.ok) {
+        setState((p) => ({ ...p, encarregadoId: null }));
+      } else {
+        const data = (await res.json()) as { error?: string };
+        alert(data.error || "Erro ao solicitar eliminação da conta de E.E.");
+      }
+    } catch {
+      alert("Erro ao solicitar eliminação da conta de E.E.");
+    } finally {
+      setEeDeleteLoading(false);
+    }
+  };
 
   // Load report metadata (status + page count)
   useEffect(() => {
@@ -348,6 +385,47 @@ export function StudentDashboardOverview() {
               </CardContent>
             </Card>
           </div>
+
+          {state.encarregadoId ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <UserMinus className="h-4 w-4 text-muted-foreground" />
+                  Conta de Encarregado de Educação
+                </CardTitle>
+                <CardDescription>
+                  Existe uma conta de Encarregado de Educação associada ao seu perfil. Se tiver completado 18 anos, pode solicitar a eliminação desta conta.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="text-destructive border-destructive hover:bg-destructive/10 bg-transparent" disabled={eeDeleteLoading}>
+                      {eeDeleteLoading ? (
+                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" />A processar...</>
+                      ) : (
+                        <><UserMinus className="mr-2 h-4 w-4" />Solicitar eliminação da conta E.E.</>
+                      )}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Eliminar conta de Encarregado de Educação</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Esta ação eliminará permanentemente a conta do Encarregado de Educação associado ao seu perfil. O E.E. deixará de ter acesso à plataforma. Tem a certeza?
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleRequestEeDelete}>
+                        Confirmar eliminação
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </CardContent>
+            </Card>
+          ) : null}
 
           {state.hasInternship && state.schoolId ? (
             <SchoolProfileCard

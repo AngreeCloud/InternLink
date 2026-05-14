@@ -136,5 +136,6 @@ export const config = {
     "/professor/:path*",
     "/tutor/:path*",
     "/school-admin/:path*",
+    "/encarregado/:path*",
   ],
 };

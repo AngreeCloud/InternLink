@@ -27,6 +27,7 @@ type StudentData = {
   telefone?: string;
   dataNascimento?: string;
   createdAt?: { toDate?: () => Date };
+  encarregadoId?: string | null;
 };
 
 type StudentStatus = "Estágio ativo" | "Estágio concluído" | "Sem estágio associado";
@@ -148,6 +149,7 @@ export async function GET() {
           createdAt:
             data.createdAt?.toDate?.()?.toLocaleDateString("pt-PT") ||
             "—",
+          encarregadoId: data.encarregadoId || null,
           internshipStatus: statusByStudentId.get(studentSnap.id) || "Sem estágio associado",
         };
       })

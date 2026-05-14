@@ -142,6 +142,8 @@ function toChatRole(role: string | undefined): ChatRole {
       return "admin";
     case "tutor":
       return "tutor";
+    case "encarregado":
+      return "student"; // EE participates in chats with teacher/school scope
     default:
       return "student";
   }
