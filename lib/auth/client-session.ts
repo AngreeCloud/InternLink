@@ -79,7 +79,9 @@ export async function clearServerSession(): Promise<void> {
     credentials: "include",
   });
 
-  await ensureOk(response, "Nao foi possivel terminar a sessao no servidor.");
+  if (!response.ok) {
+    throw new Error("Nao foi possivel terminar a sessao no servidor.");
+  }
 }
 
 type LogoutOptions = {

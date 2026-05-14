@@ -84,7 +84,7 @@ export async function GET(
 
     // Modo raw: devolver diretamente sem assinaturas.
     if (raw) {
-      return new NextResponse(pdfBytes, {
+      return new NextResponse(Buffer.from(pdfBytes), {
         headers: {
           "Content-Type": "application/pdf",
           "Content-Disposition": inline
@@ -315,7 +315,7 @@ export async function GET(
 
     const signedPdfBytes = await pdfDoc.save();
 
-    return new NextResponse(signedPdfBytes, {
+    return new NextResponse(Buffer.from(signedPdfBytes), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${fileName}-assinado.pdf"`,
