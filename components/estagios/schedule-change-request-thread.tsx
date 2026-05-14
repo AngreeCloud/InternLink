@@ -19,6 +19,7 @@ import {
   labelForRequestType,
   labelForStatus,
   variantForStatus,
+  requiresApproval,
   type ScheduleChangeRequest,
   type RequestComment,
 } from "@/lib/estagios/schedule-change-requests";
@@ -90,14 +91,22 @@ export function ScheduleChangeRequestThread({
   const [error, setError] = useState<string | null>(null);
   const [decisionError, setDecisionError] = useState<string | null>(null);
 
+  const isInformOnly = !requiresApproval(request.type);
+
   const isProfessorTurn =
+    !isInformOnly &&
     request.status === "pending_professor" &&
     (currentUserRole === "professor" || currentUserRole === "diretor");
   const isTutorTurn =
+    !isInformOnly &&
     request.status === "pending_tutor" && currentUserRole === "tutor";
 
   const canDecide = isProfessorTurn || isTutorTurn;
-  const isResolved = request.status === "approved" || request.status === "rejected" || request.status === "cancelled";
+  const isResolved =
+    isInformOnly ||
+    request.status === "approved" ||
+    request.status === "rejected" ||
+    request.status === "cancelled";
 
   function decisionEndpoint(): string {
     if (isProfessorTurn) {
@@ -207,6 +216,14 @@ export function ScheduleChangeRequestThread({
             <p className="text-xs text-muted-foreground">Motivo:</p>
             <p className="mt-1 text-sm">{request.reason}</p>
           </div>
+
+          {/* Inform-only notice */}
+          {isInformOnly && (
+            <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+              Justificação informativa — professor e tutor ficaram a saber. Não requer
+              aprovação.
+            </div>
+          )}
 
           {/* Decision actions */}
           {canDecide && !isResolved && (

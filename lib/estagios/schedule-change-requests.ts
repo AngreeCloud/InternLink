@@ -9,14 +9,18 @@ import { listWorkDays, type DiasSemanaMap } from "@/lib/estagios/workdays";
 // Types
 // ---------------------------------------------------------------------------
 
-export type ScheduleChangeRequestType = "absence" | "early_termination";
+export type ScheduleChangeRequestType =
+  | "future_absence"
+  | "past_absence_justification"
+  | "early_termination";
 
 export type ScheduleChangeRequestStatus =
   | "pending_professor"
   | "pending_tutor"
   | "approved"
   | "rejected"
-  | "cancelled";
+  | "cancelled"
+  | "acknowledged";
 
 export type RequestComment = {
   authorId: string;
@@ -204,11 +208,21 @@ export function calcNewEndDate(
 
 export function labelForRequestType(type: ScheduleChangeRequestType): string {
   switch (type) {
-    case "absence":
-      return "Falta justificada";
+    case "future_absence":
+      return "Aviso de falta futura";
+    case "past_absence_justification":
+      return "Justificação de falta";
     case "early_termination":
       return "Término antecipado";
   }
+}
+
+/**
+ * Returns true when the request type requires approval (future absence or early termination).
+ * Past absence justifications are informational only — no approval needed.
+ */
+export function requiresApproval(type: ScheduleChangeRequestType): boolean {
+  return type === "future_absence" || type === "early_termination";
 }
 
 export function labelForStatus(status: ScheduleChangeRequestStatus): string {
@@ -223,6 +237,8 @@ export function labelForStatus(status: ScheduleChangeRequestStatus): string {
       return "Rejeitado";
     case "cancelled":
       return "Cancelado";
+    case "acknowledged":
+      return "Tomado conhecimento";
   }
 }
 
@@ -231,6 +247,7 @@ export function variantForStatus(
 ): "default" | "secondary" | "outline" | "destructive" {
   switch (status) {
     case "approved":
+    case "acknowledged":
       return "default";
     case "rejected":
     case "cancelled":

@@ -4,6 +4,7 @@ import { getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { assertEstagioAccess, toApiErrorResponse, EstagioAccessError } from "@/lib/estagios/estagio-access";
 import {
   validateNoOverlap,
+  requiresApproval,
   type ScheduleChangeRequest,
   type ScheduleChangeRequestType,
 } from "@/lib/estagios/schedule-change-requests";
@@ -70,7 +71,7 @@ export async function POST(
     const body = (await request.json()) as CreateBody;
 
     // Validate type
-    if (!["absence", "early_termination"].includes(body.type)) {
+    if (!["future_absence", "past_absence_justification", "early_termination"].includes(body.type)) {
       throw new EstagioAccessError(400, "invalid_type", "Tipo de pedido inválido.");
     }
 
@@ -122,6 +123,9 @@ export async function POST(
     const professorId = (estagioData.professorId as string | undefined) ?? "";
     const tutorId = (estagioData.tutorId as string | undefined) ?? "";
 
+    // past_absence_justification → acknowledged immediately (inform-only, no approval needed)
+    const initialStatus = requiresApproval(body.type) ? "pending_professor" : "acknowledged";
+
     const newRef = col.doc();
     const payload: Omit<ScheduleChangeRequest, "id"> = {
       estagioId: id,
@@ -132,7 +136,7 @@ export async function POST(
       targetDate: body.targetDate,
       hoursAffected: Number.isFinite(body.hoursAffected) ? body.hoursAffected : 0,
       reason: body.reason.trim(),
-      status: "pending_professor",
+      status: initialStatus,
       comments: [],
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),

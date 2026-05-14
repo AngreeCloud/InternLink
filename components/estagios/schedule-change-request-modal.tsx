@@ -36,7 +36,7 @@ type Props = {
 };
 
 const schema = z.object({
-  type: z.enum(["absence", "early_termination"]),
+  type: z.enum(["future_absence", "past_absence_justification", "early_termination"]),
   reason: z
     .string()
     .min(10, "O motivo deve ter pelo menos 10 caracteres.")
@@ -46,7 +46,8 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 const TYPE_LABELS: Record<ScheduleChangeRequestType, string> = {
-  absence: "Falta justificada",
+  future_absence: "Aviso de falta futura",
+  past_absence_justification: "Justificação de falta",
   early_termination: "Término antecipado do estágio",
 };
 
@@ -60,6 +61,11 @@ export function ScheduleChangeRequestModal({
 }: Props) {
   const [serverError, setServerError] = useState<string | null>(null);
 
+  // A date is "past" if it is strictly before today (local midnight)
+  const isPastDate =
+    !!targetDate &&
+    new Date(targetDate + "T00:00:00") < new Date(new Date().toDateString());
+
   const {
     register,
     handleSubmit,
@@ -70,7 +76,7 @@ export function ScheduleChangeRequestModal({
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      type: "absence",
+      type: isPastDate ? "past_absence_justification" : "future_absence",
       reason: "",
     },
   });
@@ -130,13 +136,21 @@ export function ScheduleChangeRequestModal({
               onValueChange={(v) =>
                 setValue("type", v as ScheduleChangeRequestType, { shouldValidate: true })
               }
+              disabled={isPastDate}
             >
               <SelectTrigger id="request-type">
                 <SelectValue placeholder="Seleciona o tipo" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="absence">{TYPE_LABELS.absence}</SelectItem>
-                {canRequestEarlyTermination && (
+                {!isPastDate && (
+                  <SelectItem value="future_absence">{TYPE_LABELS.future_absence}</SelectItem>
+                )}
+                {isPastDate && (
+                  <SelectItem value="past_absence_justification">
+                    {TYPE_LABELS.past_absence_justification}
+                  </SelectItem>
+                )}
+                {canRequestEarlyTermination && !isPastDate && (
                   <SelectItem value="early_termination">
                     {TYPE_LABELS.early_termination}
                   </SelectItem>
@@ -147,16 +161,22 @@ export function ScheduleChangeRequestModal({
               <p className="text-xs text-destructive">{errors.type.message}</p>
             )}
 
+            {selectedType === "past_absence_justification" && (
+              <p className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+                Como a data já passou, esta justificação é apenas informativa — o professor
+                e o tutor ficam a saber mas não precisam de aprovar.
+              </p>
+            )}
+            {selectedType === "future_absence" && (
+              <p className="text-xs text-muted-foreground">
+                Avisa o professor e o tutor de uma falta prevista. Requer aprovação de
+                ambos. Se aprovada, prolonga a data estimada de fim em um dia útil.
+              </p>
+            )}
             {selectedType === "early_termination" && (
               <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
                 Este pedido solicita o encerramento antecipado do estágio. Requer aprovação
                 do professor orientador e do tutor da empresa.
-              </p>
-            )}
-            {selectedType === "absence" && (
-              <p className="text-xs text-muted-foreground">
-                A ausência justificada prolonga a data estimada de fim do estágio em um dia
-                útil, após aprovação do professor e do tutor.
               </p>
             )}
           </div>

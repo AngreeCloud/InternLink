@@ -4,7 +4,23 @@ import {
   calcNewEndDate,
   getNextStatus,
   validateNoOverlap,
+  requiresApproval,
 } from "@/lib/estagios/schedule-change-requests";
+
+// ---------------------------------------------------------------------------
+// requiresApproval
+// ---------------------------------------------------------------------------
+describe("requiresApproval", () => {
+  it("returns true for future_absence", () => {
+    expect(requiresApproval("future_absence")).toBe(true);
+  });
+  it("returns true for early_termination", () => {
+    expect(requiresApproval("early_termination")).toBe(true);
+  });
+  it("returns false for past_absence_justification", () => {
+    expect(requiresApproval("past_absence_justification")).toBe(false);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // canRequestEarlyTermination
