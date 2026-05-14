@@ -268,13 +268,13 @@ export function ScheduleChangeRequestThread({
                   >
                     <p className="mb-1 text-[10px] font-semibold opacity-70">
                       {labelForRole(c.authorRole)}
-                      {c.createdAt && (
+                      {!!c.createdAt && (
                         <span className="ml-2 font-normal">
-                          {String(formatCreatedAt(c.createdAt))}
+                          {formatCreatedAt(c.createdAt)}
                         </span>
                       )}
                     </p>
-                    <p className="whitespace-pre-wrap">{c.text}</p>
+                    <p className="whitespace-pre-wrap">{String(c.text ?? "")}</p>
                   </div>
                 </div>
               ))}
