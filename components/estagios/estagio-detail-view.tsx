@@ -13,6 +13,7 @@ import {
   CalendarClock,
   NotebookPen,
   Star,
+  CalendarSearch,
   Loader2,
 } from "lucide-react";
 import { OverviewTab } from "./overview-tab";
@@ -20,6 +21,7 @@ import { DocumentList } from "./documentos/document-list";
 import { ComingSoonTab } from "./coming-soon-tab";
 import { HorarioTab } from "./horario-tab";
 import { SumariosTab } from "./sumarios-tab";
+import { CalendarioTab } from "./calendario-tab";
 import {
   getUserRoleInEstagio,
   isDirectorRole,
@@ -259,6 +261,12 @@ export function EstagioDetailView({
             <NotebookPen className="mr-2 h-4 w-4" />
             Sumários
           </TabsTrigger>
+          {effectiveRole === "aluno" && (
+            <TabsTrigger value="calendario">
+              <CalendarSearch className="mr-2 h-4 w-4" />
+              Calendário
+            </TabsTrigger>
+          )}
           {effectiveRole !== "aluno" && (
             <TabsTrigger value="avaliacao">
               <Star className="mr-2 h-4 w-4" />
@@ -298,6 +306,17 @@ export function EstagioDetailView({
             currentUserRole={effectiveRole}
           />
         </TabsContent>
+
+        {effectiveRole === "aluno" && (
+          <TabsContent value="calendario">
+            <CalendarioTab
+              estagioId={estagio.id}
+              estagio={estagio as Record<string, unknown>}
+              currentUserId={currentUserId}
+              currentUserRole={effectiveRole}
+            />
+          </TabsContent>
+        )}
 
         {effectiveRole !== "aluno" && (
           <TabsContent value="avaliacao">
