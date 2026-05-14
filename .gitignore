@@ -27,6 +27,7 @@ firestore-debug.log*
 !.env.example
 .firebaserc
 
+
 # vercel
 .vercel
 
@@ -42,3 +43,5 @@ SKILL.md
 skills-lock.json
 /.deepseek
 .opencode
+opencode.json
+data/
