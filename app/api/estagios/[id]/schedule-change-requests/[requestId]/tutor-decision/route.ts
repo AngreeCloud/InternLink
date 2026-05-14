@@ -98,7 +98,7 @@ export async function PATCH(
     // Side-effects when fully approved
     const estagioUpdates: Record<string, unknown> = {};
     if (transition.nextStatus === "approved") {
-      if (req.type === "absence") {
+      if (req.type === "future_absence") {
         // Extend the estagio end date by one workday
         const currentEnd =
           (estagioData.dataFimEstimada as string | undefined) ??
