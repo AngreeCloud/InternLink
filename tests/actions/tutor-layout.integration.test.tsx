@@ -86,6 +86,7 @@ vi.mock("lucide-react", () => {
   const Icon = () => <svg />;
   return {
     Briefcase: Icon,
+    CalendarClock: Icon,
     GraduationCap: Icon,
     Inbox: Icon,
     LayoutDashboard: Icon,

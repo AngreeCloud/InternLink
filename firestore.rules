@@ -235,6 +235,15 @@ service cloud.firestore {
           .hasOnly(["estado", "reviewedAt", "reviewedBy"]);
     }
 
+    // MULTI-ESTAGIO COLLECTION GROUPS
+    match /{path=**}/schedule_change_requests/{requestId} {
+      allow read: if isSignedIn() && (
+        resource.data.professorId == request.auth.uid ||
+        resource.data.tutorId == request.auth.uid ||
+        resource.data.userId == request.auth.uid
+      );
+    }
+
     // USERS
     match /users/{userId} {
       allow read: if isSelf(userId)
@@ -582,6 +591,12 @@ service cloud.firestore {
         && request.resource.data.participants == resource.data.participants;
 
       allow delete: if false;
+    }
+
+    // NOTIFICAÇÕES (collection group para caixa de entrada do utilizador)
+    match /{path=**}/notifications/{notifId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
     // CONVITES DE TUTOR

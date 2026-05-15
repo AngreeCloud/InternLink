@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockGetAuthRuntime = vi.fn();
 const mockGetDbRuntime = vi.fn();
 const mockOnAuthStateChanged = vi.fn();
+const mockFetch = vi.fn();
 
 const mockCollection = vi.fn();
 const mockDoc = vi.fn();
@@ -103,6 +104,9 @@ async function flush() {
 beforeEach(() => {
   vi.clearAllMocks();
 
+  mockFetch.mockReset();
+  global.fetch = mockFetch as typeof fetch;
+
   mockGetAuthRuntime.mockResolvedValue({ currentUser: { uid: "prof-1" } });
   mockGetDbRuntime.mockResolvedValue({ app: "db" });
 
@@ -128,16 +132,18 @@ beforeEach(() => {
 
 describe("ApprovedStudentsManager integration", () => {
   it("renderiza tabela view-only e mostra os 3 estados de estágio", async () => {
-    mockGetDocs
-      .mockResolvedValueOnce(
-        makeQuerySnapshot([
-          makeQueryDoc("c1", { name: "Turma A" }),
-          makeQueryDoc("c2", { name: "Turma B" }),
-        ])
-      )
-      .mockResolvedValueOnce(
-        makeQuerySnapshot([
-          makeQueryDoc("s1", {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        schoolName: "Escola Teste",
+        courses: [
+          { id: "c1", name: "Turma A" },
+          { id: "c2", name: "Turma B" },
+        ],
+        students: [
+          {
+            id: "s1",
             nome: "Ana Silva",
             email: "ana@escola.pt",
             courseId: "c1",
@@ -145,9 +151,11 @@ describe("ApprovedStudentsManager integration", () => {
             localidade: "Porto",
             telefone: "911111111",
             dataNascimento: "2007-01-01",
-            createdAt: { toDate: () => new Date("2025-01-10T00:00:00Z") },
-          }),
-          makeQueryDoc("s2", {
+            createdAt: "2025-01-10",
+            internshipStatus: "Estágio ativo",
+          },
+          {
+            id: "s2",
             nome: "Bruno Costa",
             email: "bruno@escola.pt",
             courseId: "c2",
@@ -155,9 +163,11 @@ describe("ApprovedStudentsManager integration", () => {
             localidade: "Lisboa",
             telefone: "922222222",
             dataNascimento: "2006-02-01",
-            createdAt: { toDate: () => new Date("2025-01-11T00:00:00Z") },
-          }),
-          makeQueryDoc("s3", {
+            createdAt: "2025-01-11",
+            internshipStatus: "Estágio concluido",
+          },
+          {
+            id: "s3",
             nome: "Carla Pinto",
             email: "carla@escola.pt",
             courseId: "c2",
@@ -165,16 +175,11 @@ describe("ApprovedStudentsManager integration", () => {
             localidade: "Coimbra",
             telefone: "933333333",
             dataNascimento: "2005-03-01",
-            createdAt: { toDate: () => new Date("2025-01-12T00:00:00Z") },
-          }),
-        ])
-      )
-      .mockResolvedValueOnce(
-        makeQuerySnapshot([
-          makeQueryDoc("e1", { alunoId: "s1", estado: "ativo" }),
-          makeQueryDoc("e2", { alunoId: "s2", estado: "concluido" }),
-        ])
-      );
+            createdAt: "2025-01-12",
+          },
+        ],
+      }),
+    });
 
     let renderer!: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -205,16 +210,18 @@ describe("ApprovedStudentsManager integration", () => {
   });
 
   it("troca turma por popup com pesquisa de aluno", async () => {
-    mockGetDocs
-      .mockResolvedValueOnce(
-        makeQuerySnapshot([
-          makeQueryDoc("c1", { name: "Turma A" }),
-          makeQueryDoc("c2", { name: "Turma B" }),
-        ])
-      )
-      .mockResolvedValueOnce(
-        makeQuerySnapshot([
-          makeQueryDoc("s1", {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        schoolName: "Escola Teste",
+        courses: [
+          { id: "c1", name: "Turma A" },
+          { id: "c2", name: "Turma B" },
+        ],
+        students: [
+          {
+            id: "s1",
             nome: "Ana Silva",
             email: "ana@escola.pt",
             courseId: "c1",
@@ -222,11 +229,11 @@ describe("ApprovedStudentsManager integration", () => {
             localidade: "Porto",
             telefone: "911111111",
             dataNascimento: "2007-01-01",
-            createdAt: { toDate: () => new Date("2025-01-10T00:00:00Z") },
-          }),
-        ])
-      )
-      .mockResolvedValueOnce(makeQuerySnapshot([]));
+            createdAt: "2025-01-10",
+          },
+        ],
+      }),
+    });
 
     let renderer!: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -286,16 +293,18 @@ describe("ApprovedStudentsManager integration", () => {
   });
 
   it("remove aluno por popup", async () => {
-    mockGetDocs
-      .mockResolvedValueOnce(
-        makeQuerySnapshot([
-          makeQueryDoc("c1", { name: "Turma A" }),
-          makeQueryDoc("c2", { name: "Turma B" }),
-        ])
-      )
-      .mockResolvedValueOnce(
-        makeQuerySnapshot([
-          makeQueryDoc("s1", {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        schoolName: "Escola Teste",
+        courses: [
+          { id: "c1", name: "Turma A" },
+          { id: "c2", name: "Turma B" },
+        ],
+        students: [
+          {
+            id: "s1",
             nome: "Ana Silva",
             email: "ana@escola.pt",
             courseId: "c1",
@@ -303,11 +312,11 @@ describe("ApprovedStudentsManager integration", () => {
             localidade: "Porto",
             telefone: "911111111",
             dataNascimento: "2007-01-01",
-            createdAt: { toDate: () => new Date("2025-01-10T00:00:00Z") },
-          }),
-        ])
-      )
-      .mockResolvedValueOnce(makeQuerySnapshot([]));
+            createdAt: "2025-01-10",
+          },
+        ],
+      }),
+    });
 
     let renderer!: TestRenderer.ReactTestRenderer;
     await act(async () => {

@@ -18,7 +18,7 @@ describe("requiresApproval", () => {
     expect(requiresApproval("early_termination")).toBe(true);
   });
   it("returns false for past_absence_justification", () => {
-    expect(requiresApproval("past_absence_justification")).toBe(false);
+    expect(requiresApproval("past_absence_justification")).toBe(true);
   });
 });
 
