@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -61,10 +61,10 @@ export function ScheduleChangeRequestModal({
 }: Props) {
   const [serverError, setServerError] = useState<string | null>(null);
 
-  // A date is "past" if it is strictly before today (local midnight)
-  const isPastDate =
+  // A date is "past or today" — treated as justification vs future for schedule change
+  const isPastOrToday =
     !!targetDate &&
-    new Date(targetDate + "T00:00:00") < new Date(new Date().toDateString());
+    new Date(targetDate + "T00:00:00").getTime() <= new Date(new Date().toDateString()).getTime();
 
   const {
     register,
@@ -76,12 +76,21 @@ export function ScheduleChangeRequestModal({
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      type: isPastDate ? "past_absence_justification" : "future_absence",
+      type: isPastOrToday ? "past_absence_justification" : "future_absence",
       reason: "",
     },
   });
 
   const selectedType = watch("type");
+
+  useEffect(() => {
+    if (!open) return;
+    reset({
+      type: isPastOrToday ? "past_absence_justification" : "future_absence",
+      reason: "",
+    });
+    setServerError(null);
+  }, [open, isPastOrToday, reset]);
 
   function handleClose() {
     reset();
@@ -136,21 +145,21 @@ export function ScheduleChangeRequestModal({
               onValueChange={(v) =>
                 setValue("type", v as ScheduleChangeRequestType, { shouldValidate: true })
               }
-              disabled={isPastDate}
+              disabled={isPastOrToday}
             >
               <SelectTrigger id="request-type">
                 <SelectValue placeholder="Seleciona o tipo" />
               </SelectTrigger>
               <SelectContent>
-                {!isPastDate && (
+                {!isPastOrToday && (
                   <SelectItem value="future_absence">{TYPE_LABELS.future_absence}</SelectItem>
                 )}
-                {isPastDate && (
+                {isPastOrToday && (
                   <SelectItem value="past_absence_justification">
                     {TYPE_LABELS.past_absence_justification}
                   </SelectItem>
                 )}
-                {canRequestEarlyTermination && !isPastDate && (
+                {canRequestEarlyTermination && !isPastOrToday && (
                   <SelectItem value="early_termination">
                     {TYPE_LABELS.early_termination}
                   </SelectItem>
@@ -163,8 +172,8 @@ export function ScheduleChangeRequestModal({
 
             {selectedType === "past_absence_justification" && (
               <p className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
-                Como a data já passou, esta justificação é apenas informativa — o professor
-                e o tutor ficam a saber mas não precisam de aprovar.
+                O pedido será enviado ao professor orientador, que decidirá se a falta é
+                justificada ou não. O tutor será notificado da decisão.
               </p>
             )}
             {selectedType === "future_absence" && (

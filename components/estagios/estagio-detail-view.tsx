@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -42,6 +43,9 @@ type Participant = { name: string; role: EstagioRole; email?: string };
 
 type EstagioData = EstagioDoc & Record<string, unknown>;
 
+const TAB_VALUES = ["overview", "documents", "horario", "sumarios", "calendario", "avaliacao"] as const;
+type TabValue = (typeof TAB_VALUES)[number];
+
 export function EstagioDetailView({
   estagioId,
   currentUserId,
@@ -53,6 +57,18 @@ export function EstagioDetailView({
   const [course, setCourse] = useState<CourseDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams?.get("tab");
+  const focusRequestId = searchParams?.get("requestId") ?? "";
+  const initialTab = TAB_VALUES.includes(requestedTab as TabValue)
+    ? (requestedTab as TabValue)
+    : "overview";
+  const [activeTab, setActiveTab] = useState<TabValue>(initialTab);
+
+  useEffect(() => {
+    if (!TAB_VALUES.includes(requestedTab as TabValue)) return;
+    setActiveTab(requestedTab as TabValue);
+  }, [requestedTab]);
 
   // Subscribe to estagio doc
   useEffect(() => {
@@ -243,7 +259,11 @@ export function EstagioDetailView({
         )}
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as TabValue)}
+        className="space-y-4"
+      >
         <TabsList className="flex w-full overflow-x-auto">
           <TabsTrigger value="overview">
             <ClipboardList className="mr-2 h-4 w-4" />
@@ -261,12 +281,10 @@ export function EstagioDetailView({
             <NotebookPen className="mr-2 h-4 w-4" />
             Sumários
           </TabsTrigger>
-          {effectiveRole === "aluno" && (
-            <TabsTrigger value="calendario">
-              <CalendarSearch className="mr-2 h-4 w-4" />
-              Calendário
-            </TabsTrigger>
-          )}
+          <TabsTrigger value="calendario">
+            <CalendarSearch className="mr-2 h-4 w-4" />
+            Calendário
+          </TabsTrigger>
           {effectiveRole !== "aluno" && (
             <TabsTrigger value="avaliacao">
               <Star className="mr-2 h-4 w-4" />
@@ -307,16 +325,15 @@ export function EstagioDetailView({
           />
         </TabsContent>
 
-        {effectiveRole === "aluno" && (
-          <TabsContent value="calendario">
-            <CalendarioTab
-              estagioId={estagio.id}
-              estagio={estagio as Record<string, unknown>}
-              currentUserId={currentUserId}
-              currentUserRole={effectiveRole}
-            />
-          </TabsContent>
-        )}
+        <TabsContent value="calendario">
+          <CalendarioTab
+            estagioId={estagio.id}
+            estagio={estagio as Record<string, unknown>}
+            currentUserId={currentUserId}
+            currentUserRole={effectiveRole}
+            focusRequestId={focusRequestId}
+          />
+        </TabsContent>
 
         {effectiveRole !== "aluno" && (
           <TabsContent value="avaliacao">

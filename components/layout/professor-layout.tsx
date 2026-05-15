@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
@@ -9,8 +9,9 @@ import { doc, getDoc } from "firebase/firestore";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { logoutWithServerSession, waitForLogoutTransition } from "@/lib/auth/client-session";
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
-import { NotificationsInbox } from "@/components/chat/notifications-inbox";
+import { NotificationsInbox, type InboxNotification } from "@/components/chat/notifications-inbox";
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications";
+import { useEstagioNotifications, type EstagioNotification } from "@/lib/notifications/use-estagio-notifications";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { TRANSITION_PORTAL_MS } from "@/components/layout/access-validation-overlay";
@@ -29,6 +30,7 @@ import {
   Home,
   Users,
   UserCheck,
+  ClipboardCheck,
   Briefcase,
   FileText,
   LogOut,
@@ -41,6 +43,7 @@ const navigation = [
   { name: "Dashboard", href: "/professor", icon: Home },
   { name: "Alunos", href: "/professor/alunos", icon: Users },
   { name: "Aprovações de Alunos", href: "/professor/aprovacoes", icon: UserCheck },
+  { name: "Justificacoes", href: "/professor/justificacoes", icon: ClipboardCheck },
   { name: "Estágios", href: "/professor/estagios", icon: Briefcase },
   { name: "Documentos", href: "/professor/documentos", icon: FileText },
   { name: "Chat", href: "/professor/chat", icon: MessageSquare },
@@ -55,6 +58,18 @@ type AuthState = {
   photoURL: string;
   accessFailurePath: string;
 };
+
+function buildNotificationHref(notification: EstagioNotification): string | null {
+  if (notification.type === "schedule_change_request" && notification.estagioId && notification.requestId) {
+    return `/professor/estagios/${notification.estagioId}?tab=calendario&requestId=${notification.requestId}`;
+  }
+
+  if ((notification.type === "doc_signed" || notification.type === "doc_awaits_signature") && notification.estagioId) {
+    return `/professor/estagios/${notification.estagioId}?tab=documents`;
+  }
+
+  return null;
+}
 
 export function ProfessorLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -81,7 +96,7 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
 
   const isChatPage = isActiveRoute("/professor/chat");
 
-  const { notifications, handleOpenConversation } = useChatNotifications({
+  const { notifications: chatNotifications, handleOpenConversation } = useChatNotifications({
     userId: state.userId,
     enabled: !isChatPage,
     isChatOpen: isChatPage,
@@ -89,6 +104,40 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
       router.push(`/professor/chat?conversationId=${conversationId}`);
     },
   });
+
+  const { notifications: systemNotifications } = useEstagioNotifications({
+    userId: state.userId,
+    enabled: Boolean(state.userId),
+  });
+
+  const inboxNotifications = useMemo<InboxNotification[]>(() => {
+    const mappedSystem: InboxNotification[] = systemNotifications.map((item) => {
+      const href = buildNotificationHref(item);
+      let actionLabel = "Abrir";
+      if (item.type === "schedule_change_request") {
+        actionLabel =
+          item.requestType === "past_absence_justification" ? "Ver justificação" : "Ver pedido";
+      } else if (item.type === "doc_signed" || item.type === "doc_awaits_signature") {
+        actionLabel = "Ver documentos";
+      }
+
+      return {
+        id: `system-${item.id}`,
+        conversationId: `system-${item.id}`,
+        title: item.title || "Notificação",
+        avatarUrl: "",
+        preview: item.body || "",
+        lastMessageAt: item.createdAtMs || Date.now(),
+        kind: "system",
+        href: href || undefined,
+        actionLabel,
+      };
+    });
+
+    return [...chatNotifications, ...mappedSystem].sort(
+      (a, b) => b.lastMessageAt - a.lastMessageAt
+    );
+  }, [chatNotifications, systemNotifications]);
 
   useEffect(() => {
     let unsubscribe = () => {};
@@ -257,7 +306,15 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
             <div className="flex flex-1"></div>
             <div className="flex items-center gap-x-4 lg:gap-x-6">
-              <NotificationsInbox notifications={notifications} onOpenChat={handleOpenConversation} />
+              <NotificationsInbox
+                notifications={inboxNotifications}
+                onOpenChat={handleOpenConversation}
+                onOpenNotification={(notification) => {
+                  if (notification.href) {
+                    router.push(notification.href);
+                  }
+                }}
+              />
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

@@ -503,6 +503,11 @@ service cloud.firestore {
           && isEstagioDirector(get(/databases/$(database)/documents/estagios/$(estagioId)).data);
       }
 
+      // Pedidos de alteração de horario e justificacoes.
+      match /schedule_change_requests/{requestId} {
+        allow read: if isEstagioMember(get(/databases/$(database)/documents/estagios/$(estagioId)).data);
+      }
+
       // Presenças, sumários e avaliação (estrutura básica para suporte futuro).
       match /presencas/{dateId} {
         allow read: if isEstagioMember(get(/databases/$(database)/documents/estagios/$(estagioId)).data);

@@ -4,6 +4,7 @@ import { getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { assertEstagioAccess, toApiErrorResponse, EstagioAccessError } from "@/lib/estagios/estagio-access";
 import {
   getNextStatus,
+  skipsTutorStep,
   type ScheduleChangeRequest,
   type DecisionAction,
 } from "@/lib/estagios/schedule-change-requests";
@@ -79,8 +80,14 @@ export async function PATCH(
       throw new EstagioAccessError(409, "invalid_transition", transition.reason);
     }
 
+    // For absence justifications, professor approval goes directly to "approved" (skip tutor)
+    const nextStatus =
+      body.action === "approve" && skipsTutorStep(req.type)
+        ? "approved"
+        : transition.nextStatus;
+
     const updates: Record<string, unknown> = {
-      status: transition.nextStatus,
+      status: nextStatus,
       professorDecision: body.action === "approve" ? "approved" : "rejected",
       professorDecidedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),

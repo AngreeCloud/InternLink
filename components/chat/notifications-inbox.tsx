@@ -7,9 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ChatToastNotification } from "@/lib/chat/use-chat-notifications";
 
+export type InboxNotification = ChatToastNotification & {
+  kind?: "chat" | "system";
+  href?: string;
+  actionLabel?: string;
+};
+
 type NotificationsInboxProps = {
-  notifications: ChatToastNotification[];
+  notifications: InboxNotification[];
   onOpenChat: (conversationId: string, id: string) => void;
+  onOpenNotification?: (notification: InboxNotification) => void;
 };
 
 const INITIAL_RENDER_COUNT = 25;
@@ -33,7 +40,11 @@ function formatTime(ts: number): string {
   });
 }
 
-export function NotificationsInbox({ notifications, onOpenChat }: NotificationsInboxProps) {
+export function NotificationsInbox({
+  notifications,
+  onOpenChat,
+  onOpenNotification,
+}: NotificationsInboxProps) {
   const [open, setOpen] = useState(false);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [visibleCount, setVisibleCount] = useState(INITIAL_RENDER_COUNT);
@@ -82,8 +93,8 @@ export function NotificationsInbox({ notifications, onOpenChat }: NotificationsI
 
   const bubbleLabel = useMemo(() => {
     if (unreadCount <= 0) return "";
-    if (unreadCount === 1) return "1 nova mensagem";
-    return `${unreadCount} novas mensagens`;
+    if (unreadCount === 1) return "1 nova notificação";
+    return `${unreadCount} novas notificações`;
   }, [unreadCount]);
 
   return (
@@ -125,6 +136,10 @@ export function NotificationsInbox({ notifications, onOpenChat }: NotificationsI
                   <p className="text-xs text-muted-foreground">Sem notificações.</p>
                 ) : (
                   visibleNotifications.map((notification) => {
+                    const isSystem = notification.kind === "system" || Boolean(notification.href);
+                    const actionLabel = isSystem
+                      ? notification.actionLabel || "Abrir"
+                      : "Abrir chat";
                     const read = readIds.has(notification.id);
                     return (
                     <div
@@ -154,11 +169,19 @@ export function NotificationsInbox({ notifications, onOpenChat }: NotificationsI
                               size="sm"
                               className="h-7 px-2 text-xs"
                               onClick={() => {
-                                onOpenChat(notification.conversationId, notification.id);
+                                if (isSystem) {
+                                  if (onOpenNotification) {
+                                    onOpenNotification(notification);
+                                  } else if (notification.href) {
+                                    window.location.assign(notification.href);
+                                  }
+                                } else {
+                                  onOpenChat(notification.conversationId, notification.id);
+                                }
                                 setOpen(false);
                               }}
                             >
-                              Abrir chat
+                              {actionLabel}
                             </Button>
                           </div>
                         </div>

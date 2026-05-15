@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import {
   labelForStatus,
   variantForStatus,
   requiresApproval,
+  skipsTutorStep,
   type ScheduleChangeRequest,
   type RequestComment,
 } from "@/lib/estagios/schedule-change-requests";
@@ -31,6 +32,7 @@ type Props = {
   currentUserId: string;
   currentUserRole: EstagioRole;
   onUpdated: () => void;
+  initialOpen?: boolean;
 };
 
 function labelForRole(role: string): string {
@@ -84,29 +86,39 @@ export function ScheduleChangeRequestThread({
   currentUserId,
   currentUserRole,
   onUpdated,
+  initialOpen,
 }: Props) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(Boolean(initialOpen));
+  const autoOpenedRef = useRef(false);
   const [commentText, setCommentText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [decisionError, setDecisionError] = useState<string | null>(null);
 
   const isInformOnly = !requiresApproval(request.type);
+  const isJustificacao = request.type === "past_absence_justification";
+
+  useEffect(() => {
+    if (!initialOpen || autoOpenedRef.current) return;
+    setIsOpen(true);
+    autoOpenedRef.current = true;
+  }, [initialOpen]);
 
   const isProfessorTurn =
-    !isInformOnly &&
     request.status === "pending_professor" &&
     (currentUserRole === "professor" || currentUserRole === "diretor");
   const isTutorTurn =
-    !isInformOnly &&
-    request.status === "pending_tutor" && currentUserRole === "tutor";
+    !skipsTutorStep(request.type) &&
+    request.status === "pending_tutor" &&
+    currentUserRole === "tutor";
 
   const canDecide = isProfessorTurn || isTutorTurn;
   const isResolved =
     isInformOnly ||
     request.status === "approved" ||
     request.status === "rejected" ||
-    request.status === "cancelled";
+    request.status === "cancelled" ||
+    request.status === "acknowledged";
 
   function decisionEndpoint(): string {
     if (isProfessorTurn) {
@@ -189,9 +201,13 @@ export function ScheduleChangeRequestThread({
             </p>
           </div>
         </div>
-        <Badge variant={variantForStatus(request.status)}>
-          {labelForStatus(request.status)}
-        </Badge>
+        {isJustificacao && currentUserRole === "tutor" ? (
+          <Badge variant="outline">Justificação</Badge>
+        ) : (
+          <Badge variant={variantForStatus(request.status)}>
+            {labelForStatus(request.status, request.type)}
+          </Badge>
+        )}
       </button>
 
       {isOpen && (
@@ -217,11 +233,38 @@ export function ScheduleChangeRequestThread({
             <p className="mt-1 text-sm">{request.reason}</p>
           </div>
 
-          {/* Inform-only notice */}
+          {/* Inform-only notice (legacy) */}
           {isInformOnly && (
             <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
               Justificação informativa — professor e tutor ficaram a saber. Não requer
               aprovação.
+            </div>
+          )}
+
+          {/* Tutor read-only notice for justifications */}
+          {isJustificacao && currentUserRole === "tutor" && (
+            <div className="rounded-md border border-muted bg-muted/30 px-4 py-2.5 text-xs text-muted-foreground">
+              Como tutor, tens acesso de consulta a esta justificação. A decisão cabe ao
+              professor orientador.
+            </div>
+          )}
+
+          {/* Justification notice (hidden from tutor) */}
+          {isJustificacao && currentUserRole !== "tutor" && !isInformOnly && !isResolved && (
+            <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+              O professor orientador deve decidir se a falta é justificada ou não. O tutor
+              será notificado da decisão.
+            </div>
+          )}
+
+          {/* Justification resolved notice (hidden from tutor) */}
+          {isJustificacao && currentUserRole !== "tutor" && isResolved && (
+            <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+              O professor decidiu que esta falta é{" "}
+              <strong>
+                {request.status === "approved" ? "justificada" : "não justificada"}
+              </strong>
+              . O tutor foi notificado.
             </div>
           )}
 
@@ -246,7 +289,7 @@ export function ScheduleChangeRequestThread({
                   ) : (
                     <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
                   )}
-                  Aprovar
+                  {isJustificacao ? "Falta justificada" : "Aprovar"}
                 </Button>
                 <Button
                   size="sm"
@@ -259,7 +302,7 @@ export function ScheduleChangeRequestThread({
                   ) : (
                     <XCircle className="mr-1.5 h-3.5 w-3.5" />
                   )}
-                  Rejeitar
+                  {isJustificacao ? "Falta não justificada" : "Rejeitar"}
                 </Button>
               </div>
             </div>

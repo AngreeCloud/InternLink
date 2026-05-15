@@ -123,7 +123,7 @@ export async function POST(
     const professorId = (estagioData.professorId as string | undefined) ?? "";
     const tutorId = (estagioData.tutorId as string | undefined) ?? "";
 
-    // past_absence_justification → acknowledged immediately (inform-only, no approval needed)
+    // Justificação de falta → professor deve analisar
     const initialStatus = requiresApproval(body.type) ? "pending_professor" : "acknowledged";
 
     const newRef = col.doc();
@@ -143,6 +143,23 @@ export async function POST(
     };
 
     await newRef.set(payload);
+
+    if (body.type === "past_absence_justification" && professorId && professorId !== session.uid) {
+      const notifRef = db.collection("estagios").doc(id).collection("notifications").doc();
+      const studentLabel = session.displayName || "O aluno";
+      await notifRef.set({
+        userId: professorId,
+        type: "schedule_change_request",
+        requestId: newRef.id,
+        requestType: body.type,
+        targetDate: body.targetDate,
+        estagioId: id,
+        title: "Nova justificação de falta",
+        body: `${studentLabel} submeteu uma justificação de falta para ${body.targetDate}.`,
+        readAt: null,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
 
     return NextResponse.json({ ok: true, id: newRef.id }, { status: 201 });
   } catch (error) {

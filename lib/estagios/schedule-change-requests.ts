@@ -218,23 +218,31 @@ export function labelForRequestType(type: ScheduleChangeRequestType): string {
 }
 
 /**
- * Returns true when the request type requires approval (future absence or early termination).
- * Past absence justifications are informational only — no approval needed.
+ * Returns true when the request type requires approval.
+ * All request types now require at least professor approval.
  */
 export function requiresApproval(type: ScheduleChangeRequestType): boolean {
-  return type === "future_absence" || type === "early_termination";
+  return true;
 }
 
-export function labelForStatus(status: ScheduleChangeRequestStatus): string {
+/**
+ * Returns true when the request type skips the tutor step (professor decides directly).
+ */
+export function skipsTutorStep(type: ScheduleChangeRequestType): boolean {
+  return type === "past_absence_justification";
+}
+
+export function labelForStatus(status: ScheduleChangeRequestStatus, requestType?: ScheduleChangeRequestType): string {
+  const isJustificacao = requestType === "past_absence_justification";
   switch (status) {
     case "pending_professor":
-      return "Aguarda professor";
+      return isJustificacao ? "Aguarda professor" : "Aguarda professor";
     case "pending_tutor":
       return "Aguarda tutor";
     case "approved":
-      return "Aprovado";
+      return isJustificacao ? "Falta justificada" : "Aprovado";
     case "rejected":
-      return "Rejeitado";
+      return isJustificacao ? "Falta não justificada" : "Rejeitado";
     case "cancelled":
       return "Cancelado";
     case "acknowledged":
