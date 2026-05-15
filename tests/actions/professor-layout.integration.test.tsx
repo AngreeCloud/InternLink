@@ -12,6 +12,7 @@ const mockGetDoc = vi.fn();
 const mockDoc = vi.fn();
 const mockChatBadge = vi.fn();
 const mockUseChatNotifications = vi.fn();
+const mockUseEstagioNotifications = vi.fn();
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
@@ -59,6 +60,15 @@ vi.mock("@/lib/chat/use-chat-notifications", () => ({
   },
 }));
 
+vi.mock("@/lib/notifications/use-estagio-notifications", () => ({
+  useEstagioNotifications: (args: unknown) => {
+    mockUseEstagioNotifications(args);
+    return {
+      notifications: [],
+    };
+  },
+}));
+
 vi.mock("@/components/chat/notifications-inbox", () => ({
   NotificationsInbox: () => <div data-testid="notifications-inbox" />,
 }));
@@ -94,6 +104,7 @@ vi.mock("lucide-react", () => {
     Home: Icon,
     Users: Icon,
     UserCheck: Icon,
+    ClipboardCheck: Icon,
     Briefcase: Icon,
     FileText: Icon,
     LogOut: Icon,

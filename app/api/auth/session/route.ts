@@ -147,7 +147,7 @@ export async function POST(request: Request) {
       message: error instanceof Error ? error.message : String(error),
     });
     return NextResponse.json(
-      { error: "Nao foi possivel criar sessao." },
+      { error: "Não foi possível criar sessão." },
       { status: 401 }
     );
   }
@@ -183,7 +183,7 @@ export async function DELETE() {
   } catch (error) {
     console.error("Erro ao destruir session cookie:", error);
     return NextResponse.json(
-      { error: "Nao foi possivel terminar sessao." },
+      { error: "Não foi possível terminar sessão." },
       { status: 500 }
     );
   }

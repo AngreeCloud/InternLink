@@ -4,15 +4,15 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 
 // Polyfill for Map.prototype.getOrInsertComputed (TC39 proposal)
 // Required for pdfjs-dist 5.6.x compatibility
-if (!Map.prototype.getOrInsertComputed) {
-  Map.prototype.getOrInsertComputed = function (this: Map<any, any>, key: any, computeFn: () => any) {
+if (!(Map.prototype as any).getOrInsertComputed) {
+  (Map.prototype as any).getOrInsertComputed = function (this: Map<any, any>, key: any, computeFn: () => any) {
     if (this.has(key)) {
       return this.get(key);
     }
     const value = computeFn();
     this.set(key, value);
     return value;
-  } as any;
+  };
 }
 
 export type PdfPageInfo = {

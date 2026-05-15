@@ -431,7 +431,7 @@ export function StudentDashboardOverview() {
             <SchoolProfileCard
               schoolId={state.schoolId}
               title="Informação da Escola"
-              description="Disponível porque já existe estágio criado."
+              description="Estágio ativo"
             />
           ) : null}
         </>

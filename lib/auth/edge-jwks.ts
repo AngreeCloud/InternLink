@@ -2,7 +2,7 @@ import {
   createLocalJWKSet,
   exportJWK,
   importX509,
-  type JSONWebKey,
+  type JWK,
   type JWTVerifyGetKey,
   type JSONWebKeySet,
 } from "jose";
@@ -62,7 +62,7 @@ function isX509CertMap(payload: unknown): payload is X509CertMap {
 }
 
 async function convertX509MapToJwks(certMap: X509CertMap): Promise<JSONWebKeySet> {
-  const keys: JSONWebKey[] = [];
+  const keys: JWK[] = [];
 
   for (const [kid, cert] of Object.entries(certMap)) {
     const keyLike = await importX509(cert, "RS256");

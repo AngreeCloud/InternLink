@@ -9,10 +9,11 @@
  *    pnpm test:rules
  */
 
+import assert from "node:assert";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { collectionGroup, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore";
 
 let testEnv;
 
@@ -214,6 +215,48 @@ test.beforeEach(async () => {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
+
+    await setDoc(doc(db, "estagios", "estagioA"), {
+      alunoId: "studentA",
+      professorId: "profA",
+      tutorId: "tutorA",
+      schoolId: "schoolA",
+      titulo: "Estágio A",
+      alunoCurso: "Informática - Sistemas A",
+    });
+
+    await setDoc(
+      doc(db, "estagios", "estagioA", "schedule_change_requests", "reqJustif1"),
+      {
+        estagioId: "estagioA",
+        studentId: "studentA",
+        professorId: "profA",
+        tutorId: "tutorA",
+        type: "past_absence_justification",
+        targetDate: "2026-05-10",
+        reason: "Falta por motivo de saúde, conforme atestado médico.",
+        status: "pending_professor",
+        comments: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }
+    );
+
+    await setDoc(
+      doc(db, "estagios", "estagioA", "notifications", "notif1"),
+      {
+        userId: "profA",
+        type: "schedule_change_request",
+        requestId: "reqJustif1",
+        requestType: "past_absence_justification",
+        targetDate: "2026-05-10",
+        estagioId: "estagioA",
+        title: "Nova justificação de falta",
+        body: "Aluno submeteu uma justificação de falta para 2026-05-10.",
+        readAt: null,
+        createdAt: Date.now(),
+      }
+    );
   });
 });
 
@@ -433,5 +476,69 @@ test("admin escolar não consegue alterar campos sensíveis em pendingRegistrati
       reviewedBy: "adminSchoolA",
       schoolId: "schoolB",
     })
+  );
+});
+
+// ---------------------------------------------------------------------------
+// COLLECTION GROUP: schedule_change_requests
+// ---------------------------------------------------------------------------
+test("professor do estágio consegue ler schedule_change_requests via collection group", async () => {
+  const dbProfA = testEnv.authenticatedContext("profA").firestore();
+
+  const snap = await assertSucceeds(
+    getDocs(
+      query(
+        collectionGroup(dbProfA, "schedule_change_requests"),
+        where("professorId", "==", "profA")
+      )
+    )
+  );
+
+  assert.strictEqual(snap.docs.length, 1);
+  assert.strictEqual(snap.docs[0].data().type, "past_absence_justification");
+});
+
+test("professor de outro estágio não consegue ler schedule_change_requests alheio via collection group", async () => {
+  const dbProfB = testEnv.authenticatedContext("profB").firestore();
+
+  await assertFails(
+    getDocs(
+      query(
+        collectionGroup(dbProfB, "schedule_change_requests"),
+        where("professorId", "==", "profA")
+      )
+    )
+  );
+});
+
+// ---------------------------------------------------------------------------
+// COLLECTION GROUP: notifications
+// ---------------------------------------------------------------------------
+test("destinatário consegue ler notificações via collection group", async () => {
+  const dbProfA = testEnv.authenticatedContext("profA").firestore();
+
+  const snap = await assertSucceeds(
+    getDocs(
+      query(
+        collectionGroup(dbProfA, "notifications"),
+        where("userId", "==", "profA")
+      )
+    )
+  );
+
+  assert.strictEqual(snap.docs.length, 1);
+  assert.strictEqual(snap.docs[0].data().type, "schedule_change_request");
+});
+
+test("outro utilizador não consegue ler notificações alheias via collection group", async () => {
+  const dbProfB = testEnv.authenticatedContext("profB").firestore();
+
+  await assertFails(
+    getDocs(
+      query(
+        collectionGroup(dbProfB, "notifications"),
+        where("userId", "==", "profA")
+      )
+    )
   );
 });
