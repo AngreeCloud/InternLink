@@ -9,6 +9,11 @@ import {
   type DecisionAction,
 } from "@/lib/estagios/schedule-change-requests";
 import { normalizeDiasSemana } from "@/lib/estagios/workdays";
+import {
+  buildNotification,
+  shouldNotifyProfessorOnTutorDecision,
+  shouldNotifyStudent,
+} from "@/lib/notifications/create-notification";
 
 export const runtime = "nodejs";
 
@@ -126,6 +131,28 @@ export async function PATCH(
     if (Object.keys(estagioUpdates).length > 0) {
       batch.update(estagioRef, estagioUpdates);
     }
+
+    // Notifications
+    const notifsCol = db.collection("estagios").doc(id).collection("notifications");
+    const isApproved = transition.nextStatus === "approved";
+    const actorName = session.displayName || "O tutor";
+
+    if (shouldNotifyProfessorOnTutorDecision(req.type, transition.nextStatus) && req.professorId) {
+      const n = buildNotification(req.professorId, requestId, req.type, req.targetDate, id, {
+        kind: isApproved ? "tutor_approved" : "tutor_rejected",
+        actorName,
+      });
+      batch.set(notifsCol.doc(), { ...n, createdAt: FieldValue.serverTimestamp() });
+    }
+
+    if (shouldNotifyStudent(req.type, transition.nextStatus)) {
+      const n = buildNotification(req.studentId, requestId, req.type, req.targetDate, id, {
+        kind: isApproved ? "tutor_approved" : "tutor_rejected",
+        actorName,
+      });
+      batch.set(notifsCol.doc(), { ...n, createdAt: FieldValue.serverTimestamp() });
+    }
+
     await batch.commit();
 
     return NextResponse.json({ ok: true, nextStatus: transition.nextStatus });

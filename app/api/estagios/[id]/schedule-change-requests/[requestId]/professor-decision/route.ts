@@ -8,6 +8,12 @@ import {
   type ScheduleChangeRequest,
   type DecisionAction,
 } from "@/lib/estagios/schedule-change-requests";
+import {
+  buildNotification,
+  shouldNotifyTutorOnProfessorDecision,
+  shouldNotifyProfessorOnTutorDecision,
+  shouldNotifyStudent,
+} from "@/lib/notifications/create-notification";
 
 export const runtime = "nodejs";
 
@@ -53,7 +59,6 @@ export async function PATCH(
     const req = snap.data() as ScheduleChangeRequest;
 
     if (body.action === "comment") {
-      // Comment only — no status change
       if (!body.comment || body.comment.trim().length < 1) {
         throw new EstagioAccessError(400, "empty_comment", "O comentário não pode ser vazio.");
       }
@@ -74,13 +79,11 @@ export async function PATCH(
       return NextResponse.json({ ok: true });
     }
 
-    // Decision (approve or reject)
     const transition = getNextStatus(req.status, session.role as "professor" | "diretor", body.action);
     if (!transition.ok) {
       throw new EstagioAccessError(409, "invalid_transition", transition.reason);
     }
 
-    // For absence justifications, professor approval goes directly to "approved" (skip tutor)
     const nextStatus =
       body.action === "approve" && skipsTutorStep(req.type)
         ? "approved"
@@ -104,26 +107,29 @@ export async function PATCH(
 
     await reqRef.update(updates);
 
-    // Notify tutor when request goes to pending_tutor
-    if (nextStatus === "pending_tutor" && req.tutorId && req.studentId !== req.tutorId) {
-      const actionLabel = body.action === "approve" ? "aprovou" : "rejeitou";
-      await db
-        .collection("estagios")
-        .doc(id)
-        .collection("notifications")
-        .add({
-          userId: req.tutorId,
-          type: "schedule_change_request",
-          requestId,
-          requestType: req.type,
-          targetDate: req.targetDate,
-          estagioId: id,
-      title: "Pedido aguarda decisão do tutor",
-          body: `O professor ${actionLabel} o pedido de alteração de horário para ${req.targetDate}. Aguarda a sua decisão.`,
-          readAt: null,
-          createdAt: FieldValue.serverTimestamp(),
-        });
+    const actorName = session.displayName || "O professor";
+    const notifsCol = db.collection("estagios").doc(id).collection("notifications");
+    const batch = db.batch();
+
+    // Notify tutor when request becomes pending their decision
+    if (shouldNotifyTutorOnProfessorDecision(req.type, nextStatus) && req.tutorId) {
+      const n = buildNotification(req.tutorId, requestId, req.type, req.targetDate, id, {
+        kind: body.action === "approve" ? "professor_approved" : "professor_rejected",
+        actorName,
+      });
+      batch.set(notifsCol.doc(), { ...n, createdAt: FieldValue.serverTimestamp() });
     }
+
+    // Notify student when request is resolved (approved/rejected)
+    if (shouldNotifyStudent(req.type, nextStatus)) {
+      const n = buildNotification(req.studentId, requestId, req.type, req.targetDate, id, {
+        kind: "justification_result",
+        result: nextStatus === "approved" ? "justificada" : "não justificada",
+      });
+      batch.set(notifsCol.doc(), { ...n, createdAt: FieldValue.serverTimestamp() });
+    }
+
+    await batch.commit();
 
     return NextResponse.json({ ok: true, nextStatus: transition.nextStatus });
   } catch (error) {

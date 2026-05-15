@@ -64,7 +64,7 @@ function buildNotificationHref(notification: EstagioNotification): string | null
     if (notification.requestType === "past_absence_justification") {
       return "/professor/justificacoes";
     }
-    return `/professor/estagios/${notification.estagioId}?tab=calendario&requestId=${notification.requestId}`;
+    return "/professor/justificacoes?tab=mudancas";
   }
 
   if ((notification.type === "doc_signed" || notification.type === "doc_awaits_signature") && notification.estagioId) {

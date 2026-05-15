@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
@@ -31,6 +32,9 @@ function toMillis(raw: unknown): number {
 }
 
 export function ProfessorRequestsCenter() {
+  const searchParams = useSearchParams();
+  const tabFromUrl = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState(tabFromUrl === "mudancas" ? "mudancas" : "justificacoes");
   const [userId, setUserId] = useState("");
   const [loadingUser, setLoadingUser] = useState(true);
   const [loadingRequests, setLoadingRequests] = useState(true);
@@ -168,7 +172,7 @@ export function ProfessorRequestsCenter() {
         </p>
       </div>
 
-      <Tabs defaultValue="justificacoes" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="flex w-full flex-wrap gap-2">
           <TabsTrigger value="justificacoes">Justificação de faltas</TabsTrigger>
           <TabsTrigger value="mudancas">Solicitações de mudança de horário</TabsTrigger>

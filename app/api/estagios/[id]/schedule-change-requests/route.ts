@@ -8,6 +8,11 @@ import {
   type ScheduleChangeRequest,
   type ScheduleChangeRequestType,
 } from "@/lib/estagios/schedule-change-requests";
+import {
+  buildNotification,
+  shouldNotifyProfessorOnCreate,
+  shouldNotifyTutorOnCreate,
+} from "@/lib/notifications/create-notification";
 
 export const runtime = "nodejs";
 
@@ -144,22 +149,29 @@ export async function POST(
 
     await newRef.set(payload);
 
-    if (body.type === "past_absence_justification" && professorId && professorId !== session.uid) {
-      const notifRef = db.collection("estagios").doc(id).collection("notifications").doc();
-      const studentLabel = session.displayName || "O aluno";
-      await notifRef.set({
-        userId: professorId,
-        type: "schedule_change_request",
-        requestId: newRef.id,
-        requestType: body.type,
-        targetDate: body.targetDate,
-        estagioId: id,
-        title: "Nova justificação de falta",
-        body: `${studentLabel} submeteu uma justificação de falta para ${body.targetDate}.`,
-        readAt: null,
-        createdAt: FieldValue.serverTimestamp(),
+    const studentLabel = session.displayName || "O aluno";
+    const notifsCol = db.collection("estagios").doc(id).collection("notifications");
+    const batch = db.batch();
+
+    // Notify professor for all request types
+    if (shouldNotifyProfessorOnCreate(body.type) && professorId && professorId !== session.uid) {
+      const n = buildNotification(professorId, newRef.id, body.type, body.targetDate, id, {
+        kind: "request_created",
+        studentName: studentLabel,
       });
+      batch.set(notifsCol.doc(), { ...n, createdAt: FieldValue.serverTimestamp() });
     }
+
+    // Notify tutor for justification requests
+    if (shouldNotifyTutorOnCreate(body.type) && tutorId && tutorId !== session.uid) {
+      const n = buildNotification(tutorId, newRef.id, body.type, body.targetDate, id, {
+        kind: "request_created",
+        studentName: studentLabel,
+      });
+      batch.set(notifsCol.doc(), { ...n, createdAt: FieldValue.serverTimestamp() });
+    }
+
+    await batch.commit();
 
     return NextResponse.json({ ok: true, id: newRef.id }, { status: 201 });
   } catch (error) {
