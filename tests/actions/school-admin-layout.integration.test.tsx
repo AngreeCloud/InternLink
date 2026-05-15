@@ -95,6 +95,7 @@ vi.mock("lucide-react", () => {
     MessageSquare: Icon,
     History: Icon,
     Folder: Icon,
+    Users: Icon,
     LogOut: Icon,
     Menu: Icon,
   };

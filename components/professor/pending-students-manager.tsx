@@ -84,6 +84,14 @@ export function PendingStudentsManager() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const eeNomeRef = useRef<HTMLInputElement>(null);
 
+  // EE search state
+  const [eeSearchOpen, setEeSearchOpen] = useState(false);
+  const [eeSearchStudentId, setEeSearchStudentId] = useState<string | null>(null);
+  const [eeSearchTerm, setEeSearchTerm] = useState("");
+  const [eeSearchResults, setEeSearchResults] = useState<{ uid: string; nome: string; email: string; educandosCount: number }[]>([]);
+  const [eeSearchLoading, setEeSearchLoading] = useState(false);
+  const [eeSearchError, setEeSearchError] = useState<string | null>(null);
+
   const loadStudents = async () => {
     setLoading(true);
     try {
@@ -319,6 +327,53 @@ export function PendingStudentsManager() {
     }
   };
 
+  const openEeSearch = (studentId: string) => {
+    setEeSearchStudentId(studentId);
+    setEeSearchTerm("");
+    setEeSearchResults([]);
+    setEeSearchError(null);
+    setEeSearchOpen(true);
+    fetchEeSearchP(""); // P for Pending
+  };
+
+  const closeEeSearch = () => {
+    setEeSearchOpen(false);
+    setEeSearchStudentId(null);
+  };
+
+  const fetchEeSearchP = async (q: string) => {
+    setEeSearchLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (q.trim()) params.set("q", q.trim());
+      const res = await fetch(`/api/encarregado/search?${params.toString()}`);
+      const json = (await res.json()) as { ok: boolean; ees: { uid: string; nome: string; email: string; educandosCount: number }[] };
+      if (json.ok) setEeSearchResults(json.ees);
+    } catch { /* ignore */ } finally {
+      setEeSearchLoading(false);
+    }
+  };
+
+  const handleAssociateEeP = async (eeUid: string) => {
+    if (!eeSearchStudentId) return;
+    setEeSearchError(null);
+    try {
+      const res = await fetch("/api/encarregado/associate", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId: eeSearchStudentId, eeUid }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setEeSearchError(data.error || "Erro ao associar.");
+        return;
+      }
+      closeEeSearch();
+    } catch {
+      setEeSearchError("Erro de rede. Tenta novamente.");
+    }
+  };
+
   const filteredStudents = students.filter(
     (s) =>
       s.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -390,16 +445,28 @@ export function PendingStudentsManager() {
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
                       {canCreateEE && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-blue-600 border-blue-400 hover:bg-blue-50 bg-transparent"
-                          onClick={() => openEeDialog(student.id)}
-                          disabled={actionLoading === student.id}
-                        >
-                          <UserPlus className="mr-2 h-4 w-4" />
-                          Criar conta E.E.
-                        </Button>
+                        <div className="flex flex-col gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-blue-600 border-blue-400 hover:bg-blue-50 bg-transparent"
+                            onClick={() => openEeDialog(student.id)}
+                            disabled={actionLoading === student.id}
+                          >
+                            <UserPlus className="mr-2 h-4 w-4" />
+                            Criar conta E.E.
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-muted-foreground border-muted hover:bg-muted/30 bg-transparent"
+                            onClick={() => openEeSearch(student.id)}
+                            disabled={actionLoading === student.id}
+                          >
+                            <Search className="mr-2 h-4 w-4" />
+                            Associar E.E. existente
+                          </Button>
+                        </div>
                       )}
                       <Button
                         variant="outline"
@@ -541,6 +608,67 @@ export function PendingStudentsManager() {
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* EE Associate Search Dialog */}
+      <Dialog open={eeSearchOpen} onOpenChange={(open) => { if (!open) closeEeSearch(); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Associar Encarregado de Educação existente</DialogTitle>
+            <DialogDescription>
+              Pesquise um Encarregado de Educação já registado na escola para associar a este aluno.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Pesquisar por nome ou email..."
+                value={eeSearchTerm}
+                onChange={(e) => {
+                  setEeSearchTerm(e.target.value);
+                  fetchEeSearchP(e.target.value);
+                }}
+                className="pl-9"
+              />
+            </div>
+            {eeSearchError ? (
+              <p className="text-sm text-destructive">{eeSearchError}</p>
+            ) : null}
+            {eeSearchLoading ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">A pesquisar...</p>
+            ) : eeSearchResults.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                {eeSearchTerm ? "Nenhum EE encontrado." : "A pesquisar todos os EE da escola..."}
+              </p>
+            ) : (
+              <div className="max-h-60 overflow-y-auto space-y-2">
+                {eeSearchResults.map((ee) => (
+                  <div
+                    key={ee.uid}
+                    className="flex items-center justify-between rounded-md border border-border p-3 hover:bg-muted/40 transition-colors"
+                  >
+                    <div className="space-y-0.5 min-w-0">
+                      <p className="text-sm font-medium truncate">{ee.nome}</p>
+                      <p className="text-xs text-muted-foreground truncate">{ee.email}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {ee.educandosCount} educando{ee.educandosCount !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0"
+                      onClick={() => handleAssociateEeP(ee.uid)}
+                    >
+                      Associar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

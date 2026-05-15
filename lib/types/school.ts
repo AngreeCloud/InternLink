@@ -26,6 +26,7 @@ export type School = {
   requiresPhone?: boolean;
   requirePhone?: boolean;
   requirePhoneVerification?: boolean;
+  eePageAccess?: "admin_only" | "professors"; // quem pode aceder à página de gestão de EE
   createdAt?: Date | { toDate: () => Date };
   updatedAt?: Date | { toDate: () => Date };
 };

@@ -104,6 +104,14 @@ export function ApprovedStudentsManager() {
   const [eeLoading, setEeLoading] = useState(false);
   const [eeCredentials, setEeCredentials] = useState<EECredentials | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  // EE search state
+  const [eeSearchOpen, setEeSearchOpen] = useState(false);
+  const [eeSearchStudentId, setEeSearchStudentId] = useState<string | null>(null);
+  const [eeSearchTerm, setEeSearchTerm] = useState("");
+  const [eeSearchResults, setEeSearchResults] = useState<{ uid: string; nome: string; email: string; educandosCount: number }[]>([]);
+  const [eeSearchLoading, setEeSearchLoading] = useState(false);
+  const [eeSearchError, setEeSearchError] = useState<string | null>(null);
   const [manageMode, setManageMode] = useState<"change-course" | "remove-student" | null>(null);
   const [dialogSearchTerm, setDialogSearchTerm] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState("");
@@ -232,6 +240,58 @@ export function ApprovedStudentsManager() {
       setCopiedField(field);
       setTimeout(() => setCopiedField(null), 2000);
     } catch { /* ignore */ }
+  };
+
+  const openEeSearch = (studentId: string) => {
+    setEeSearchStudentId(studentId);
+    setEeSearchTerm("");
+    setEeSearchResults([]);
+    setEeSearchError(null);
+    setEeSearchOpen(true);
+    fetchEeSearch("");
+  };
+
+  const closeEeSearch = () => {
+    setEeSearchOpen(false);
+    setEeSearchStudentId(null);
+  };
+
+  const fetchEeSearch = async (q: string) => {
+    setEeSearchLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (q.trim()) params.set("q", q.trim());
+      const res = await fetch(`/api/encarregado/search?${params.toString()}`);
+      const json = (await res.json()) as { ok: boolean; ees: { uid: string; nome: string; email: string; educandosCount: number }[] };
+      if (json.ok) {
+        setEeSearchResults(json.ees);
+      }
+    } catch { /* ignore */ } finally {
+      setEeSearchLoading(false);
+    }
+  };
+
+  const handleAssociateEe = async (eeUid: string) => {
+    if (!eeSearchStudentId) return;
+    setEeSearchError(null);
+    try {
+      const res = await fetch("/api/encarregado/associate", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId: eeSearchStudentId, eeUid }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setEeSearchError(data.error || "Erro ao associar.");
+        return;
+      }
+      setStudents((prev) =>
+        prev.map((s) => (s.id === eeSearchStudentId ? { ...s, encarregadoId: eeUid } : s))
+      );
+      closeEeSearch();
+    } catch {
+      setEeSearchError("Erro de rede. Tenta novamente.");
+    }
   };
 
   const openManageDialog = (mode: "change-course" | "remove-student") => {
@@ -615,10 +675,16 @@ export function ApprovedStudentsManager() {
                                 </AlertDialogContent>
                               </AlertDialog>
                             ) : calculateAge(student.dataNascimento) < 18 ? (
-                              <Button variant="ghost" size="sm" className="h-7 px-2 text-blue-600 hover:text-blue-700" onClick={() => openEeDialog(student.id)}>
-                                <UserPlus className="h-3.5 w-3.5 mr-1" />
-                                Criar E.E.
-                              </Button>
+                              <div className="flex flex-col gap-1">
+                                <Button variant="ghost" size="sm" className="h-7 px-2 text-blue-600 hover:text-blue-700 justify-start" onClick={() => openEeDialog(student.id)}>
+                                  <UserPlus className="h-3.5 w-3.5 mr-1" />
+                                  Criar E.E.
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground hover:text-foreground justify-start" onClick={() => openEeSearch(student.id)}>
+                                  <Search className="h-3.5 w-3.5 mr-1" />
+                                  Associar E.E.
+                                </Button>
+                              </div>
                             ) : (
                               <span className="text-xs text-muted-foreground">—</span>
                             )}
@@ -671,10 +737,16 @@ export function ApprovedStudentsManager() {
                           </AlertDialogContent>
                         </AlertDialog>
                       ) : calculateAge(student.dataNascimento) < 18 ? (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-blue-600 hover:text-blue-700" onClick={() => openEeDialog(student.id)}>
-                          <UserPlus className="h-3.5 w-3.5 mr-1" />
-                          Criar E.E.
-                        </Button>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="sm" className="h-7 px-2 text-blue-600 hover:text-blue-700" onClick={() => openEeDialog(student.id)}>
+                            <UserPlus className="h-3.5 w-3.5 mr-1" />
+                            Criar E.E.
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground hover:text-foreground" onClick={() => openEeSearch(student.id)}>
+                            <Search className="h-3.5 w-3.5 mr-1" />
+                            Associar E.E.
+                          </Button>
+                        </div>
                       ) : (
                         <span className="text-xs text-muted-foreground px-2">—</span>
                       )}
@@ -750,6 +822,67 @@ export function ApprovedStudentsManager() {
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* EE Associate Search Dialog */}
+      <Dialog open={eeSearchOpen} onOpenChange={(open) => { if (!open) closeEeSearch(); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Associar Encarregado de Educação existente</DialogTitle>
+            <DialogDescription>
+              Pesquise um Encarregado de Educação já registado na escola para associar a este aluno.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Pesquisar por nome ou email..."
+                value={eeSearchTerm}
+                onChange={(e) => {
+                  setEeSearchTerm(e.target.value);
+                  fetchEeSearch(e.target.value);
+                }}
+                className="pl-9"
+              />
+            </div>
+            {eeSearchError ? (
+              <p className="text-sm text-destructive">{eeSearchError}</p>
+            ) : null}
+            {eeSearchLoading ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">A pesquisar...</p>
+            ) : eeSearchResults.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                {eeSearchTerm ? "Nenhum EE encontrado." : "A pesquisar todos os EE da escola..."}
+              </p>
+            ) : (
+              <div className="max-h-60 overflow-y-auto space-y-2">
+                {eeSearchResults.map((ee) => (
+                  <div
+                    key={ee.uid}
+                    className="flex items-center justify-between rounded-md border border-border p-3 hover:bg-muted/40 transition-colors"
+                  >
+                    <div className="space-y-0.5 min-w-0">
+                      <p className="text-sm font-medium truncate">{ee.nome}</p>
+                      <p className="text-xs text-muted-foreground truncate">{ee.email}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {ee.educandosCount} educando{ee.educandosCount !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0"
+                      onClick={() => handleAssociateEe(ee.uid)}
+                    >
+                      Associar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
