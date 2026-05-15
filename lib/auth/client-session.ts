@@ -49,7 +49,7 @@ export async function createServerSession(user: User): Promise<SessionCreationRe
     if (response.ok) {
       const payload = await readJsonPayload(response);
       if (!payload.role || !payload.estado) {
-        throw new Error("Nao foi possivel obter os dados da sessao.");
+        throw new Error("Não foi possível obter os dados da sessão.");
       }
 
       return { role: payload.role, estado: payload.estado };
@@ -66,10 +66,10 @@ export async function createServerSession(user: User): Promise<SessionCreationRe
       continue;
     }
 
-    throw new Error(payload.error || "Nao foi possivel iniciar a sessao no servidor.");
+    throw new Error(payload.error || "Não foi possível iniciar a sessão no servidor.");
   }
 
-  throw new Error("Nao foi possivel iniciar a sessao no servidor. Tente novamente em alguns segundos.");
+  throw new Error("Não foi possível iniciar a sessão no servidor. Tente novamente em alguns segundos.");
 }
 
 export async function clearServerSession(): Promise<void> {
@@ -80,7 +80,7 @@ export async function clearServerSession(): Promise<void> {
   });
 
   if (!response.ok) {
-    throw new Error("Nao foi possivel terminar a sessao no servidor.");
+    throw new Error("Não foi possível terminar a sessão no servidor.");
   }
 }
 

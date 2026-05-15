@@ -80,7 +80,7 @@ export function ScheduleChangeRequestsList({
               <CardContent className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-foreground">
-                    {estagio?.alunoNome || "Aluno"} · {estagio?.titulo || "Estagio"}
+                    {estagio?.alunoNome || "Aluno"} · {estagio?.titulo || "Estágio"}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {labelForRequestType(request.type)} · {formatIsoPt(request.targetDate)}
@@ -99,7 +99,7 @@ export function ScheduleChangeRequestsList({
                   </Badge>
                   {href ? (
                     <Button asChild size="sm" variant="outline">
-                      <Link href={href}>Abrir estagio</Link>
+                      <Link href={href}>Abrir estágio</Link>
                     </Button>
                   ) : null}
                 </div>

@@ -11,6 +11,7 @@ export type InboxNotification = ChatToastNotification & {
   kind?: "chat" | "system";
   href?: string;
   actionLabel?: string;
+  read?: boolean;
 };
 
 type NotificationsInboxProps = {
@@ -55,7 +56,12 @@ export function NotificationsInbox({
   );
 
   const unreadCount = useMemo(
-    () => orderedNotifications.filter((item) => !readIds.has(item.id)).length,
+    () =>
+      orderedNotifications.filter((item) => {
+        if (item.read === true) return false;
+        if (item.read === false) return true;
+        return !readIds.has(item.id);
+      }).length,
     [orderedNotifications, readIds]
   );
 

@@ -59,7 +59,7 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
   const navItems = [
     { href: "/tutor", label: "Dashboard", icon: LayoutDashboard },
     { href: "/tutor/inbox", label: "Caixa de Entrada", icon: Inbox },
-    { href: "/tutor/solicitacoes-horario", label: "Solicitacoes de horario", icon: CalendarClock },
+    { href: "/tutor/solicitacoes-horario", label: "Solicitações de horário", icon: CalendarClock },
     { href: "/tutor/estagios", label: "Estágios", icon: Briefcase },
     { href: "/tutor/chat", label: "Chat", icon: MessageSquare },
     { href: "/tutor/documentos", label: "Documentos", icon: User },

@@ -43,7 +43,7 @@ const navigation = [
   { name: "Dashboard", href: "/professor", icon: Home },
   { name: "Alunos", href: "/professor/alunos", icon: Users },
   { name: "Aprovações de Alunos", href: "/professor/aprovacoes", icon: UserCheck },
-  { name: "Justificacoes", href: "/professor/justificacoes", icon: ClipboardCheck },
+  { name: "Justificações", href: "/professor/justificacoes", icon: ClipboardCheck },
   { name: "Estágios", href: "/professor/estagios", icon: Briefcase },
   { name: "Documentos", href: "/professor/documentos", icon: FileText },
   { name: "Chat", href: "/professor/chat", icon: MessageSquare },
@@ -61,6 +61,9 @@ type AuthState = {
 
 function buildNotificationHref(notification: EstagioNotification): string | null {
   if (notification.type === "schedule_change_request" && notification.estagioId && notification.requestId) {
+    if (notification.requestType === "past_absence_justification") {
+      return "/professor/justificacoes";
+    }
     return `/professor/estagios/${notification.estagioId}?tab=calendario&requestId=${notification.requestId}`;
   }
 
@@ -105,7 +108,7 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
     },
   });
 
-  const { notifications: systemNotifications } = useEstagioNotifications({
+  const { notifications: systemNotifications, unreadCount: systemUnreadCount, markAsRead } = useEstagioNotifications({
     userId: state.userId,
     enabled: Boolean(state.userId),
   });
@@ -131,6 +134,7 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
         kind: "system",
         href: href || undefined,
         actionLabel,
+        read: item.readAt != null,
       };
     });
 
@@ -312,6 +316,13 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
                 onOpenNotification={(notification) => {
                   if (notification.href) {
                     router.push(notification.href);
+                  }
+                  if (notification.kind === "system" && notification.id.startsWith("system-")) {
+                    const realId = notification.id.slice("system-".length);
+                    const notif = systemNotifications.find((n) => n.id === realId);
+                    if (notif && notif.readAt == null) {
+                      markAsRead(notif.estagioId, notif.id);
+                    }
                   }
                 }}
               />

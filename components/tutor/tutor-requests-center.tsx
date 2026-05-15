@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { collectionGroup, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,6 +9,8 @@ import { ScheduleChangeRequestsList, type EstagioMetaLite } from "@/components/e
 import type { ScheduleChangeRequest, ScheduleChangeRequestType } from "@/lib/estagios/schedule-change-requests";
 
 const SCHEDULE_TYPES: ScheduleChangeRequestType[] = ["future_absence", "early_termination"];
+
+const POLL_MS = 30_000;
 
 function toMillis(raw: unknown): number {
   if (!raw) return 0;
@@ -32,6 +34,7 @@ export function TutorRequestsCenter() {
   const [loadingRequests, setLoadingRequests] = useState(true);
   const [requests, setRequests] = useState<ScheduleChangeRequest[]>([]);
   const [estagiosById, setEstagiosById] = useState<Record<string, EstagioMetaLite | undefined>>({});
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     let unsubscribe = () => {};
@@ -47,6 +50,27 @@ export function TutorRequestsCenter() {
     return () => unsubscribe();
   }, []);
 
+  const fetchRequests = useCallback(async (uid: string) => {
+    try {
+      const res = await fetch("/api/schedule-change-requests?role=tutor");
+      if (!res.ok) {
+        console.error("[v0] schedule-change-requests tutor fetch", res.status);
+        return;
+      }
+      const json = (await res.json()) as {
+        ok: boolean;
+        requests: ScheduleChangeRequest[];
+      };
+      if (!json.ok) return;
+      const out = json.requests.sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
+      setRequests(out);
+      setLoadingRequests(false);
+    } catch (err) {
+      console.error("[v0] schedule-change-requests tutor fetch error", err);
+      setLoadingRequests(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!userId) {
       setRequests([]);
@@ -54,41 +78,13 @@ export function TutorRequestsCenter() {
       return;
     }
 
-    let unsubscribe = () => {};
-    let cancelled = false;
-
-    (async () => {
-      const db = await getDbRuntime();
-      const q = query(
-        collectionGroup(db, "schedule_change_requests"),
-        where("tutorId", "==", userId)
-      );
-
-      unsubscribe = onSnapshot(
-        q,
-        (snap) => {
-          if (cancelled) return;
-          const out: ScheduleChangeRequest[] = [];
-          snap.forEach((docSnap) => {
-            out.push({ id: docSnap.id, ...(docSnap.data() as ScheduleChangeRequest) });
-          });
-          out.sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
-          setRequests(out);
-          setLoadingRequests(false);
-        },
-        () => {
-          if (cancelled) return;
-          setRequests([]);
-          setLoadingRequests(false);
-        }
-      );
-    })();
+    fetchRequests(userId);
+    intervalRef.current = setInterval(() => fetchRequests(userId), POLL_MS);
 
     return () => {
-      cancelled = true;
-      unsubscribe();
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [userId]);
+  }, [userId, fetchRequests]);
 
   useEffect(() => {
     if (requests.length === 0) return;
@@ -113,7 +109,7 @@ export function TutorRequestsCenter() {
             const raw = snap.data() as Record<string, unknown>;
             nextEntries[id] = {
               id,
-              titulo: (raw.titulo as string | undefined) || (raw.title as string | undefined) || "Estagio",
+              titulo: (raw.titulo as string | undefined) || (raw.title as string | undefined) || "Estágio",
               alunoNome: (raw.alunoNome as string | undefined) || "Aluno",
               empresa:
                 (raw.empresa as string | undefined) ||
@@ -154,9 +150,9 @@ export function TutorRequestsCenter() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Solicitacoes de mudanca de horario</h1>
+        <h1 className="text-3xl font-bold text-foreground">Solicitações de mudança de horário</h1>
         <p className="text-muted-foreground">
-          Pedidos de faltas futuras e termino antecipado dos seus formandos.
+          Pedidos de faltas futuras e término antecipado dos seus formandos.
         </p>
       </div>
 
@@ -166,7 +162,7 @@ export function TutorRequestsCenter() {
         currentUserId={userId}
         currentUserRole="tutor"
         basePath="tutor"
-        emptyTitle="Sem solicitacoes de mudanca"
+        emptyTitle="Sem solicitações de mudança"
         emptyDescription="Quando um aluno pedir uma falta futura, aparece aqui."
       />
     </div>

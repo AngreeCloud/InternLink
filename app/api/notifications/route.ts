@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { FieldValue } from "firebase-admin/firestore";
 import { getFirebaseAdminDb } from "@/lib/firebase-admin";
 import {
   EstagioAccessError,
@@ -72,7 +73,7 @@ export async function GET() {
               id: docSnap.id,
               userId: (data.userId as string) ?? "",
               type: (data.type as string) ?? "",
-              title: (data.title as string) ?? "Notificacao",
+              title: (data.title as string) ?? "Notificação",
               body: (data.body as string) ?? "",
               readAt: data.readAt ?? null,
               createdAtMs: toMillis(data.createdAt),
@@ -94,6 +95,41 @@ export async function GET() {
     return NextResponse.json({ ok: true, notifications });
   } catch (error) {
     console.error("[api/notifications]", error);
+    const { body, status } = toApiErrorResponse(error);
+    return NextResponse.json(body, { status });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const { uid } = await requireSessionUid();
+    const body = (await request.json()) as { estagioId?: string; notificationId?: string };
+
+    if (!body.estagioId || !body.notificationId) {
+      throw new EstagioAccessError(400, "missing_fields", "Faltam estagioId ou notificationId.");
+    }
+
+    const db = getFirebaseAdminDb();
+    const ref = db
+      .collection("estagios")
+      .doc(body.estagioId)
+      .collection("notifications")
+      .doc(body.notificationId);
+
+    const snap = await ref.get();
+    if (!snap.exists) {
+      throw new EstagioAccessError(404, "not_found", "Notificação não encontrada.");
+    }
+
+    const data = snap.data() as Record<string, unknown>;
+    if (data.userId !== uid) {
+      throw new EstagioAccessError(403, "not_owner", "Esta notificação não lhe pertence.");
+    }
+
+    await ref.update({ readAt: FieldValue.serverTimestamp() });
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("[api/notifications/patch]", error);
     const { body, status } = toApiErrorResponse(error);
     return NextResponse.json(body, { status });
   }

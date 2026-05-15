@@ -104,6 +104,27 @@ export async function PATCH(
 
     await reqRef.update(updates);
 
+    // Notify tutor when request goes to pending_tutor
+    if (nextStatus === "pending_tutor" && req.tutorId && req.studentId !== req.tutorId) {
+      const actionLabel = body.action === "approve" ? "aprovou" : "rejeitou";
+      await db
+        .collection("estagios")
+        .doc(id)
+        .collection("notifications")
+        .add({
+          userId: req.tutorId,
+          type: "schedule_change_request",
+          requestId,
+          requestType: req.type,
+          targetDate: req.targetDate,
+          estagioId: id,
+      title: "Pedido aguarda decisão do tutor",
+          body: `O professor ${actionLabel} o pedido de alteração de horário para ${req.targetDate}. Aguarda a sua decisão.`,
+          readAt: null,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+    }
+
     return NextResponse.json({ ok: true, nextStatus: transition.nextStatus });
   } catch (error) {
     const { body, status } = toApiErrorResponse(error);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export type EstagioNotification = {
   id: string;
@@ -66,5 +66,22 @@ export function useEstagioNotifications(params: {
     };
   }, [enabled, limitCount, userId]);
 
-  return { notifications };
+  const markAsRead = useCallback(async (estagioId: string, notificationId: string) => {
+    try {
+      await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estagioId, notificationId }),
+      });
+    } catch (err) {
+      console.error("[v0] mark notification read error", err);
+    }
+  }, []);
+
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => n.readAt == null).length,
+    [notifications]
+  );
+
+  return { notifications, unreadCount, markAsRead };
 }

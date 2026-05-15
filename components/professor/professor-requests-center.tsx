@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { collectionGroup, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScheduleChangeRequestsList, type EstagioMetaLite } from "@/components/estagios/schedule-change-requests-list";
-import type { ScheduleChangeRequest, ScheduleChangeRequestType } from "@/lib/estagios/schedule-change-requests";
+import type { ScheduleChangeRequest, ScheduleChangeRequestStatus, ScheduleChangeRequestType } from "@/lib/estagios/schedule-change-requests";
 
 const JUSTIFICATION_TYPES: ScheduleChangeRequestType[] = ["past_absence_justification"];
 const SCHEDULE_TYPES: ScheduleChangeRequestType[] = ["future_absence", "early_termination"];
+
+const POLL_MS = 30_000;
 
 function toMillis(raw: unknown): number {
   if (!raw) return 0;
@@ -34,6 +36,7 @@ export function ProfessorRequestsCenter() {
   const [loadingRequests, setLoadingRequests] = useState(true);
   const [requests, setRequests] = useState<ScheduleChangeRequest[]>([]);
   const [estagiosById, setEstagiosById] = useState<Record<string, EstagioMetaLite | undefined>>({});
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     let unsubscribe = () => {};
@@ -49,6 +52,32 @@ export function ProfessorRequestsCenter() {
     return () => unsubscribe();
   }, []);
 
+  const fetchRequests = useCallback(async (uid: string) => {
+    try {
+      const res = await fetch("/api/schedule-change-requests?role=professor");
+      if (!res.ok) {
+        console.error("[v0] schedule-change-requests fetch", res.status);
+        return;
+      }
+      const json = (await res.json()) as {
+        ok: boolean;
+        requests: ScheduleChangeRequest[];
+      };
+      if (!json.ok) return;
+      const PENDING_SET = new Set<ScheduleChangeRequestStatus>(["pending_professor", "pending_tutor"]);
+      const out = json.requests.sort((a, b) => {
+        const aP = PENDING_SET.has(a.status) ? 0 : 1;
+        const bP = PENDING_SET.has(b.status) ? 0 : 1;
+        return aP - bP || toMillis(b.createdAt) - toMillis(a.createdAt);
+      });
+      setRequests(out);
+      setLoadingRequests(false);
+    } catch (err) {
+      console.error("[v0] schedule-change-requests fetch error", err);
+      setLoadingRequests(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!userId) {
       setRequests([]);
@@ -56,41 +85,13 @@ export function ProfessorRequestsCenter() {
       return;
     }
 
-    let unsubscribe = () => {};
-    let cancelled = false;
-
-    (async () => {
-      const db = await getDbRuntime();
-      const q = query(
-        collectionGroup(db, "schedule_change_requests"),
-        where("professorId", "==", userId)
-      );
-
-      unsubscribe = onSnapshot(
-        q,
-        (snap) => {
-          if (cancelled) return;
-          const out: ScheduleChangeRequest[] = [];
-          snap.forEach((docSnap) => {
-            out.push({ id: docSnap.id, ...(docSnap.data() as ScheduleChangeRequest) });
-          });
-          out.sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
-          setRequests(out);
-          setLoadingRequests(false);
-        },
-        () => {
-          if (cancelled) return;
-          setRequests([]);
-          setLoadingRequests(false);
-        }
-      );
-    })();
+    fetchRequests(userId);
+    intervalRef.current = setInterval(() => fetchRequests(userId), POLL_MS);
 
     return () => {
-      cancelled = true;
-      unsubscribe();
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [userId]);
+  }, [userId, fetchRequests]);
 
   useEffect(() => {
     if (requests.length === 0) return;
@@ -115,7 +116,7 @@ export function ProfessorRequestsCenter() {
             const raw = snap.data() as Record<string, unknown>;
             nextEntries[id] = {
               id,
-              titulo: (raw.titulo as string | undefined) || (raw.title as string | undefined) || "Estagio",
+              titulo: (raw.titulo as string | undefined) || (raw.title as string | undefined) || "Estágio",
               alunoNome: (raw.alunoNome as string | undefined) || "Aluno",
               empresa:
                 (raw.empresa as string | undefined) ||
@@ -161,22 +162,22 @@ export function ProfessorRequestsCenter() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Justificacoes e pedidos</h1>
+        <h1 className="text-3xl font-bold text-foreground">Justificações e pedidos</h1>
         <p className="text-muted-foreground">
-          Acompanhe justificacoes de faltas e mudancas de horario em todos os estagios.
+          Acompanhe justificações de faltas e mudanças de horário em todos os estágios.
         </p>
       </div>
 
       <Tabs defaultValue="justificacoes" className="space-y-4">
         <TabsList className="flex w-full flex-wrap gap-2">
-          <TabsTrigger value="justificacoes">Justificacao de faltas</TabsTrigger>
-          <TabsTrigger value="mudancas">Solicitacoes de mudanca de horario</TabsTrigger>
+          <TabsTrigger value="justificacoes">Justificação de faltas</TabsTrigger>
+          <TabsTrigger value="mudancas">Solicitações de mudança de horário</TabsTrigger>
         </TabsList>
 
         <TabsContent value="justificacoes" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Justificacoes de faltas</CardTitle>
+              <CardTitle>Justificações de faltas</CardTitle>
             </CardHeader>
           </Card>
           <ScheduleChangeRequestsList
@@ -185,15 +186,15 @@ export function ProfessorRequestsCenter() {
             currentUserId={userId}
             currentUserRole="professor"
             basePath="professor"
-            emptyTitle="Sem justificacoes pendentes"
-            emptyDescription="Quando um aluno submeter uma justificacao, ela aparece aqui."
+            emptyTitle="Sem justificações pendentes"
+            emptyDescription="Quando um aluno submeter uma justificação, ela aparece aqui."
           />
         </TabsContent>
 
         <TabsContent value="mudancas" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Solicitacoes de mudanca de horario</CardTitle>
+              <CardTitle>Solicitações de mudança de horário</CardTitle>
             </CardHeader>
           </Card>
           <ScheduleChangeRequestsList
@@ -202,8 +203,8 @@ export function ProfessorRequestsCenter() {
             currentUserId={userId}
             currentUserRole="professor"
             basePath="professor"
-            emptyTitle="Sem solicitacoes de mudanca"
-            emptyDescription="Pedidos de faltas futuras ou termino antecipado aparecem aqui."
+            emptyTitle="Sem solicitações de mudança"
+            emptyDescription="Pedidos de faltas futuras ou término antecipado aparecem aqui."
           />
         </TabsContent>
       </Tabs>
