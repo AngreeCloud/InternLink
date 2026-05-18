@@ -47,3 +47,6 @@ opencode.json
 data/
 # hunkwise
 .vscode/hunkwise/
+
+# opencode diff plugin
+.opencode-tmp/
