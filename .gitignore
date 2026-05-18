@@ -45,3 +45,5 @@ skills-lock.json
 .opencode
 opencode.json
 data/
+# hunkwise
+.vscode/hunkwise/

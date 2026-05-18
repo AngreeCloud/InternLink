@@ -189,3 +189,89 @@ export function normalizeDiasSemana(raw: unknown): DiasSemanaMap {
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Week sorting helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Sort weeks for HorarioTab:
+ * - current week first
+ * - future weeks (after current) next, ascending
+ * - past weeks (before current) last, descending
+ *
+ * When internship ended (no current week): normal chronological order.
+ */
+export function sortWeeksHorario(weeks: WorkWeek[], todayIso: string): WorkWeek[] {
+  const current = weeks.find((w) => isCurrentWeek(w, todayIso)) ?? null;
+
+  // Internship ended → chronological
+  if (!current && weeks.every((w) => w.weekEndIso < todayIso)) {
+    return [...weeks].sort((a, b) => a.weekStartIso.localeCompare(b.weekStartIso));
+  }
+
+  const future = weeks.filter((w) => isFutureWeek(w, todayIso));
+  const past = current
+    ? weeks.filter((w) => w.weekEndIso < todayIso)
+    : [];
+
+  return [
+    ...(current ? [current] : []),
+    ...future.sort((a, b) => a.weekStartIso.localeCompare(b.weekStartIso)),
+    ...past.sort((a, b) => b.weekStartIso.localeCompare(a.weekStartIso)),
+  ];
+}
+
+export function isPastWeek(week: WorkWeek, todayIso: string): boolean {
+  return week.weekEndIso < todayIso;
+}
+
+export function isCurrentWeek(week: WorkWeek, todayIso: string): boolean {
+  return week.weekStartIso <= todayIso && week.weekEndIso >= todayIso;
+}
+
+export function isFutureWeek(week: WorkWeek, todayIso: string): boolean {
+  return week.weekStartIso > todayIso;
+}
+
+/**
+ * Sort weeks for SumariosTab:
+ * - uncompleted past weeks (closest past to today first)
+ * - current week
+ * - future weeks ascending
+ * - completed past weeks (oldest first)
+ *
+ * When internship ended (no current/past weeks all past): uncompleted first, then completed.
+ */
+export function sortWeeksSumarios(
+  weeks: WorkWeek[],
+  todayIso: string,
+  isCompleted: (week: WorkWeek) => boolean,
+): WorkWeek[] {
+  const current = weeks.find((w) => isCurrentWeek(w, todayIso)) ?? null;
+
+  // Internship ended → uncompleted first (chronological), completed last (chronological)
+  if (!current && weeks.every((w) => w.weekEndIso < todayIso)) {
+    const uncompleted = weeks.filter((w) => !isCompleted(w));
+    const completed = weeks.filter((w) => isCompleted(w));
+    return [
+      ...uncompleted.sort((a, b) => a.weekStartIso.localeCompare(b.weekStartIso)),
+      ...completed.sort((a, b) => a.weekStartIso.localeCompare(b.weekStartIso)),
+    ];
+  }
+
+  const future = weeks.filter((w) => isFutureWeek(w, todayIso));
+  const past = current
+    ? weeks.filter((w) => w.weekEndIso < todayIso)
+    : weeks.filter((w) => w.weekId !== current?.weekId);
+
+  const uncompleted = past.filter((w) => !isCompleted(w));
+  const completed = past.filter((w) => isCompleted(w));
+
+  return [
+    ...uncompleted.sort((a, b) => a.weekStartIso.localeCompare(b.weekStartIso)),
+    ...(current ? [current] : []),
+    ...future.sort((a, b) => a.weekStartIso.localeCompare(b.weekStartIso)),
+    ...completed.sort((a, b) => a.weekStartIso.localeCompare(b.weekStartIso)),
+  ];
+}

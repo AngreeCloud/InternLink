@@ -27,6 +27,7 @@ import {
   groupWorkDaysByWeek,
   listWorkDays,
   normalizeDiasSemana,
+  sortWeeksSumarios,
   toIsoDate,
   weekdayLabel,
   type WorkWeek,
@@ -122,14 +123,25 @@ export function SumariosTab({
     };
   }, [estagioId]);
 
-  // Auto-open the most recent past week on load.
+  // Sorted weeks: uncompleted past first, current, future, completed last
+  const sortedWeeks = useMemo(
+    () =>
+      sortWeeksSumarios(weeks, todayIso, (w) => Boolean(sumarios[w.weekId]?.content)),
+    [weeks, todayIso, sumarios]
+  );
+
+  // Auto-open first uncompleted past week, or current week on load.
   useEffect(() => {
-    if (loading || weeks.length === 0) return;
+    if (loading || sortedWeeks.length === 0) return;
     if (Object.keys(openWeeks).length > 0) return;
-    const pastWeeks = weeks.filter((w) => w.weekStartIso <= todayIso);
-    const target = pastWeeks.length > 0 ? pastWeeks[pastWeeks.length - 1] : weeks[0];
+    const firstUncompleted = sortedWeeks.find(
+      (w) => !sumarios[w.weekId]?.content && w.weekEndIso <= todayIso
+    );
+    const target = firstUncompleted ?? sortedWeeks.find(
+      (w) => w.weekStartIso <= todayIso && w.weekEndIso >= todayIso
+    ) ?? sortedWeeks[0];
     setOpenWeeks({ [target.weekId]: true });
-  }, [loading, weeks, openWeeks, todayIso]);
+  }, [loading, sortedWeeks, openWeeks, todayIso, sumarios]);
 
   function getDraft(week: WorkWeek): string {
     const persisted = sumarios[week.weekId]?.content ?? "";
@@ -281,7 +293,7 @@ export function SumariosTab({
         </Card>
       ) : (
         <div className="space-y-3">
-          {weeks.map((week) => {
+          {sortedWeeks.map((week) => {
             const persisted = sumarios[week.weekId];
             const draft = getDraft(week);
             const dirty = isDirty(week);

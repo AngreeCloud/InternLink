@@ -14,12 +14,16 @@ import {
   Loader2,
   Save,
   AlertCircle,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import {
   formatIsoPt,
   groupWorkDaysByWeek,
+  isPastWeek,
   listWorkDays,
   normalizeDiasSemana,
+  sortWeeksHorario,
   toIsoDate,
   weekdayLabel,
   type WorkDay,
@@ -68,6 +72,7 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
   const [saving, setSaving] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
+  const [collapsedWeeks, setCollapsedWeeks] = useState<Record<string, boolean>>({});
 
   // Subscribe to all presencas of this estagio.
   useEffect(() => {
@@ -106,6 +111,21 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
   const canEdit = currentUserRole === "aluno";
 
   const todayIso = toIsoDate(new Date());
+
+  // Init collapsed: past weeks collapsed, current+future expanded
+  useEffect(() => {
+    if (weeks.length === 0 || Object.keys(collapsedWeeks).length > 0) return;
+    const init: Record<string, boolean> = {};
+    for (const w of weeks) {
+      if (isPastWeek(w, todayIso)) init[w.weekId] = true;
+    }
+    setCollapsedWeeks(init);
+  }, [weeks, todayIso, collapsedWeeks]);
+
+  const sortedWeeks = useMemo(
+    () => sortWeeksHorario(weeks, todayIso),
+    [weeks, todayIso]
+  );
 
   const totalRealizado = useMemo(() => {
     let sum = 0;
@@ -301,7 +321,7 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
         </Card>
       ) : (
         <div className="space-y-4">
-          {weeks.map((week) => {
+          {sortedWeeks.map((week) => {
             const weekHoras = week.days.reduce((sum, d) => {
               const p = presencas[d.iso];
               return sum + (typeof p?.hoursWorked === "number" ? p.hoursWorked : 0);
@@ -310,27 +330,57 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
               (d) => typeof presencas[d.iso]?.hoursWorked === "number"
             ).length;
 
+            const isCollapsed = collapsedWeeks[week.weekId] ?? false;
+
             return (
               <Card key={week.weekId}>
                 <CardHeader className="pb-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <CardTitle className="text-sm">
-                        Semana {week.weekNumber} • {week.weekYear}
-                      </CardTitle>
-                      <p className="text-xs text-muted-foreground">
-                        {formatIsoPt(week.weekStartIso)} – {formatIsoPt(week.weekEndIso)}
-                      </p>
+                    <div className="flex items-center gap-3">
+                      {isPastWeek(week, todayIso) && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCollapsedWeeks((prev) => ({
+                              ...prev,
+                              [week.weekId]: !prev[week.weekId],
+                            }))
+                          }
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {isCollapsed ? (
+                            <ChevronRight className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </button>
+                      )}
+                      <div>
+                        <CardTitle className="text-sm">
+                          Semana {week.weekNumber} • {week.weekYear}
+                          {isPastWeek(week, todayIso) && isCollapsed && (
+                            <span className="ml-2 text-xs text-muted-foreground font-normal">
+                              ({weekDoneCount}/{week.days.length} dias, {formatHours(weekHoras)}h)
+                            </span>
+                          )}
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground">
+                          {formatIsoPt(week.weekStartIso)} – {formatIsoPt(week.weekEndIso)}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Badge variant="outline">
-                        {weekDoneCount}/{week.days.length} dias
-                      </Badge>
-                      <Badge variant="secondary">{formatHours(weekHoras)}h</Badge>
-                    </div>
+                    {!isCollapsed && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline">
+                          {weekDoneCount}/{week.days.length} dias
+                        </Badge>
+                        <Badge variant="secondary">{formatHours(weekHoras)}h</Badge>
+                      </div>
+                    )}
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-2">
+                {!isCollapsed && (
+                  <CardContent className="space-y-2">
                   {week.days.map((day) => {
                     const draft = getDraft(day);
                     const persisted = presencas[day.iso];
@@ -436,6 +486,7 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
                     );
                   })}
                 </CardContent>
+              )}
               </Card>
             );
           })}
