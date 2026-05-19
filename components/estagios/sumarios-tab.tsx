@@ -7,6 +7,7 @@ import {
   onSnapshot,
   serverTimestamp,
   setDoc,
+  Timestamp,
 } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,13 +16,25 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
   CheckCircle2,
+  Clock,
   Loader2,
   NotebookPen,
+  Pen,
   Save,
   AlertCircle,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   formatIsoPt,
   groupWorkDaysByWeek,
@@ -34,11 +47,14 @@ import {
 } from "@/lib/estagios/workdays";
 import type { EstagioRole } from "@/lib/estagios/permissions";
 
+type Participant = { name: string; role: EstagioRole; email?: string };
+
 type Props = {
   estagioId: string;
   estagio: Record<string, unknown>;
   currentUserId: string;
   currentUserRole: EstagioRole;
+  participants?: Record<string, Participant>;
 };
 
 type SumarioDoc = {
@@ -51,6 +67,10 @@ type SumarioDoc = {
   updatedAt?: unknown;
   updatedBy?: string;
   updatedByRole?: string;
+  signedByTutor?: boolean;
+  tutorSignedAt?: Timestamp;
+  tutorSignedById?: string;
+  tutorSignedByName?: string;
 };
 
 const MIN_LEN = 10;
@@ -61,6 +81,7 @@ export function SumariosTab({
   estagio,
   currentUserId,
   currentUserRole,
+  participants,
 }: Props) {
   const dataInicio = (estagio.dataInicio as string | undefined) ?? "";
   const dataFim =
@@ -82,11 +103,12 @@ export function SumariosTab({
   const [saving, setSaving] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
+  const [signingWeek, setSigningWeek] = useState<WorkWeek | null>(null);
+  const [signingSubmitting, setSigningSubmitting] = useState(false);
+  const [signingError, setSigningError] = useState<string | null>(null);
 
-  const canEdit =
-    currentUserRole === "aluno" ||
-    currentUserRole === "tutor" ||
-    currentUserRole === "diretor";
+  const canEdit = currentUserRole === "aluno";
+  const isTutor = currentUserRole === "tutor";
 
   const todayIso = toIsoDate(new Date());
 
@@ -227,6 +249,34 @@ export function SumariosTab({
     } finally {
       setSaving(null);
     }
+  }
+
+  async function handleTutorSign(week: WorkWeek, tutorName: string) {
+    setSigningError(null);
+    setSigningSubmitting(true);
+    try {
+      const db = await getDbRuntime();
+      const ref = doc(db, "estagios", estagioId, "sumarios", week.weekId);
+      await setDoc(ref, {
+        signedByTutor: true,
+        tutorSignedAt: serverTimestamp(),
+        tutorSignedById: currentUserId,
+        tutorSignedByName: tutorName,
+      }, { merge: true });
+      setSigningWeek(null);
+    } catch (err) {
+      console.error("[v0] tutor sign", err);
+      setSigningError("Não foi possível assinar. Tenta novamente.");
+    } finally {
+      setSigningSubmitting(false);
+    }
+  }
+
+  function formatTimestamp(ts: Timestamp | undefined): string {
+    if (!ts) return "";
+    const d = ts.toDate();
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} às ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
   if (!dataInicio || !dataFim) {
@@ -412,6 +462,57 @@ export function SumariosTab({
                         </Button>
                       )}
                     </div>
+
+                    {/* Signature footer */}
+                    {isTutor ? (
+                      <div className="border-t pt-3">
+                        {persisted?.signedByTutor ? (
+                          <div className="flex items-center gap-2 text-xs text-emerald-600">
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                            <span>
+                              Sumário validado por si •{" "}
+                              {formatTimestamp(persisted.tutorSignedAt)}
+                            </span>
+                          </div>
+                        ) : persisted?.content ? (
+                          <Button
+                            type="button"
+                            variant="default"
+                            size="sm"
+                            className="w-full"
+                            onClick={() => setSigningWeek(week)}
+                          >
+                            <Pen className="mr-2 h-4 w-4" />
+                            Assinar sumário semanal
+                          </Button>
+                        ) : (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Clock className="h-3.5 w-3.5 shrink-0" />
+                            <span>Sumário ainda não preenchido pelo formando</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="border-t pt-3">
+                        {persisted?.signedByTutor ? (
+                          <div className="flex items-center gap-2 text-xs text-emerald-600">
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                            <span>
+                              Validado pelo tutor{" "}
+                              <span className="font-medium">
+                                {persisted.tutorSignedByName}
+                              </span>{" "}
+                              • {formatTimestamp(persisted.tutorSignedAt)}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Clock className="h-3.5 w-3.5 shrink-0" />
+                            <span>Aguarda validação do tutor</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 )}
               </Card>
@@ -419,6 +520,71 @@ export function SumariosTab({
           })}
         </div>
       )}
+
+      <AlertDialog
+        open={signingWeek !== null}
+        onOpenChange={(open) => {
+          if (!open) setSigningWeek(null);
+          setSigningError(null);
+        }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Validar sumário semanal</AlertDialogTitle>
+          </AlertDialogHeader>
+          <div className="space-y-3 text-sm">
+            <p className="text-muted-foreground">
+              Semana {signingWeek?.weekNumber} • {signingWeek?.weekYear} —{" "}
+              {signingWeek ? formatIsoPt(signingWeek.weekStartIso) : ""} a{" "}
+              {signingWeek ? formatIsoPt(signingWeek.weekEndIso) : ""}
+            </p>
+            {(() => {
+              const studentId = estagio.alunoId as string | undefined;
+              const studentName = studentId ? participants?.[studentId]?.name : undefined;
+              return studentName ? (
+                <p className="text-muted-foreground">Formando: {studentName}</p>
+              ) : null;
+            })()}
+            <div className="rounded-md border bg-muted/30 px-4 py-3 text-justify text-xs leading-relaxed text-muted-foreground">
+              &ldquo;Declaro que tomei conhecimento das atividades descritas pelo formando
+              para esta semana de trabalho e confirmo que as mesmas são compatíveis com o
+              plano de formação em contexto de trabalho em vigor.&rdquo;
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Esta ação fica registada com a sua identidade e não pode ser revertida.
+            </p>
+            {signingError && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {signingError}
+              </div>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={signingSubmitting}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={signingSubmitting}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!signingWeek) return;
+                const tutorName =
+                  participants?.[currentUserId]?.name ?? "Tutor";
+                handleTutorSign(signingWeek, tutorName);
+              }}
+            >
+              {signingSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  A assinar...
+                </>
+              ) : (
+                "Confirmar validação"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
