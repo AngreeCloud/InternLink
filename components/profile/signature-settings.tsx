@@ -172,7 +172,7 @@ export function SignatureSettings() {
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">
               Assinatura atual
             </Label>
-            <div className="flex items-center justify-center rounded-md bg-card p-3">
+            <div className="flex items-center justify-center rounded-md bg-[#f5f0e8] p-3">
               <img
                 src={saved.dataUrl || "/placeholder.svg"}
                 alt="Assinatura guardada"
@@ -267,7 +267,7 @@ export function SignatureSettings() {
           )}
 
           {pendingDataUrl ? (
-            <div className="rounded-md border border-dashed border-border bg-card p-3">
+            <div className="rounded-md border border-dashed border-border bg-[#f5f0e8] p-3">
               <Label className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground">
                 Pré-visualização
               </Label>

@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   Clock,
   Loader2,
+  Lock,
   NotebookPen,
   Pen,
   Save,
@@ -46,6 +47,7 @@ import {
   type WorkWeek,
 } from "@/lib/estagios/workdays";
 import type { EstagioRole } from "@/lib/estagios/permissions";
+import { SumariosExportPanel } from "@/components/estagios/sumarios-export-panel";
 
 type Participant = { name: string; role: EstagioRole; email?: string };
 
@@ -71,6 +73,7 @@ type SumarioDoc = {
   tutorSignedAt?: Timestamp;
   tutorSignedById?: string;
   tutorSignedByName?: string;
+  estado?: "por_preencher" | "preenchido" | "arquivado";
 };
 
 const MIN_LEN = 10;
@@ -215,6 +218,15 @@ export function SumariosTab({
       return;
     }
 
+    const persisted = sumarios[week.weekId];
+    if (persisted?.estado === "arquivado") {
+      setErrors((e) => ({
+        ...e,
+        [week.weekId]: "Sumário arquivado. Não é possível editar.",
+      }));
+      return;
+    }
+
     setSaving(week.weekId);
     try {
       const db = await getDbRuntime();
@@ -226,6 +238,7 @@ export function SumariosTab({
         weekNumber: week.weekNumber,
         weekYear: week.weekYear,
         content,
+        estado: "preenchido",
         updatedAt: serverTimestamp(),
         updatedBy: currentUserId,
         updatedByRole: currentUserRole,
@@ -262,6 +275,7 @@ export function SumariosTab({
         tutorSignedAt: serverTimestamp(),
         tutorSignedById: currentUserId,
         tutorSignedByName: tutorName,
+        estado: "arquivado",
       }, { merge: true });
       setSigningWeek(null);
     } catch (err) {
@@ -305,6 +319,7 @@ export function SumariosTab({
   const totalPreenchidos = weeks.filter((w) => Boolean(sumarios[w.weekId]?.content))
     .length;
   const semanasPassadas = weeks.filter((w) => w.weekStartIso <= todayIso).length;
+  const hasAnySumario = Object.values(sumarios).some((s) => Boolean(s.content));
 
   return (
     <div className="space-y-4">
@@ -352,11 +367,14 @@ export function SumariosTab({
             const isFuture = week.weekStartIso > todayIso;
             const error = errors[week.weekId];
             const isSavedFlash = savedFlash === week.weekId;
-            const status = persisted?.content
-              ? { label: "Preenchido", variant: "default" as const }
-              : isFuture
-                ? { label: "Por vir", variant: "outline" as const }
-                : { label: "Por preencher", variant: "secondary" as const };
+            const isArchived = persisted?.estado === "arquivado";
+            const status = isArchived
+              ? { label: "Arquivado", variant: "default" as const }
+              : persisted?.content
+                ? { label: "Preenchido", variant: "default" as const }
+                : isFuture
+                  ? { label: "Por vir", variant: "outline" as const }
+                  : { label: "Por preencher", variant: "secondary" as const };
 
             const workDaysOfWeek = week.days
               .map((d) => `${weekdayLabel(d.date, true)} ${formatIsoPt(d.iso)}`)
@@ -408,7 +426,7 @@ export function SumariosTab({
                         value={draft}
                         onChange={(e) => setDraft(week.weekId, e.target.value)}
                         placeholder="Descreve as atividades, aprendizagens e tarefas realizadas durante a semana..."
-                        disabled={!canEdit || isFuture}
+                        disabled={!canEdit || isFuture || isArchived}
                         maxLength={MAX_LEN}
                         rows={6}
                         aria-invalid={Boolean(error)}
@@ -445,7 +463,12 @@ export function SumariosTab({
                           Guardado
                         </span>
                       )}
-                      {canEdit && !isFuture && (
+                      {isArchived ? (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Lock className="h-3.5 w-3.5" />
+                          Validado pelo tutor — edição bloqueada
+                        </span>
+                      ) : canEdit && !isFuture ? (
                         <Button
                           type="button"
                           size="sm"
@@ -460,7 +483,7 @@ export function SumariosTab({
                           )}
                           Guardar sumário
                         </Button>
-                      )}
+                      ) : null}
                     </div>
 
                     {/* Signature footer */}
@@ -585,6 +608,15 @@ export function SumariosTab({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {hasAnySumario && (
+        <SumariosExportPanel
+          estagioId={estagioId}
+          currentUserRole={currentUserRole}
+          alunoId={estagio.alunoId as string | undefined}
+          tutorId={estagio.tutorId as string | undefined}
+        />
+      )}
     </div>
   );
 }
