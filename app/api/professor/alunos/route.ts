@@ -118,7 +118,7 @@ export async function GET() {
       }
     }
 
-    const students = studentsSnap.docs
+    const studentsTemp = studentsSnap.docs
       .map((studentSnap) => {
         const data = studentSnap.data() as StudentData;
         const resolvedCourseId = resolveStudentCourseId(
@@ -155,6 +155,24 @@ export async function GET() {
       })
       .filter((student): student is NonNullable<typeof student> => Boolean(student))
       .sort((left, right) => left.nome.localeCompare(right.nome, "pt-PT"));
+
+    // Fetch EE names
+    const eeIds = Array.from(new Set(studentsTemp.map(s => s.encarregadoId).filter(Boolean) as string[]));
+    const eeNames = new Map<string, string>();
+    
+    // Process in chunks of 30 due to Firestore "in" filter limits
+    for (let i = 0; i < eeIds.length; i += 30) {
+      const chunk = eeIds.slice(i, i + 30);
+      const eesSnap = await db.collection("users").where("__name__", "in", chunk).get();
+      for (const eeDoc of eesSnap.docs) {
+        eeNames.set(eeDoc.id, (eeDoc.data() as { nome?: string }).nome || "—");
+      }
+    }
+
+    const students = studentsTemp.map(s => ({
+      ...s,
+      encarregadoNome: s.encarregadoId ? eeNames.get(s.encarregadoId) || "—" : null
+    }));
 
     const courses = courseRefs.sort((left, right) => left.name.localeCompare(right.name, "pt-PT"));
 

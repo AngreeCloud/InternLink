@@ -404,21 +404,21 @@ export function StudentDashboardOverview() {
                       {eeDeleteLoading ? (
                         <><Loader2 className="mr-2 h-4 w-4 animate-spin" />A processar...</>
                       ) : (
-                        <><UserMinus className="mr-2 h-4 w-4" />Solicitar eliminação da conta E.E.</>
+                        <><UserMinus className="mr-2 h-4 w-4" />Desassociar conta E.E.</>
                       )}
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Eliminar conta de Encarregado de Educação</AlertDialogTitle>
+                      <AlertDialogTitle>Desassociar conta de Encarregado de Educação</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Esta ação eliminará permanentemente a conta do Encarregado de Educação associado ao seu perfil. O E.E. deixará de ter acesso à plataforma. Tem a certeza?
+                        Esta ação desassociará a conta do Encarregado de Educação do seu perfil. O E.E. deixará de ter acesso à sua plataforma. Tem a certeza?
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
                       <AlertDialogAction onClick={handleRequestEeDelete}>
-                        Confirmar eliminação
+                        Confirmar desassociação
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>

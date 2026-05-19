@@ -179,12 +179,12 @@ export async function DELETE(request: Request) {
     const { searchParams } = new URL(request.url);
     const studentId = searchParams.get("studentId");
 
-    // If the caller is a student, they can only delete their own EE
+    // If the caller is a student, they can only disassociate their own EE
     if (role === "aluno" && studentId !== uid) {
       throw new EstagioAccessError(403, "forbidden", "Sem permissão para esta operação.");
     }
 
-    if (role !== "professor" && role !== "aluno") {
+    if (role !== "professor" && role !== "aluno" && role !== "admin_escolar") {
       throw new EstagioAccessError(403, "not_authorized", "Sem permissão para esta operação.");
     }
 
@@ -202,22 +202,21 @@ export async function DELETE(request: Request) {
       throw new EstagioAccessError(404, "no_ee", "Nenhum Encarregado de Educação associado.");
     }
 
-    const auth = getFirebaseAdminAuth();
-
-    // Delete Auth user
-    try {
-      await auth.deleteUser(encarregadoId);
-    } catch {
-      // Continue if auth user doesn't exist
-    }
-
-    // Delete Firestore doc
-    await db.collection("users").doc(encarregadoId).delete();
-
     // Unlink from student
     await db.collection("users").doc(targetStudentId).update({
       encarregadoId: null,
     });
+
+    // Remove from EE's educandoIds
+    try {
+      const eeSnap = await db.collection("users").doc(encarregadoId).get();
+      if (eeSnap.exists) {
+        const { FieldValue } = await import("firebase-admin/firestore");
+        await db.collection("users").doc(encarregadoId).update({
+          educandoIds: FieldValue.arrayRemove(targetStudentId)
+        });
+      }
+    } catch { /* ignore */ }
 
     // Clear encarregadoId from estagios for this student
     const estagiosSnap = await db
