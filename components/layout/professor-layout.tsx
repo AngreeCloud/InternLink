@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { logoutWithServerSession, waitForLogoutTransition } from "@/lib/auth/client-session";
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
@@ -57,6 +57,7 @@ type AuthState = {
   email: string;
   photoURL: string;
   accessFailurePath: string;
+  isDirector: boolean;
 };
 
 function buildNotificationHref(notification: EstagioNotification): string | null {
@@ -85,6 +86,7 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
     email: "",
     photoURL: "",
     accessFailurePath: "",
+    isDirector: false,
   });
   const router = useRouter();
   const pathname = usePathname();
@@ -181,6 +183,14 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
           return;
         }
 
+        let isDirector = false;
+        if (data.schoolId) {
+          const coursesSnap = await getDocs(
+            query(collection(db, "courses"), where("schoolId", "==", data.schoolId), where("courseDirectorId", "==", user.uid))
+          );
+          isDirector = !coursesSnap.empty;
+        }
+
         setState({
           loading: false,
           userId: user.uid,
@@ -189,6 +199,7 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
           email: data.email || user.email || "",
           photoURL: data.photoURL || "",
           accessFailurePath: "",
+          isDirector,
         });
       });
     })();
@@ -218,6 +229,13 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
+  const filteredNavigation = navigation.filter((item) => {
+    if (item.name === "Aprovações de Alunos") {
+      return state.isDirector;
+    }
+    return true;
+  });
+
   return (
     <div className="min-h-screen bg-background">
       {isLoggingOut ? <LogoutOverlay /> : null}
@@ -233,7 +251,7 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
             <nav className="flex-1 space-y-1 p-4">
-              {navigation.map((item) => (
+              {filteredNavigation.map((item) => (
                 <Link
                   key={item.name}
                   href={item.href}
@@ -272,7 +290,7 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
             <ul role="list" className="flex flex-1 flex-col gap-y-7">
               <li>
                 <ul role="list" className="-mx-2 space-y-1">
-                  {navigation.map((item) => (
+                  {filteredNavigation.map((item) => (
                     <li key={item.name}>
                       <Link
                         href={item.href}

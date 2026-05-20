@@ -74,6 +74,8 @@ type SumarioDoc = {
   tutorSignedById?: string;
   tutorSignedByName?: string;
   estado?: "por_preencher" | "preenchido" | "arquivado";
+  changeRequested?: boolean;
+  changeRequestedReason?: string;
 };
 
 const MIN_LEN = 10;
@@ -109,6 +111,10 @@ export function SumariosTab({
   const [signingWeek, setSigningWeek] = useState<WorkWeek | null>(null);
   const [signingSubmitting, setSigningSubmitting] = useState(false);
   const [signingError, setSigningError] = useState<string | null>(null);
+  const [rejectingWeek, setRejectingWeek] = useState<WorkWeek | null>(null);
+  const [rejectingReason, setRejectingReason] = useState("");
+  const [rejectingSubmitting, setRejectingSubmitting] = useState(false);
+  const [rejectingError, setRejectingError] = useState<string | null>(null);
 
   const canEdit = currentUserRole === "aluno";
   const isTutor = currentUserRole === "tutor";
@@ -498,16 +504,27 @@ export function SumariosTab({
                             </span>
                           </div>
                         ) : persisted?.content ? (
-                          <Button
-                            type="button"
-                            variant="default"
-                            size="sm"
-                            className="w-full"
-                            onClick={() => setSigningWeek(week)}
-                          >
-                            <Pen className="mr-2 h-4 w-4" />
-                            Assinar sumário semanal
-                          </Button>
+                          <div className="flex gap-2 w-full">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => setRejectingWeek(week)}
+                            >
+                              Solicitar alteração
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="default"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => setSigningWeek(week)}
+                            >
+                              <CheckCircle2 className="mr-2 h-4 w-4" />
+                              Validar sumário
+                            </Button>
+                          </div>
                         ) : (
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <Clock className="h-3.5 w-3.5 shrink-0" />
@@ -605,6 +622,99 @@ export function SumariosTab({
                 "Confirmar validação"
               )}
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={rejectingWeek !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRejectingWeek(null);
+            setRejectingReason("");
+            setRejectingError(null);
+          }
+        }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Solicitar alteração</AlertDialogTitle>
+            <AlertDialogDescription>
+              Indique o que precisa ser corrigido ou complementado neste sumário.
+              O aluno receberá uma notificação no chat com as suas indicações.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            <Textarea
+              value={rejectingReason}
+              onChange={(e) => setRejectingReason(e.target.value)}
+              placeholder="Ex: Por favor, detalhe mais as atividades realizadas na terça-feira..."
+              disabled={rejectingSubmitting}
+              rows={4}
+            />
+            {rejectingError && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {rejectingError}
+              </div>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={rejectingSubmitting}>
+              Cancelar
+            </AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={rejectingSubmitting || !rejectingReason.trim()}
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!rejectingWeek || !rejectingReason.trim()) return;
+                setRejectingSubmitting(true);
+                setRejectingError(null);
+                try {
+                  const db = await getDbRuntime();
+                  const ref = doc(db, "estagios", estagioId, "sumarios", rejectingWeek.weekId);
+                  await setDoc(
+                    ref,
+                    {
+                      changeRequested: true,
+                      changeRequestedReason: rejectingReason,
+                      updatedAt: serverTimestamp(),
+                      updatedBy: currentUserId,
+                      updatedByRole: currentUserRole,
+                    },
+                    { merge: true }
+                  );
+                  
+                  const studentId = estagio.alunoId as string | undefined;
+                  if (studentId) {
+                    await fetch("/api/chat/system-message", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        userIds: [currentUserId, studentId],
+                        text: `O tutor solicitou alterações no sumário da Semana ${rejectingWeek.weekNumber}:\n\n"${rejectingReason}"`,
+                      }),
+                    });
+                  }
+
+                  setRejectingWeek(null);
+                  setRejectingReason("");
+                } catch (err) {
+                  setRejectingError("Erro ao solicitar alteração.");
+                } finally {
+                  setRejectingSubmitting(false);
+                }
+              }}
+            >
+              {rejectingSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  A enviar...
+                </>
+              ) : (
+                "Enviar pedido"
+              )}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
