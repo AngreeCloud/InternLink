@@ -146,7 +146,7 @@ export async function GET(
     });
 
     cursorY -= 10;
-    sigPage.drawText(`Documento: ${docData.nome ?? "—"}`, {
+    sigPage.drawText(`Documento: ${docData.nome ?? "-"}`, {
       x: margin,
       y: cursorY,
       size: 9,
@@ -193,7 +193,7 @@ export async function GET(
         const overflow = pdfDoc.addPage([595.28, 841.89]);
         cursorY = overflow.getSize().height - margin;
         // Referência mínima de cabeçalho na página de transbordo.
-        overflow.drawText("InternLink — continuação de assinaturas", {
+        overflow.drawText("InternLink - continuacao de assinaturas", {
           x: margin,
           y: cursorY,
           size: 9,
@@ -305,7 +305,7 @@ export async function GET(
         color: mutedColor,
       }
     );
-    sigPage.drawText(`internlink.app  •  ${session.estagio.schoolId ?? ""}`, {
+    sigPage.drawText(`internlink.app  -  ${session.estagio.schoolId ?? ""}`, {
       x: margin,
       y: footerY - 10,
       size: 7,
