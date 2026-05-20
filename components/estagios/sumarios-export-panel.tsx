@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Download, FileDown, Loader2, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 import Link from "next/link";
 
@@ -29,6 +28,9 @@ export function SumariosExportPanel({ estagioId, currentUserRole, alunoId, tutor
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState<"signed" | "unsigned" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const normalizedRole = currentUserRole.toLowerCase();
+  const currentUserIsAluno = normalizedRole === "aluno";
+  const currentUserIsTutor = normalizedRole === "tutor";
 
   useEffect(() => {
     let cancelled = false;
@@ -118,15 +120,15 @@ export function SumariosExportPanel({ estagioId, currentUserRole, alunoId, tutor
           <RequirementItem
             ok={preflight.alunoHasSignature}
             label="Assinatura do aluno configurada"
-            actionHref={!preflight.alunoHasSignature ? "/profile" : undefined}
-            actionLabel={!preflight.alunoHasSignature ? "Configurar assinatura no perfil" : undefined}
+            actionHref={!preflight.alunoHasSignature && currentUserIsAluno ? "/profile" : undefined}
+            actionLabel={!preflight.alunoHasSignature && currentUserIsAluno ? "Configurar assinatura no perfil" : undefined}
           />
 
           <RequirementItem
             ok={preflight.tutorHasSignature}
             label="Assinatura do tutor configurada"
-            actionHref={!preflight.tutorHasSignature ? "/profile" : undefined}
-            actionLabel={!preflight.tutorHasSignature ? "Configurar assinatura no perfil" : undefined}
+            actionHref={!preflight.tutorHasSignature && currentUserIsTutor ? "/profile" : undefined}
+            actionLabel={!preflight.tutorHasSignature && currentUserIsTutor ? "Configurar assinatura no perfil" : undefined}
           />
         </div>
 
