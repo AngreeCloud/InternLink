@@ -85,6 +85,19 @@ export function getIsoWeekStart(date: Date): Date {
   return d;
 }
 
+/**
+ * Calcula o número da semana relativo ao início do estágio.
+ * A semana 1 é a semana que contém a dataInicio.
+ */
+export function getRelativeWeekNumber(date: Date, stageStartDate: Date): number {
+  const stageWeekStart = getIsoWeekStart(stageStartDate);
+  const dateWeekStart = getIsoWeekStart(date);
+  const diffMs = dateWeekStart.getTime() - stageWeekStart.getTime();
+  const diffDays = diffMs / (24 * 60 * 60 * 1000);
+  const weekNumber = 1 + Math.floor(diffDays / 7);
+  return Math.max(1, weekNumber);
+}
+
 export type WorkDay = {
   iso: string;
   date: Date;
@@ -108,6 +121,7 @@ export type WorkWeek = {
 /**
  * Devolve todos os dias úteis (per diasSemana, excluindo feriados PT) entre
  * dataInicio e dataFim (inclusivo). Limitado a um intervalo razoável.
+ * Os números das semanas são relativos ao dataInicio (Semana 1 = semana que contém dataInicio).
  */
 export function listWorkDays(
   dataInicio: string,
@@ -134,19 +148,22 @@ export function listWorkDays(
     const isWorkday = Boolean(diasSemana[key]);
     const isHoliday = holidays.has(iso);
     if (isWorkday && !isHoliday) {
-      const w = getIsoWeek(cursor);
+      const isoWeek = getIsoWeek(cursor);
+      const relativeWeekNumber = getRelativeWeekNumber(cursor, start);
       const weekStart = getIsoWeekStart(cursor);
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 6);
+      // weekId combina ISO week e semana relativa para unicidade
+      const weekIdStr = `${relativeWeekNumber}-${toIsoDate(weekStart)}`;
       days.push({
         iso,
         date: new Date(cursor),
         weekday,
-        weekId: w.weekId,
+        weekId: weekIdStr,
         weekStartIso: toIsoDate(weekStart),
         weekEndIso: toIsoDate(weekEnd),
-        weekNumber: w.week,
-        weekYear: w.year,
+        weekNumber: relativeWeekNumber,
+        weekYear: isoWeek.year,
       });
     }
     cursor.setDate(cursor.getDate() + 1);
