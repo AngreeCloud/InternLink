@@ -33,6 +33,7 @@ type Props = {
   targetDate: string;
   canRequestEarlyTermination: boolean;
   onCreated: () => void;
+  defaultType?: ScheduleChangeRequestType;
 };
 
 const schema = z.object({
@@ -58,6 +59,7 @@ export function ScheduleChangeRequestModal({
   targetDate,
   canRequestEarlyTermination,
   onCreated,
+  defaultType,
 }: Props) {
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -76,7 +78,7 @@ export function ScheduleChangeRequestModal({
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      type: isPastOrToday ? "past_absence_justification" : "future_absence",
+      type: defaultType || (isPastOrToday ? "past_absence_justification" : "future_absence"),
       reason: "",
     },
   });
@@ -86,11 +88,12 @@ export function ScheduleChangeRequestModal({
   useEffect(() => {
     if (!open) return;
     reset({
-      type: isPastOrToday ? "past_absence_justification" : "future_absence",
+      type: defaultType || (isPastOrToday ? "past_absence_justification" : "future_absence"),
       reason: "",
     });
+
     setServerError(null);
-  }, [open, isPastOrToday, reset]);
+  }, [open, isPastOrToday, reset, defaultType]);
 
   function handleClose() {
     reset();

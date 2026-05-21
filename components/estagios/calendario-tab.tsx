@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, getDocs, onSnapshot, query, where } from "firebase/firestore";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/style.css";
 import { getDbRuntime } from "@/lib/firebase-runtime";
@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   Clock,
   StickyNote,
+  Send,
 } from "lucide-react";
 import {
   formatIsoPt,
@@ -178,6 +179,9 @@ export function CalendarioTab({
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [modalDate, setModalDate] = useState<string>("");
+  const [modalDefaultType, setModalDefaultType] = useState<ScheduleChangeRequestType | undefined>();
+  const [earlyTerminationLoading, setEarlyTerminationLoading] = useState(false);
+  const [earlyTerminationError, setEarlyTerminationError] = useState<string | null>(null);
 
   const presencaSet = useMemo(
     () =>
@@ -259,7 +263,47 @@ export function CalendarioTab({
     if (iso <= todayIso && !hasMissingHours(iso)) return;
 
     setModalDate(iso);
+    setModalDefaultType(undefined);
     setModalOpen(true);
+  }
+
+  async function handleEarlyTerminationClick() {
+    setEarlyTerminationLoading(true);
+    setEarlyTerminationError(null);
+    try {
+      const db = await getDbRuntime();
+      const sumariosSnap = await getDocs(query(collection(db, "estagios", estagioId, "sumarios")));
+      const allSubmitted = sumariosSnap.docs.every((d) => {
+        const s = d.data();
+        return s.estado === "preenchido" || s.estado === "arquivado";
+      });
+
+      if (!allSubmitted) {
+        const pending = sumariosSnap.docs.filter(
+          (d) => d.data().estado !== "preenchido" && d.data().estado !== "arquivado"
+        ).length;
+        setEarlyTerminationError(
+          `Ainda tens ${pending} sumário(s) por preencher. Submete todos os sumários antes de solicitar o término antecipado.`
+        );
+        return;
+      }
+
+      // Find next future workday
+      const nextFuture = workDays.find((d: WorkDay) => d.iso > todayIso);
+      if (!nextFuture) {
+        setEarlyTerminationError("Não foi encontrado um dia futuro para associar ao pedido.");
+        return;
+      }
+
+      setModalDate(nextFuture.iso);
+      setModalDefaultType("early_termination");
+      setModalOpen(true);
+    } catch (err) {
+      console.error("Erro ao verificar sumários:", err);
+      setEarlyTerminationError("Erro ao verificar sumários. Tenta novamente.");
+    } finally {
+      setEarlyTerminationLoading(false);
+    }
   }
 
   function handleWeekPrev() {
@@ -384,9 +428,36 @@ export function CalendarioTab({
           </div>
 
           {isAluno && eligibleForEarlyTermination && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-              Tens horas restantes inferiores a um dia de trabalho — podes solicitar o
-              término antecipado do estágio.
+            <div className="rounded-md border border-teal-200 bg-teal-50 px-4 py-3 dark:border-teal-800 dark:bg-teal-950">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium text-teal-800 dark:text-teal-200">
+                    Tens horas restantes inferiores a um dia de trabalho
+                  </p>
+                  <p className="text-xs text-teal-600 dark:text-teal-400">
+                    Podes solicitar o término antecipado do estágio.
+                  </p>
+                </div>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="shrink-0 bg-teal-600 hover:bg-teal-700 text-white"
+                  onClick={handleEarlyTerminationClick}
+                  disabled={earlyTerminationLoading}
+                >
+                  {earlyTerminationLoading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-2 h-4 w-4" />
+                  )}
+                  Solicitar término antecipado
+                </Button>
+              </div>
+              {earlyTerminationError && (
+                <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+                  {earlyTerminationError}
+                </p>
+              )}
             </div>
           )}
 
@@ -635,11 +706,16 @@ export function CalendarioTab({
       {/* Modal */}
       <ScheduleChangeRequestModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => {
+          setModalOpen(false);
+          setModalDefaultType(undefined);
+          setEarlyTerminationError(null);
+        }}
         estagioId={estagioId}
         targetDate={modalDate}
         canRequestEarlyTermination={eligibleForEarlyTermination}
         onCreated={handleUpdated}
+        defaultType={modalDefaultType}
       />
     </div>
   );
