@@ -34,6 +34,7 @@ import {
   labelForStatus,
   variantForStatus,
   type ScheduleChangeRequest,
+  type ScheduleChangeRequestType,
 } from "@/lib/estagios/schedule-change-requests";
 import type { EstagioRole } from "@/lib/estagios/permissions";
 import { ScheduleChangeRequestModal } from "./schedule-change-request-modal";
