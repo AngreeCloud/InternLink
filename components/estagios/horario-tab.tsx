@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { collection, doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -112,7 +112,8 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
 
   const todayIso = toIsoDate(new Date());
 
-  // Init collapsed: past weeks collapsed, current+future expanded
+  const [recalcTriggered, setRecalcTriggered] = useState(false);
+
   useEffect(() => {
     if (weeks.length === 0 || Object.keys(collapsedWeeks).length > 0) return;
     const init: Record<string, boolean> = {};
@@ -141,6 +142,23 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
   const diasRegistados = Object.values(presencas).filter(
     (p) => typeof p.hoursWorked === "number" && p.hoursWorked > 0
   ).length;
+
+  // Recalcular dataFimEstimada quando as presenças carregarem e estiver inconsistente.
+  useEffect(() => {
+    if (recalcTriggered) return;
+    if (workDays.length > 0 && diasRegistados >= workDays.length && restante > 0) {
+      setRecalcTriggered(true);
+      const url = `/api/estagios/${encodeURIComponent(estagioId)}/recalcular-data-fim`;
+      fetch(url, { method: "POST" })
+        .then((r) => r.json().then((data) => {
+          console.log("[recalcular-data-fim] resposta:", data);
+        }))
+        .catch((err) => {
+          console.error("recalcular-data-fim falhou:", err);
+          setRecalcTriggered(false);
+        });
+    }
+  }, [diasRegistados, workDays.length, restante, estagioId, recalcTriggered]);
 
   function getDraft(day: WorkDay) {
     const persisted = presencas[day.iso];
@@ -242,7 +260,14 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
           horasTrabalhadas: v.value,
           horasPrevistasNoDia: horasDiarias || 0,
         }),
-      }).catch(() => { /* best-effort */ });
+      }).catch((err) => { console.error("invalidar termino-antecipado falhou:", err); });
+
+      // Recalcular dataFimEstimada no backend (non-blocking)
+      fetch(`/api/estagios/${estagioId}/recalcular-data-fim`, {
+        method: "POST",
+      }).then((r) => r.json().then((data) => {
+        console.log("[recalcular-data-fim] resposta pós-save:", data);
+      })).catch((err) => { console.error("recalcular-data-fim falhou:", err); });
     } catch (err) {
       console.error("[v0] save presenca", err);
       setErrors((e) => ({
@@ -311,6 +336,13 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
                   style={{ width: `${Math.min(100, pct)}%` }}
                 />
               </div>
+            </div>
+          )}
+
+          {workDays.length > 0 && diasRegistados === workDays.length && restante > 0 && (
+            <div className="sm:col-span-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+              Atingiste o limite de dias previstos mas ainda faltam {formatHours(restante)}h.
+              O calendário está a ser recalculado. Se os novos dias não aparecerem, reguarda uma presença existente para forçar o recálculo.
             </div>
           )}
         </CardContent>

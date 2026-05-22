@@ -109,6 +109,77 @@ export function calcularDataFimEstimada(input: DateCalcInput): DateCalcResult {
   };
 }
 
+/**
+ * Recalcula a data de fim estimada com base nas horas efetivamente realizadas.
+ *
+ * Ao contrário de `calcularDataFimEstimada` (que projeta a partir de dataInicio),
+ * esta função projeta a partir do dia seguinte ao atual, garantindo que o estágio
+ * tenha sempre dias futuros suficientes para acomodar as horas em falta.
+ *
+ * Se horasRestantes <= 0, retorna dataFimEstimada vazia (estágio concluído).
+ */
+export function recalcularDataFimEstimada(input: {
+  totalHoras: number;
+  horasRealizadas: number;
+  horasDiarias: number;
+  diasSemana: DiasSemana;
+}): DateCalcResult {
+  const { totalHoras, horasRealizadas, horasDiarias, diasSemana } = input;
+
+  if (!Number.isFinite(totalHoras) || !Number.isFinite(horasRealizadas)) {
+    return { dataFimEstimada: "", diasUteis: 0, horasPorDia: horasDiarias, totalHoras };
+  }
+
+  if (!Number.isFinite(horasDiarias) || horasDiarias <= 0) {
+    return { dataFimEstimada: "", diasUteis: 0, horasPorDia: horasDiarias, totalHoras };
+  }
+
+  const anyDayActive = WEEKDAY_KEYS.some((key) => diasSemana[key]);
+  if (!anyDayActive) {
+    return { dataFimEstimada: "", diasUteis: 0, horasPorDia: horasDiarias, totalHoras };
+  }
+
+  const horasRestantes = Math.max(0, totalHoras - horasRealizadas);
+  if (horasRestantes <= 0) {
+    return { dataFimEstimada: "", diasUteis: 0, horasPorDia: horasDiarias, totalHoras }; // concluído
+  }
+
+  const diasNecessarios = Math.ceil(horasRestantes / horasDiarias);
+
+  // Projetar a partir do dia seguinte ao atual
+  const hoje = new Date();
+  const cursor = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1);
+  const holidays = getPortugueseHolidays(cursor.getFullYear(), cursor.getFullYear() + 10);
+  let diasUteisRestantes = diasNecessarios;
+  let ultimoDiaUtil = toIsoDate(cursor);
+  let safety = 0;
+  const HARD_LIMIT_DAYS = 366 * 10;
+
+  while (diasUteisRestantes > 0 && safety < HARD_LIMIT_DAYS) {
+    const iso = toIsoDate(cursor);
+    const weekday = cursor.getDay();
+    const key = WEEKDAY_KEYS[weekday] as keyof DiasSemana;
+    const isActiveDay = Boolean(diasSemana[key]);
+    const isHoliday = holidays.has(iso);
+
+    if (isActiveDay && !isHoliday) {
+      ultimoDiaUtil = iso;
+      diasUteisRestantes -= 1;
+      if (diasUteisRestantes <= 0) break;
+    }
+
+    cursor.setDate(cursor.getDate() + 1);
+    safety += 1;
+  }
+
+  return {
+    dataFimEstimada: ultimoDiaUtil,
+    diasUteis: diasNecessarios,
+    horasPorDia: horasDiarias,
+    totalHoras,
+  };
+}
+
 export function formatIsoDatePt(iso: string): string {
   if (!iso || iso.length < 10) return iso;
   const [y, m, d] = iso.split("-");
