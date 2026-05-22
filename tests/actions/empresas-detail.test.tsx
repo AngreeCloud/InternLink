@@ -12,6 +12,15 @@ vi.mock("lucide-react", () => ({
   ArrowLeft: () => <svg data-testid="arrow-left-icon" />,
   Building2: () => <svg data-testid="building-icon" />,
   Loader2: () => <svg data-testid="loader-icon" />,
+  GraduationCap: () => <svg data-testid="graduation-icon" />,
+  Calendar: () => <svg data-testid="calendar-icon" />,
+  Clock: () => <svg data-testid="clock-icon" />,
+  Trash2: () => <svg data-testid="trash-icon" />,
+  UserPlus: () => <svg data-testid="user-plus-icon" />,
+  Search: () => <svg data-testid="search-icon" />,
+  X: () => <svg data-testid="x-icon" />,
+  MessageSquare: () => <svg data-testid="message-icon" />,
+  Pencil: () => <svg data-testid="pencil-icon" />,
 }));
 
 vi.mock("next/link", () => ({

@@ -41,6 +41,15 @@
         { "fieldPath": "ativa", "order": "ASCENDING" },
         { "fieldPath": "nomeNormalizado", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "estagios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "empresaId", "order": "ASCENDING" },
+        { "fieldPath": "schoolId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [

@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Building2, Loader2, Trash2, UserPlus, Search, X, MessageSquare } from "lucide-react";
+import { ArrowLeft, Building2, Loader2, Trash2, UserPlus, Search, X, MessageSquare, GraduationCap, Calendar, Clock, Pencil } from "lucide-react";
 import Link from "next/link";
+import { EmpresasEditForm } from "./empresas-edit-form";
 
 type EmpresaFull = {
   id: string;
@@ -21,6 +22,7 @@ type EmpresaFull = {
   pais?: string;
   emailGeral?: string;
   telefone?: string;
+  logoUrl?: string;
   ativa: boolean;
 };
 
@@ -34,6 +36,21 @@ type TutorItem = {
 type Props = {
   empresaId: string;
   basePath: string;
+};
+
+type EstagioItem = {
+  id: string;
+  titulo: string;
+  alunoNome: string;
+  professorNome: string;
+  tutorNome: string;
+  estadoEstagio: string;
+  dataInicio?: string;
+  dataFimEstimada?: string;
+  totalHoras?: number;
+  horasRealizadas?: number;
+  courseNome?: string;
+  createdAt?: number | null;
 };
 
 function InfoTab({ empresa }: { empresa: EmpresaFull }) {
@@ -321,11 +338,112 @@ function TutoresTab({
   );
 }
 
+function EstagiosTab({ empresaId }: { empresaId: string }) {
+  const [estagios, setEstagios] = useState<EstagioItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/empresas/${empresaId}/estagios`);
+        if (!res.ok) throw new Error("Erro ao carregar estágios");
+        const data = (await res.json()) as { estagios?: EstagioItem[] };
+        if (!cancelled) setEstagios(data.estagios ?? []);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Erro inesperado");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [empresaId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-10">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <p className="text-sm text-destructive">{error}</p>;
+  }
+
+  if (estagios.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">Nenhum estágio associado a esta empresa.</p>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        {estagios.length} {estagios.length === 1 ? "estágio encontrado" : "estágios encontrados"}
+      </p>
+      {estagios.map((estagio) => (
+        <div
+          key={estagio.id}
+          className="rounded-lg border border-border bg-card p-4 space-y-2"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium truncate">{estagio.titulo}</p>
+              <p className="text-xs text-muted-foreground">{estagio.alunoNome}</p>
+            </div>
+            <span
+              className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${
+                estagio.estadoEstagio === "concluido"
+                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                  : estagio.estadoEstagio === "em_curso"
+                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                  : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {estagio.estadoEstagio === "concluido"
+                ? "Concluído"
+                : estagio.estadoEstagio === "em_curso"
+                ? "Em curso"
+                : estagio.estadoEstagio}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            {estagio.professorNome && (
+              <span className="flex items-center gap-1">
+                <GraduationCap className="h-3 w-3" />
+                {estagio.professorNome}
+              </span>
+            )}
+            {estagio.dataInicio && (
+              <span className="flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
+                {estagio.dataInicio}
+                {estagio.dataFimEstimada && ` → ${estagio.dataFimEstimada}`}
+              </span>
+            )}
+            {estagio.totalHoras != null && (
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {estagio.horasRealizadas ?? 0}/{estagio.totalHoras}h
+              </span>
+            )}
+            {estagio.courseNome && <span>{estagio.courseNome}</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function EmpresasDetail({ empresaId, basePath }: Props) {
   const [empresa, setEmpresa] = useState<EmpresaFull | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"info" | "tutores">("info");
+  const [tab, setTab] = useState<"info" | "tutores" | "estagios">("info");
+  const [editing, setEditing] = useState(false);
 
   const fetchEmpresa = useCallback(async () => {
     setLoading(true);
@@ -374,9 +492,10 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
     );
   }
 
-  const tabs = [
+    const tabs = [
     { key: "info" as const, label: "Informações" },
     { key: "tutores" as const, label: "Tutores" },
+    { key: "estagios" as const, label: "Estágios" },
   ];
 
   return (
@@ -397,6 +516,10 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
             {empresa.setor && <p className="text-sm text-muted-foreground">{empresa.setor}</p>}
           </div>
         </div>
+        <Button variant="outline" size="sm" onClick={() => setEditing(!editing)}>
+          <Pencil className="mr-2 h-4 w-4" />
+          {editing ? "Fechar" : "Editar"}
+        </Button>
       </div>
 
       <div className="flex gap-1 border-b border-border">
@@ -416,8 +539,18 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
         ))}
       </div>
 
-      {tab === "info" && <InfoTab empresa={empresa} />}
+      {tab === "info" && (editing ? (
+        <EmpresasEditForm
+          empresaId={empresaId}
+          initial={empresa}
+          onSaved={() => { setEditing(false); fetchEmpresa(); }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        <InfoTab empresa={empresa} />
+      ))}
       {tab === "tutores" && <TutoresTab empresaId={empresaId} basePath={basePath} />}
+      {tab === "estagios" && <EstagiosTab empresaId={empresaId} />}
     </div>
   );
 }
