@@ -13,6 +13,7 @@ import { TRANSITION_PORTAL_MS } from "@/components/layout/access-validation-over
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
 import { NotificationsInbox } from "@/components/chat/notifications-inbox";
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications";
+import { usePendingSummaries } from "@/lib/estagios/use-pending-summaries";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -32,6 +33,7 @@ import {
   LogOut,
   MessageSquare,
   User,
+  FileText,
 } from "lucide-react";
 
 type AuthState = {
@@ -61,11 +63,14 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
     { href: "/tutor/inbox", label: "Caixa de Entrada", icon: Inbox },
     { href: "/tutor/solicitacoes-horario", label: "Solicitações de horário", icon: CalendarClock },
     { href: "/tutor/estagios", label: "Estágios", icon: Briefcase },
+    { href: "/tutor/sumarios", label: "Validação de sumários", icon: FileText },
     { href: "/tutor/chat", label: "Chat", icon: MessageSquare },
     { href: "/tutor/documentos", label: "Documentos", icon: User },
   ];
 
   const isChatPage = pathname === "/tutor/chat" || pathname.startsWith("/tutor/chat/");
+
+  const pendingSummariesCount = usePendingSummaries(state.userId);
 
   const { notifications, handleOpenConversation } = useChatNotifications({
     userId: state.userId,
@@ -168,6 +173,11 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
                       userId={state.userId}
                       isActive={pathname === item.href || pathname.startsWith(`${item.href}/`)}
                     />
+                  )}
+                  {item.href === "/tutor/sumarios" && pendingSummariesCount > 0 && (
+                    <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground">
+                      {pendingSummariesCount}
+                    </span>
                   )}
                 </Link>
               );

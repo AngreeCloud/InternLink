@@ -179,12 +179,12 @@ export async function DELETE(request: Request) {
     const { searchParams } = new URL(request.url);
     const studentId = searchParams.get("studentId");
 
-    // If the caller is a student, they can only delete their own EE
+    // If the caller is a student, they can only disassociate their own EE
     if (role === "aluno" && studentId !== uid) {
       throw new EstagioAccessError(403, "forbidden", "Sem permissão para esta operação.");
     }
 
-    if (role !== "professor" && role !== "aluno") {
+    if (role !== "professor" && role !== "aluno" && role !== "admin_escolar") {
       throw new EstagioAccessError(403, "not_authorized", "Sem permissão para esta operação.");
     }
 
@@ -195,29 +195,44 @@ export async function DELETE(request: Request) {
       throw new EstagioAccessError(404, "student_not_found", "Aluno não encontrado.");
     }
 
-    const studentData = studentSnap.data() as { encarregadoId?: string };
+    const studentData = studentSnap.data() as { encarregadoId?: string; dataNascimento?: string };
     const encarregadoId = studentData.encarregadoId;
 
     if (!encarregadoId) {
       throw new EstagioAccessError(404, "no_ee", "Nenhum Encarregado de Educação associado.");
     }
 
-    const auth = getFirebaseAdminAuth();
-
-    // Delete Auth user
-    try {
-      await auth.deleteUser(encarregadoId);
-    } catch {
-      // Continue if auth user doesn't exist
+    // Apenas alunos com 18+ podem desassociar E.E.
+    if (role === "aluno") {
+      const birth = new Date(studentData.dataNascimento ?? "");
+      let idadeOk = false;
+      if (!isNaN(birth.getTime())) {
+        const today = new Date();
+        let age = today.getFullYear() - birth.getFullYear();
+        const m = today.getMonth() - birth.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+        idadeOk = age >= 18;
+      }
+      if (!idadeOk) {
+        throw new EstagioAccessError(403, "minor", "Apenas alunos com 18+ anos podem desassociar a conta de E.E.");
+      }
     }
-
-    // Delete Firestore doc
-    await db.collection("users").doc(encarregadoId).delete();
 
     // Unlink from student
     await db.collection("users").doc(targetStudentId).update({
       encarregadoId: null,
     });
+
+    // Remove from EE's educandoIds
+    try {
+      const eeSnap = await db.collection("users").doc(encarregadoId).get();
+      if (eeSnap.exists) {
+        const { FieldValue } = await import("firebase-admin/firestore");
+        await db.collection("users").doc(encarregadoId).update({
+          educandoIds: FieldValue.arrayRemove(targetStudentId)
+        });
+      }
+    } catch { /* ignore */ }
 
     // Clear encarregadoId from estagios for this student
     const estagiosSnap = await db

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { collection, doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,12 +14,16 @@ import {
   Loader2,
   Save,
   AlertCircle,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import {
   formatIsoPt,
   groupWorkDaysByWeek,
+  isPastWeek,
   listWorkDays,
   normalizeDiasSemana,
+  sortWeeksHorario,
   toIsoDate,
   weekdayLabel,
   type WorkDay,
@@ -68,6 +72,7 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
   const [saving, setSaving] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
+  const [collapsedWeeks, setCollapsedWeeks] = useState<Record<string, boolean>>({});
 
   // Subscribe to all presencas of this estagio.
   useEffect(() => {
@@ -107,6 +112,22 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
 
   const todayIso = toIsoDate(new Date());
 
+  const [recalcTriggered, setRecalcTriggered] = useState(false);
+
+  useEffect(() => {
+    if (weeks.length === 0 || Object.keys(collapsedWeeks).length > 0) return;
+    const init: Record<string, boolean> = {};
+    for (const w of weeks) {
+      if (isPastWeek(w, todayIso)) init[w.weekId] = true;
+    }
+    setCollapsedWeeks(init);
+  }, [weeks, todayIso, collapsedWeeks]);
+
+  const sortedWeeks = useMemo(
+    () => sortWeeksHorario(weeks, todayIso),
+    [weeks, todayIso]
+  );
+
   const totalRealizado = useMemo(() => {
     let sum = 0;
     for (const p of Object.values(presencas)) {
@@ -121,6 +142,23 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
   const diasRegistados = Object.values(presencas).filter(
     (p) => typeof p.hoursWorked === "number" && p.hoursWorked > 0
   ).length;
+
+  // Recalcular dataFimEstimada quando as presenças carregarem e estiver inconsistente.
+  useEffect(() => {
+    if (recalcTriggered) return;
+    if (workDays.length > 0 && diasRegistados >= workDays.length && restante > 0) {
+      setRecalcTriggered(true);
+      const url = `/api/estagios/${encodeURIComponent(estagioId)}/recalcular-data-fim`;
+      fetch(url, { method: "POST" })
+        .then((r) => r.json().then((data) => {
+          console.log("[recalcular-data-fim] resposta:", data);
+        }))
+        .catch((err) => {
+          console.error("recalcular-data-fim falhou:", err);
+          setRecalcTriggered(false);
+        });
+    }
+  }, [diasRegistados, workDays.length, restante, estagioId, recalcTriggered]);
 
   function getDraft(day: WorkDay) {
     const persisted = presencas[day.iso];
@@ -212,6 +250,24 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
       setTimeout(() => {
         setSavedFlash((s) => (s === day.iso ? null : s));
       }, 2000);
+
+      // Trigger invalidation check for terminoAntecipado (non-blocking)
+      fetch(`/api/estagios/${estagioId}/termino-antecipado/invalidar`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dataPresenca: day.iso,
+          horasTrabalhadas: v.value,
+          horasPrevistasNoDia: horasDiarias || 0,
+        }),
+      }).catch((err) => { console.error("invalidar termino-antecipado falhou:", err); });
+
+      // Recalcular dataFimEstimada no backend (non-blocking)
+      fetch(`/api/estagios/${estagioId}/recalcular-data-fim`, {
+        method: "POST",
+      }).then((r) => r.json().then((data) => {
+        console.log("[recalcular-data-fim] resposta pós-save:", data);
+      })).catch((err) => { console.error("recalcular-data-fim falhou:", err); });
     } catch (err) {
       console.error("[v0] save presenca", err);
       setErrors((e) => ({
@@ -282,6 +338,13 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
               </div>
             </div>
           )}
+
+          {workDays.length > 0 && diasRegistados === workDays.length && restante > 0 && (
+            <div className="sm:col-span-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+              Atingiste o limite de dias previstos mas ainda faltam {formatHours(restante)}h.
+              O calendário está a ser recalculado. Se os novos dias não aparecerem, reguarda uma presença existente para forçar o recálculo.
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -301,7 +364,7 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
         </Card>
       ) : (
         <div className="space-y-4">
-          {weeks.map((week) => {
+          {sortedWeeks.map((week) => {
             const weekHoras = week.days.reduce((sum, d) => {
               const p = presencas[d.iso];
               return sum + (typeof p?.hoursWorked === "number" ? p.hoursWorked : 0);
@@ -310,27 +373,57 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
               (d) => typeof presencas[d.iso]?.hoursWorked === "number"
             ).length;
 
+            const isCollapsed = collapsedWeeks[week.weekId] ?? false;
+
             return (
               <Card key={week.weekId}>
                 <CardHeader className="pb-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <CardTitle className="text-sm">
-                        Semana {week.weekNumber} • {week.weekYear}
-                      </CardTitle>
-                      <p className="text-xs text-muted-foreground">
-                        {formatIsoPt(week.weekStartIso)} – {formatIsoPt(week.weekEndIso)}
-                      </p>
+                    <div className="flex items-center gap-3">
+                      {isPastWeek(week, todayIso) && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCollapsedWeeks((prev) => ({
+                              ...prev,
+                              [week.weekId]: !prev[week.weekId],
+                            }))
+                          }
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {isCollapsed ? (
+                            <ChevronRight className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </button>
+                      )}
+                      <div>
+                        <CardTitle className="text-sm">
+                          Semana {week.weekNumber} • {week.weekYear}
+                          {isPastWeek(week, todayIso) && isCollapsed && (
+                            <span className="ml-2 text-xs text-muted-foreground font-normal">
+                              ({weekDoneCount}/{week.days.length} dias, {formatHours(weekHoras)}h)
+                            </span>
+                          )}
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground">
+                          {formatIsoPt(week.weekStartIso)} – {formatIsoPt(week.weekEndIso)}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Badge variant="outline">
-                        {weekDoneCount}/{week.days.length} dias
-                      </Badge>
-                      <Badge variant="secondary">{formatHours(weekHoras)}h</Badge>
-                    </div>
+                    {!isCollapsed && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline">
+                          {weekDoneCount}/{week.days.length} dias
+                        </Badge>
+                        <Badge variant="secondary">{formatHours(weekHoras)}h</Badge>
+                      </div>
+                    )}
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-2">
+                {!isCollapsed && (
+                  <CardContent className="space-y-2">
                   {week.days.map((day) => {
                     const draft = getDraft(day);
                     const persisted = presencas[day.iso];
@@ -436,6 +529,7 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
                     );
                   })}
                 </CardContent>
+              )}
               </Card>
             );
           })}

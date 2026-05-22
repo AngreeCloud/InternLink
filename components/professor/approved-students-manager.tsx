@@ -28,7 +28,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Search, Users, UserPlus, UserMinus, Copy, Check, ShieldCheck } from "lucide-react";
+import { Search, Users, UserPlus, UserMinus, Copy, Check, ShieldCheck, Trash2 } from "lucide-react";
 
 function calculateAge(dataNascimento: string): number {
   if (!dataNascimento || dataNascimento === "—") return 99;
@@ -66,6 +66,7 @@ type ApprovedStudent = {
   dataNascimento: string;
   createdAt: string;
   encarregadoId: string | null;
+  encarregadoNome: string | null;
 };
 
 type EECredentials = {
@@ -78,6 +79,7 @@ type EECredentials = {
 type ApiStudent = ApprovedStudent & {
   internshipStatus?: InternshipStatusLabel;
   encarregadoId?: string | null;
+  encarregadoNome?: string | null;
 };
 
 type ApiResponse = {
@@ -146,6 +148,7 @@ export function ApprovedStudentsManager() {
       setStudents(nextStudents.map(({ internshipStatus: _internshipStatus, ...student }) => ({
         ...student,
         encarregadoId: student.encarregadoId || null,
+        encarregadoNome: student.encarregadoNome || null,
       })));
       setStudentInternshipStatus(
         Object.fromEntries(
@@ -217,18 +220,39 @@ export function ApprovedStudentsManager() {
     }
   };
 
-  const handleDeleteEe = async (studentId: string) => {
+  const handleDisassociateEe = async (studentId: string) => {
     try {
       const res = await fetch(`/api/encarregado?studentId=${studentId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        setActionError(data.error || "Erro ao desassociar conta de E.E.");
+        return;
+      }
+      setStudents((prev) =>
+        prev.map((s) => (s.id === studentId ? { ...s, encarregadoId: null } : s))
+      );
+      setActionSuccess("Conta de E.E. desassociada com sucesso.");
+    } catch {
+      setActionError("Erro ao desassociar conta de E.E.");
+    }
+  };
+
+  const handleDeleteEeAccount = async (studentId: string, eeUid: string) => {
+    try {
+      const res = await fetch(`/api/encarregado/delete-ee`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eeUid })
+      });
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
         setActionError(data.error || "Erro ao eliminar conta de E.E.");
         return;
       }
       setStudents((prev) =>
-        prev.map((s) => (s.id === studentId ? { ...s, encarregadoId: null } : s))
+        prev.map((s) => (s.encarregadoId === eeUid ? { ...s, encarregadoId: null } : s))
       );
-      setActionSuccess("Conta de E.E. eliminada com sucesso.");
+      setActionSuccess("Conta de E.E. eliminada com sucesso e desassociada de todos os educandos.");
     } catch {
       setActionError("Erro ao eliminar conta de E.E.");
     }
@@ -652,28 +676,55 @@ export function ApprovedStudentsManager() {
                           </td>
                           <td className="px-4 py-3">
                             {student.encarregadoId ? (
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive h-7 px-2">
-                                    <UserMinus className="h-3.5 w-3.5 mr-1" />
-                                    Eliminar E.E.
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Eliminar conta de E.E.</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Vai eliminar a conta de Encarregado de Educação associada a <strong>{student.nome}</strong>. Esta ação é irreversível.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => void handleDeleteEe(student.id)}>
-                                      Confirmar
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                              <div className="flex flex-col gap-1.5">
+                                <span className="text-sm font-medium text-foreground">{student.encarregadoNome || "—"}</span>
+                                <div className="flex flex-wrap items-center gap-1">
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button variant="ghost" size="sm" className="text-orange-600 hover:text-orange-700 h-6 px-1.5 text-xs">
+                                        <UserMinus className="h-3 w-3 mr-1" />
+                                        Desassociar
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Desassociar conta de E.E.</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          A conta de Encarregado de Educação deixará de estar associada a <strong>{student.nome}</strong>. O E.E. continuará a existir para outros educandos (caso tenha).
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => void handleDisassociateEe(student.id)}>
+                                          Confirmar
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive h-6 px-1.5 text-xs">
+                                        <Trash2 className="h-3 w-3 mr-1" />
+                                        Eliminar
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Eliminar conta de E.E.</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          Vai eliminar permanentemente a conta de Encarregado de Educação associada a <strong>{student.nome}</strong>. O E.E. perderá o acesso e será desassociado de todos os seus educandos. Esta ação é irreversível.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => { if(student.encarregadoId) void handleDeleteEeAccount(student.id, student.encarregadoId); }}>
+                                          Confirmar
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </div>
+                              </div>
                             ) : calculateAge(student.dataNascimento) < 18 ? (
                               <div className="flex flex-col gap-1">
                                 <Button variant="ghost" size="sm" className="h-7 px-2 text-blue-600 hover:text-blue-700 justify-start" onClick={() => openEeDialog(student.id)}>
@@ -710,32 +761,56 @@ export function ApprovedStudentsManager() {
                       <p>Telefone: {student.telefone}</p>
                       <p>Nascimento: {student.dataNascimento}</p>
                       <p>Registado em: {student.createdAt}</p>
-                      <p>E.E.: {student.encarregadoId ? "Associado" : "Não associado"}</p>
+                      <p>E.E.: {student.encarregadoId ? student.encarregadoNome : "Não associado"}</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border">
                       {student.encarregadoId ? (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive h-7 px-2">
-                              <UserMinus className="h-3.5 w-3.5 mr-1" />
-                              Eliminar E.E.
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Eliminar conta de E.E.</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Vai eliminar a conta de Encarregado de Educação associada a <strong>{student.nome}</strong>. Esta ação é irreversível.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => void handleDeleteEe(student.id)}>
-                                Confirmar
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        <>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="text-orange-600 hover:text-orange-700 h-7 px-2">
+                                <UserMinus className="h-3.5 w-3.5 mr-1" />
+                                Desassociar E.E.
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Desassociar conta de E.E.</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  A conta de Encarregado de Educação deixará de estar associada a <strong>{student.nome}</strong>. O E.E. continuará a existir para outros educandos (caso tenha).
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => void handleDisassociateEe(student.id)}>
+                                  Confirmar
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive h-7 px-2">
+                                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                Eliminar E.E.
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Eliminar conta de E.E.</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Vai eliminar permanentemente a conta de Encarregado de Educação associada a <strong>{student.nome}</strong>. O E.E. perderá o acesso e será desassociado de todos os seus educandos. Esta ação é irreversível.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => { if(student.encarregadoId) void handleDeleteEeAccount(student.id, student.encarregadoId); }}>
+                                  Confirmar
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </>
                       ) : calculateAge(student.dataNascimento) < 18 ? (
                         <div className="flex gap-1">
                           <Button variant="ghost" size="sm" className="h-7 px-2 text-blue-600 hover:text-blue-700" onClick={() => openEeDialog(student.id)}>

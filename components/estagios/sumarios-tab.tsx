@@ -7,6 +7,7 @@ import {
   onSnapshot,
   serverTimestamp,
   setDoc,
+  Timestamp,
 } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,29 +16,47 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
   CheckCircle2,
+  Clock,
   Loader2,
+  Lock,
   NotebookPen,
+  Pen,
   Save,
   AlertCircle,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   formatIsoPt,
   groupWorkDaysByWeek,
   listWorkDays,
   normalizeDiasSemana,
+  sortWeeksSumarios,
   toIsoDate,
   weekdayLabel,
   type WorkWeek,
 } from "@/lib/estagios/workdays";
 import type { EstagioRole } from "@/lib/estagios/permissions";
+import { SumariosExportPanel } from "@/components/estagios/sumarios-export-panel";
+
+type Participant = { name: string; role: EstagioRole; email?: string };
 
 type Props = {
   estagioId: string;
   estagio: Record<string, unknown>;
   currentUserId: string;
   currentUserRole: EstagioRole;
+  participants?: Record<string, Participant>;
 };
 
 type SumarioDoc = {
@@ -50,6 +69,13 @@ type SumarioDoc = {
   updatedAt?: unknown;
   updatedBy?: string;
   updatedByRole?: string;
+  signedByTutor?: boolean;
+  tutorSignedAt?: Timestamp;
+  tutorSignedById?: string;
+  tutorSignedByName?: string;
+  estado?: "por_preencher" | "preenchido" | "arquivado";
+  changeRequested?: boolean;
+  changeRequestedReason?: string;
 };
 
 const MIN_LEN = 10;
@@ -60,6 +86,7 @@ export function SumariosTab({
   estagio,
   currentUserId,
   currentUserRole,
+  participants,
 }: Props) {
   const dataInicio = (estagio.dataInicio as string | undefined) ?? "";
   const dataFim =
@@ -81,11 +108,16 @@ export function SumariosTab({
   const [saving, setSaving] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
+  const [signingWeek, setSigningWeek] = useState<WorkWeek | null>(null);
+  const [signingSubmitting, setSigningSubmitting] = useState(false);
+  const [signingError, setSigningError] = useState<string | null>(null);
+  const [rejectingWeek, setRejectingWeek] = useState<WorkWeek | null>(null);
+  const [rejectingReason, setRejectingReason] = useState("");
+  const [rejectingSubmitting, setRejectingSubmitting] = useState(false);
+  const [rejectingError, setRejectingError] = useState<string | null>(null);
 
-  const canEdit =
-    currentUserRole === "aluno" ||
-    currentUserRole === "tutor" ||
-    currentUserRole === "diretor";
+  const canEdit = currentUserRole === "aluno";
+  const isTutor = currentUserRole === "tutor";
 
   const todayIso = toIsoDate(new Date());
 
@@ -122,14 +154,25 @@ export function SumariosTab({
     };
   }, [estagioId]);
 
-  // Auto-open the most recent past week on load.
+  // Sorted weeks: uncompleted past first, current, future, completed last
+  const sortedWeeks = useMemo(
+    () =>
+      sortWeeksSumarios(weeks, todayIso, (w) => Boolean(sumarios[w.weekId]?.content)),
+    [weeks, todayIso, sumarios]
+  );
+
+  // Auto-open first uncompleted past week, or current week on load.
   useEffect(() => {
-    if (loading || weeks.length === 0) return;
+    if (loading || sortedWeeks.length === 0) return;
     if (Object.keys(openWeeks).length > 0) return;
-    const pastWeeks = weeks.filter((w) => w.weekStartIso <= todayIso);
-    const target = pastWeeks.length > 0 ? pastWeeks[pastWeeks.length - 1] : weeks[0];
+    const firstUncompleted = sortedWeeks.find(
+      (w) => !sumarios[w.weekId]?.content && w.weekEndIso <= todayIso
+    );
+    const target = firstUncompleted ?? sortedWeeks.find(
+      (w) => w.weekStartIso <= todayIso && w.weekEndIso >= todayIso
+    ) ?? sortedWeeks[0];
     setOpenWeeks({ [target.weekId]: true });
-  }, [loading, weeks, openWeeks, todayIso]);
+  }, [loading, sortedWeeks, openWeeks, todayIso, sumarios]);
 
   function getDraft(week: WorkWeek): string {
     const persisted = sumarios[week.weekId]?.content ?? "";
@@ -181,6 +224,15 @@ export function SumariosTab({
       return;
     }
 
+    const persisted = sumarios[week.weekId];
+    if (persisted?.estado === "arquivado") {
+      setErrors((e) => ({
+        ...e,
+        [week.weekId]: "Sumário arquivado. Não é possível editar.",
+      }));
+      return;
+    }
+
     setSaving(week.weekId);
     try {
       const db = await getDbRuntime();
@@ -192,6 +244,7 @@ export function SumariosTab({
         weekNumber: week.weekNumber,
         weekYear: week.weekYear,
         content,
+        estado: "preenchido",
         updatedAt: serverTimestamp(),
         updatedBy: currentUserId,
         updatedByRole: currentUserRole,
@@ -215,6 +268,35 @@ export function SumariosTab({
     } finally {
       setSaving(null);
     }
+  }
+
+  async function handleTutorSign(week: WorkWeek, tutorName: string) {
+    setSigningError(null);
+    setSigningSubmitting(true);
+    try {
+      const db = await getDbRuntime();
+      const ref = doc(db, "estagios", estagioId, "sumarios", week.weekId);
+      await setDoc(ref, {
+        signedByTutor: true,
+        tutorSignedAt: serverTimestamp(),
+        tutorSignedById: currentUserId,
+        tutorSignedByName: tutorName,
+        estado: "arquivado",
+      }, { merge: true });
+      setSigningWeek(null);
+    } catch (err) {
+      console.error("[v0] tutor sign", err);
+      setSigningError("Não foi possível assinar. Tenta novamente.");
+    } finally {
+      setSigningSubmitting(false);
+    }
+  }
+
+  function formatTimestamp(ts: Timestamp | undefined): string {
+    if (!ts) return "";
+    const d = ts.toDate();
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} às ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
   if (!dataInicio || !dataFim) {
@@ -243,6 +325,7 @@ export function SumariosTab({
   const totalPreenchidos = weeks.filter((w) => Boolean(sumarios[w.weekId]?.content))
     .length;
   const semanasPassadas = weeks.filter((w) => w.weekStartIso <= todayIso).length;
+  const hasAnySumario = Object.values(sumarios).some((s) => Boolean(s.content));
 
   return (
     <div className="space-y-4">
@@ -281,7 +364,7 @@ export function SumariosTab({
         </Card>
       ) : (
         <div className="space-y-3">
-          {weeks.map((week) => {
+          {sortedWeeks.map((week) => {
             const persisted = sumarios[week.weekId];
             const draft = getDraft(week);
             const dirty = isDirty(week);
@@ -290,11 +373,14 @@ export function SumariosTab({
             const isFuture = week.weekStartIso > todayIso;
             const error = errors[week.weekId];
             const isSavedFlash = savedFlash === week.weekId;
-            const status = persisted?.content
-              ? { label: "Preenchido", variant: "default" as const }
-              : isFuture
-                ? { label: "Por vir", variant: "outline" as const }
-                : { label: "Por preencher", variant: "secondary" as const };
+            const isArchived = persisted?.estado === "arquivado";
+            const status = isArchived
+              ? { label: "Arquivado", variant: "default" as const }
+              : persisted?.content
+                ? { label: "Preenchido", variant: "default" as const }
+                : isFuture
+                  ? { label: "Por vir", variant: "outline" as const }
+                  : { label: "Por preencher", variant: "secondary" as const };
 
             const workDaysOfWeek = week.days
               .map((d) => `${weekdayLabel(d.date, true)} ${formatIsoPt(d.iso)}`)
@@ -346,7 +432,7 @@ export function SumariosTab({
                         value={draft}
                         onChange={(e) => setDraft(week.weekId, e.target.value)}
                         placeholder="Descreve as atividades, aprendizagens e tarefas realizadas durante a semana..."
-                        disabled={!canEdit || isFuture}
+                        disabled={!canEdit || isFuture || isArchived}
                         maxLength={MAX_LEN}
                         rows={6}
                         aria-invalid={Boolean(error)}
@@ -383,7 +469,12 @@ export function SumariosTab({
                           Guardado
                         </span>
                       )}
-                      {canEdit && !isFuture && (
+                      {isArchived ? (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Lock className="h-3.5 w-3.5" />
+                          Validado pelo tutor — edição bloqueada
+                        </span>
+                      ) : canEdit && !isFuture ? (
                         <Button
                           type="button"
                           size="sm"
@@ -398,14 +489,243 @@ export function SumariosTab({
                           )}
                           Guardar sumário
                         </Button>
-                      )}
+                      ) : null}
                     </div>
+
+                    {/* Signature footer */}
+                    {isTutor ? (
+                      <div className="border-t pt-3">
+                        {persisted?.signedByTutor ? (
+                          <div className="flex items-center gap-2 text-xs text-emerald-600">
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                            <span>
+                              Sumário validado por si •{" "}
+                              {formatTimestamp(persisted.tutorSignedAt)}
+                            </span>
+                          </div>
+                        ) : persisted?.content ? (
+                          <div className="flex gap-2 w-full">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => setRejectingWeek(week)}
+                            >
+                              Solicitar alteração
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="default"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => setSigningWeek(week)}
+                            >
+                              <CheckCircle2 className="mr-2 h-4 w-4" />
+                              Validar sumário
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Clock className="h-3.5 w-3.5 shrink-0" />
+                            <span>Sumário ainda não preenchido pelo formando</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="border-t pt-3">
+                        {persisted?.signedByTutor ? (
+                          <div className="flex items-center gap-2 text-xs text-emerald-600">
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                            <span>
+                              Validado pelo tutor{" "}
+                              <span className="font-medium">
+                                {persisted.tutorSignedByName}
+                              </span>{" "}
+                              • {formatTimestamp(persisted.tutorSignedAt)}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Clock className="h-3.5 w-3.5 shrink-0" />
+                            <span>Aguarda validação do tutor</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 )}
               </Card>
             );
           })}
         </div>
+      )}
+
+      <AlertDialog
+        open={signingWeek !== null}
+        onOpenChange={(open) => {
+          if (!open) setSigningWeek(null);
+          setSigningError(null);
+        }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Validar sumário semanal</AlertDialogTitle>
+          </AlertDialogHeader>
+          <div className="space-y-3 text-sm">
+            <p className="text-muted-foreground">
+              Semana {signingWeek?.weekNumber} • {signingWeek?.weekYear} —{" "}
+              {signingWeek ? formatIsoPt(signingWeek.weekStartIso) : ""} a{" "}
+              {signingWeek ? formatIsoPt(signingWeek.weekEndIso) : ""}
+            </p>
+            {(() => {
+              const studentId = estagio.alunoId as string | undefined;
+              const studentName = studentId ? participants?.[studentId]?.name : undefined;
+              return studentName ? (
+                <p className="text-muted-foreground">Formando: {studentName}</p>
+              ) : null;
+            })()}
+            <div className="rounded-md border bg-muted/30 px-4 py-3 text-justify text-xs leading-relaxed text-muted-foreground">
+              &ldquo;Declaro que tomei conhecimento das atividades descritas pelo formando
+              para esta semana de trabalho e confirmo que as mesmas são compatíveis com o
+              plano de formação em contexto de trabalho em vigor.&rdquo;
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Esta ação fica registada com a sua identidade e não pode ser revertida.
+            </p>
+            {signingError && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {signingError}
+              </div>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={signingSubmitting}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={signingSubmitting}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!signingWeek) return;
+                const tutorName =
+                  participants?.[currentUserId]?.name ?? "Tutor";
+                handleTutorSign(signingWeek, tutorName);
+              }}
+            >
+              {signingSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  A assinar...
+                </>
+              ) : (
+                "Confirmar validação"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={rejectingWeek !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRejectingWeek(null);
+            setRejectingReason("");
+            setRejectingError(null);
+          }
+        }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Solicitar alteração</AlertDialogTitle>
+            <AlertDialogDescription>
+              Indique o que precisa ser corrigido ou complementado neste sumário.
+              O aluno receberá uma notificação no chat com as suas indicações.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            <Textarea
+              value={rejectingReason}
+              onChange={(e) => setRejectingReason(e.target.value)}
+              placeholder="Ex: Por favor, detalhe mais as atividades realizadas na terça-feira..."
+              disabled={rejectingSubmitting}
+              rows={4}
+            />
+            {rejectingError && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {rejectingError}
+              </div>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={rejectingSubmitting}>
+              Cancelar
+            </AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={rejectingSubmitting || !rejectingReason.trim()}
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!rejectingWeek || !rejectingReason.trim()) return;
+                setRejectingSubmitting(true);
+                setRejectingError(null);
+                try {
+                  const db = await getDbRuntime();
+                  const ref = doc(db, "estagios", estagioId, "sumarios", rejectingWeek.weekId);
+                  await setDoc(
+                    ref,
+                    {
+                      changeRequested: true,
+                      changeRequestedReason: rejectingReason,
+                      updatedAt: serverTimestamp(),
+                      updatedBy: currentUserId,
+                      updatedByRole: currentUserRole,
+                    },
+                    { merge: true }
+                  );
+                  
+                  const studentId = estagio.alunoId as string | undefined;
+                  if (studentId) {
+                    await fetch("/api/chat/system-message", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        userIds: [currentUserId, studentId],
+                        text: `O tutor solicitou alterações no sumário da Semana ${rejectingWeek.weekNumber}:\n\n"${rejectingReason}"`,
+                      }),
+                    });
+                  }
+
+                  setRejectingWeek(null);
+                  setRejectingReason("");
+                } catch (err) {
+                  setRejectingError("Erro ao solicitar alteração.");
+                } finally {
+                  setRejectingSubmitting(false);
+                }
+              }}
+            >
+              {rejectingSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  A enviar...
+                </>
+              ) : (
+                "Enviar pedido"
+              )}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {hasAnySumario && (
+        <SumariosExportPanel
+          estagioId={estagioId}
+          currentUserRole={currentUserRole}
+          alunoId={estagio.alunoId as string | undefined}
+          tutorId={estagio.tutorId as string | undefined}
+        />
       )}
     </div>
   );

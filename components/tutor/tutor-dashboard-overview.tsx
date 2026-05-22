@@ -255,46 +255,23 @@ export function TutorDashboardOverview() {
         </Card>
       ) : (
         <>
-          <Card>
-            <CardHeader>
-              <CardTitle>{state.tutorName}</CardTitle>
-              <CardDescription>{state.empresa}</CardDescription>
-            </CardHeader>
-          </Card>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Escolas Associadas</CardTitle>
-                <School className="h-4 w-4 text-muted-foreground" />
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card className="bg-primary/5 border-primary/10">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xl">{state.tutorName}</CardTitle>
+                <CardDescription>{state.empresa}</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">{state.associatedSchools}</p>
-                <p className="text-xs text-muted-foreground">Pode estar associado a várias escolas.</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Estágios Associados</CardTitle>
-                <Briefcase className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">{state.estagios}</p>
-                <p className="text-xs text-muted-foreground">Estágios em que está encarregado(a).</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Documentos</CardTitle>
-                <FileText className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">{state.documentos}</p>
-                <Badge variant={state.associatedSchools > 0 ? "default" : "secondary"}>
-                  {state.associatedSchools > 0 ? "Chat desbloqueado" : "Aguardando associação"}
-                </Badge>
+                <div className="flex gap-4 text-sm mt-2">
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <School className="h-4 w-4" />
+                    <span>{state.associatedSchools} Escolas</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Briefcase className="h-4 w-4" />
+                    <span>{state.estagios} Estágios</span>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>

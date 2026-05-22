@@ -322,6 +322,7 @@ export function EstagioDetailView({
             estagio={estagio as Record<string, unknown>}
             currentUserId={currentUserId}
             currentUserRole={effectiveRole}
+            participants={participants}
           />
         </TabsContent>
 

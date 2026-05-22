@@ -14,8 +14,8 @@ export async function DELETE(request: Request) {
       throw new EstagioAccessError(403, "user_not_found", "Utilizador não encontrado.");
     }
     const callerData = callerSnap.data() as { role?: string; schoolId?: string };
-    if (callerData.role !== "admin_escolar" || !callerData.schoolId) {
-      throw new EstagioAccessError(403, "not_admin", "Apenas o Administrador Escolar pode eliminar E.E.");
+    if ((callerData.role !== "admin_escolar" && callerData.role !== "professor") || !callerData.schoolId) {
+      throw new EstagioAccessError(403, "not_allowed", "Sem permissão para eliminar E.E.");
     }
 
     const body = (await request.json()) as { eeUid?: string };

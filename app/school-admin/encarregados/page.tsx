@@ -1,4 +1,3 @@
-import { SchoolAdminLayout } from "@/components/layout/school-admin-layout";
 import { EEManager } from "@/components/school-admin/ee-manager";
 import { getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { cookies } from "next/headers";
@@ -24,8 +23,6 @@ export default async function SchoolAdminEncarregadosPage() {
   } catch { /* fallback: client-side will handle */ }
 
   return (
-    <SchoolAdminLayout>
-      <EEManager schoolId={schoolId} />
-    </SchoolAdminLayout>
+    <EEManager schoolId={schoolId} />
   );
 }
