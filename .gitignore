@@ -50,3 +50,6 @@ data/
 
 # opencode diff plugin
 .opencode-tmp/
+
+# CodeGraph 
+/.codegraph/
