@@ -275,15 +275,17 @@ export function TutorTerminosAntecipadosCenter() {
 
       {/* Approve dialog */}
       <Dialog open={approveOpen} onOpenChange={(v) => !v && setApproveOpen(false)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Aprovar término antecipado — {selectedPedido?.alunoNome}</DialogTitle>
-            <DialogDescription>Confirma a aprovação do pedido de término antecipado.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 text-sm">
+          <div className="space-y-4 text-sm">
             <div className="rounded-md bg-muted/50 px-4 py-3 space-y-1 text-xs">
               <Row label="Formando" value={selectedPedido?.alunoNome || "—"} />
-              <Row label="Empresa" value={selectedPedido?.tutorNome || "—"} />
+              <Row
+                label="Empresa"
+                value={selectedPedido ? (estagiosById[selectedPedido.estagioId]?.empresa || "—") : "—"}
+              />
               <Row
                 label="Dias ainda obrigatórios"
                 value={selectedPedido ? selectedPedido.diasParaCumprir.map(formatIsoPt).join("; ") : "—"}
@@ -293,11 +295,45 @@ export function TutorTerminosAntecipadosCenter() {
                 value={selectedPedido?.diaDeDispensa ? formatIsoPt(selectedPedido.diaDeDispensa) : "—"}
               />
             </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Ao aprovar esta solicitação, o tutor declara que autoriza a ausência do formando no dia indicado,
-              desde que se verifique o cumprimento integral dos dias obrigatórios. O incumprimento posterior
-              determina a perda de eficácia da aprovação.
-            </p>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                DECLARAÇÃO DO TUTOR
+              </p>
+              <div className="space-y-1.5 text-xs text-muted-foreground leading-relaxed">
+                <p>
+                  Ao aprovar a presente solicitação, o tutor declara, para os devidos
+                  efeitos, que:
+                </p>
+                <ol className="list-decimal list-outside space-y-1.5 pl-4">
+                  <li>
+                    Autoriza a ausência do formando{" "}
+                    <strong>{selectedPedido?.alunoNome || "o formando"}</strong> no dia{" "}
+                    <strong>{selectedPedido?.diaDeDispensa ? formatIsoPt(selectedPedido.diaDeDispensa) : "indicado"}</strong>,
+                    sem que essa ausência, por si só, seja qualificada como falta
+                    injustificada ou determine penalização autónoma, desde que se
+                    verifique o cumprimento integral das condições abaixo enunciadas;
+                  </li>
+                  <li>
+                    A presente aprovação fica expressamente subordinada ao cumprimento
+                    total, pelo formando, dos dias de trabalho remanescentes identificados
+                    na presente decisão, em conformidade com o horário e plano de trabalho
+                    da FCT aplicáveis;
+                  </li>
+                  <li>
+                    A constatação posterior de falta, incumprimento parcial de horário
+                    ou insuficiência de horas realizadas em qualquer dos dias remanescentes
+                    determina a ineficácia superveniente da presente aprovação;
+                  </li>
+                  <li>
+                    Verificando-se a situação prevista no número anterior, reativa-se
+                    a obrigação de comparência do formando no dia inicialmente indicado
+                    como dispensável, sem necessidade de nova autorização.
+                  </li>
+                </ol>
+              </div>
+            </div>
+
             {error && <p className="text-xs text-destructive">{error}</p>}
           </div>
           <DialogFooter>
