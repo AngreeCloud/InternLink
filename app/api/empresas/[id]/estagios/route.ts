@@ -36,6 +36,16 @@ async function requireAuth() {
   return { uid, schoolId: userData.schoolId, db } as const;
 }
 
+const ESTADO_TO_ESTAGIO: Record<string, string> = {
+  ativo: "em_curso",
+  activo: "em_curso",
+  active: "em_curso",
+  concluido: "concluido",
+  finished: "concluido",
+  suspenso: "suspenso",
+  suspended: "suspenso",
+};
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -64,21 +74,54 @@ export async function GET(
       .orderBy("createdAt", "desc")
       .get();
 
-    const estagios = snap.docs.map((doc) => {
-      const d = doc.data();
+    const professorIdsToResolve = new Set<string>();
+    const rawDocs = snap.docs.map((doc) => {
+      const d = doc.data() as Record<string, unknown>;
+      if (!d.professorNome && d.professorId) {
+        professorIdsToResolve.add(d.professorId as string);
+      }
+      return { _id: doc.id, ...d };
+    });
+
+    const professorNames = new Map<string, string>();
+    if (professorIdsToResolve.size > 0) {
+      const refs = [...professorIdsToResolve].map((pid) =>
+        db.collection("users").doc(pid)
+      );
+      const profSnap = await db.getAll(...refs);
+      profSnap.forEach((s) => {
+        if (s.exists) {
+          const data = s.data();
+          professorNames.set(
+            s.id,
+            (data?.nome as string) || (data?.displayName as string) || ""
+          );
+        }
+      });
+    }
+
+    const estagios = rawDocs.map((d) => {
+      const estadoRaw = (d.estadoEstagio as string) || (d.estado as string) || (d.status as string) || "";
+      const estadoEstagio = ESTADO_TO_ESTAGIO[estadoRaw] || estadoRaw;
+      const professorNome =
+        (d.professorNome as string) ||
+        professorNames.get(d.professorId as string) ||
+        "";
+
       return {
-        id: doc.id,
+        id: d._id as string,
         titulo: d.titulo as string,
         alunoNome: d.alunoNome as string,
-        professorNome: d.professorNome as string,
+        professorNome,
         tutorNome: d.tutorNome as string,
-        estadoEstagio: d.estadoEstagio as string,
+        estadoEstagio,
         dataInicio: d.dataInicio as string | undefined,
         dataFimEstimada: d.dataFimEstimada as string | undefined,
         totalHoras: d.totalHoras as number | undefined,
         horasRealizadas: d.horasRealizadas as number | undefined,
         courseNome: d.courseNome as string | undefined,
-        createdAt: (d.createdAt as { toMillis?: () => number })?.toMillis?.() ?? null,
+        createdAt:
+          ((d.createdAt as { toMillis?: () => number })?.toMillis?.() ?? null),
       };
     });
 

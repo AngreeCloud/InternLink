@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Building2, MapPin } from "lucide-react";
 import {
   calcularDataFimEstimada,
+  recalcularDataFimEstimada,
   DEFAULT_DIAS_SEMANA,
   formatIsoDatePt,
   type DiasSemana,
@@ -55,6 +56,7 @@ export type EditableEstagio = {
   dataInicio?: string;
   totalHoras?: number;
   horasDiarias?: number;
+  horasRealizadas?: number;
   diasSemana?: Partial<DiasSemana>;
 };
 
@@ -203,13 +205,22 @@ export function EditEstagioDialog({ estagio, open, onOpenChange, onSaved }: Prop
 
   const dateResult = useMemo(() => {
     if (!dataInicio || !totalHoras || !horasDiarias) return null;
+    const hrsRealizadas = estagio?.horasRealizadas ?? 0;
+    if (hrsRealizadas > 0) {
+      return recalcularDataFimEstimada({
+        totalHoras: Number(totalHoras),
+        horasRealizadas: hrsRealizadas,
+        horasDiarias: Number(horasDiarias),
+        diasSemana,
+      });
+    }
     return calcularDataFimEstimada({
       dataInicio,
       totalHoras: Number(totalHoras),
       horasDiarias: Number(horasDiarias),
       diasSemana,
     });
-  }, [dataInicio, totalHoras, horasDiarias, diasSemana]);
+  }, [dataInicio, totalHoras, horasDiarias, diasSemana, estagio?.horasRealizadas]);
 
   const toggleDay = (key: keyof DiasSemana) => {
     setDiasSemana((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -244,12 +255,20 @@ export function EditEstagioDialog({ estagio, open, onOpenChange, onSaved }: Prop
     setSubmitting(true);
     try {
       const db = await getDbRuntime();
-      const calc = calcularDataFimEstimada({
-        dataInicio,
-        totalHoras: Number(totalHoras),
-        horasDiarias: Number(horasDiarias),
-        diasSemana,
-      });
+      const hrsRealizadas = estagio.horasRealizadas ?? 0;
+      const calc = hrsRealizadas > 0
+        ? recalcularDataFimEstimada({
+            totalHoras: Number(totalHoras),
+            horasRealizadas: hrsRealizadas,
+            horasDiarias: Number(horasDiarias),
+            diasSemana,
+          })
+        : calcularDataFimEstimada({
+            dataInicio,
+            totalHoras: Number(totalHoras),
+            horasDiarias: Number(horasDiarias),
+            diasSemana,
+          });
 
       const empresaNome = selectedEmpresa?.nome ?? empresaSearch.trim();
 

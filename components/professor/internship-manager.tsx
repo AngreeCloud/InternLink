@@ -276,6 +276,7 @@ export function InternshipManager() {
             dataFim?: string;
             totalHoras?: number;
             horasDiarias?: number;
+            horasRealizadas?: number;
             diasSemana?: Partial<DiasSemana>;
             createdAt?: { toDate: () => Date };
           };
@@ -313,6 +314,8 @@ export function InternshipManager() {
             totalHoras: typeof data.totalHoras === "number" ? data.totalHoras : undefined,
             horasDiarias:
               typeof data.horasDiarias === "number" ? data.horasDiarias : undefined,
+            horasRealizadas:
+              typeof data.horasRealizadas === "number" ? data.horasRealizadas : undefined,
             diasSemana: data.diasSemana || undefined,
             createdAt: createdAtDate?.toLocaleDateString("pt-PT") || "—",
             createdAtMs: createdAtDate?.getTime() || 0,

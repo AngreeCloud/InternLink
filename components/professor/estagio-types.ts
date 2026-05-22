@@ -17,6 +17,7 @@ export type EstagioListItem = {
   dataFimEstimada?: string;
   totalHoras?: number;
   horasDiarias?: number;
+  horasRealizadas?: number;
   diasSemana?: Partial<DiasSemana>;
   createdAt: string;
   createdAtMs: number;
