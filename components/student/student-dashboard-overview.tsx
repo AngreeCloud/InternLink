@@ -22,6 +22,17 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ArrowRight, Briefcase, Loader2, UserMinus } from "lucide-react";
 
+function calcularIdade(dataNascimento: string | undefined): number {
+  if (!dataNascimento) return 0;
+  const birth = new Date(dataNascimento);
+  if (isNaN(birth.getTime())) return 0;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
+
 type DashboardData = {
   loading: boolean;
   reportLoading: boolean;
@@ -43,6 +54,7 @@ type DashboardData = {
   reportSubmittedAt: string | null;
   encarregadoId: string | null;
   studentId: string;
+  isAdult: boolean;
 };
 
 const DEFAULT_MIN_HOURS = 80;
@@ -69,6 +81,7 @@ export function StudentDashboardOverview() {
     reportSubmittedAt: null,
     encarregadoId: null,
     studentId: "",
+    isAdult: false,
   });
   const [eeDeleteLoading, setEeDeleteLoading] = useState(false);
 
@@ -96,8 +109,10 @@ export function StudentDashboardOverview() {
               curso?: string;
               courseId?: string;
               encarregadoId?: string | null;
+              dataNascimento?: string;
             })
           : {};
+        const isAdult = calcularIdade(userData.dataNascimento) >= 18;
 
         let reportMinHours = DEFAULT_MIN_HOURS;
         let reportWaitDays = 0;
@@ -200,6 +215,7 @@ export function StudentDashboardOverview() {
           reportSubmittedAt: null,
           encarregadoId: userData.encarregadoId || null,
           studentId: user.uid,
+          isAdult,
         });
       });
     })();
@@ -386,16 +402,13 @@ export function StudentDashboardOverview() {
             </Card>
           </div>
 
-          {state.encarregadoId ? (
+          {state.encarregadoId && state.isAdult ? (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <UserMinus className="h-4 w-4 text-muted-foreground" />
                   Conta de Encarregado de Educação
                 </CardTitle>
-                <CardDescription>
-                  Existe uma conta de Encarregado de Educação associada ao seu perfil. Se tiver completado 18 anos, pode solicitar a eliminação desta conta.
-                </CardDescription>
               </CardHeader>
               <CardContent>
                 <AlertDialog>

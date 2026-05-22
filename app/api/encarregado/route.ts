@@ -195,11 +195,27 @@ export async function DELETE(request: Request) {
       throw new EstagioAccessError(404, "student_not_found", "Aluno não encontrado.");
     }
 
-    const studentData = studentSnap.data() as { encarregadoId?: string };
+    const studentData = studentSnap.data() as { encarregadoId?: string; dataNascimento?: string };
     const encarregadoId = studentData.encarregadoId;
 
     if (!encarregadoId) {
       throw new EstagioAccessError(404, "no_ee", "Nenhum Encarregado de Educação associado.");
+    }
+
+    // Apenas alunos com 18+ podem desassociar E.E.
+    if (role === "aluno") {
+      const birth = new Date(studentData.dataNascimento ?? "");
+      let idadeOk = false;
+      if (!isNaN(birth.getTime())) {
+        const today = new Date();
+        let age = today.getFullYear() - birth.getFullYear();
+        const m = today.getMonth() - birth.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+        idadeOk = age >= 18;
+      }
+      if (!idadeOk) {
+        throw new EstagioAccessError(403, "minor", "Apenas alunos com 18+ anos podem desassociar a conta de E.E.");
+      }
     }
 
     // Unlink from student
