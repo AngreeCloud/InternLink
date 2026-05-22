@@ -37,6 +37,7 @@ import {
   Menu,
   MessageSquare,
   User,
+  Building2,
 } from "lucide-react";
 
 const navigation = [
@@ -46,6 +47,7 @@ const navigation = [
   { name: "Justificações", href: "/professor/justificacoes", icon: ClipboardCheck },
   { name: "Estágios", href: "/professor/estagios", icon: Briefcase },
   { name: "Documentos", href: "/professor/documentos", icon: FileText },
+  { name: "Empresas", href: "/professor/empresas", icon: Building2 },
   { name: "Chat", href: "/professor/chat", icon: MessageSquare },
 ];
 
@@ -231,6 +233,9 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
 
   const filteredNavigation = navigation.filter((item) => {
     if (item.name === "Aprovações de Alunos") {
+      return state.isDirector;
+    }
+    if (item.name === "Empresas") {
       return state.isDirector;
     }
     return true;

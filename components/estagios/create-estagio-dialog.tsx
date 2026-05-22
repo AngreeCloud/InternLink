@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Plus } from "lucide-react";
+import { Plus, Building2, MapPin } from "lucide-react";
 import {
   calcularDataFimEstimada,
   DEFAULT_DIAS_SEMANA,
@@ -37,6 +37,16 @@ type TutorOption = {
   email: string;
   photoURL: string;
   empresa: string;
+};
+
+type EmpresaOption = {
+  id: string;
+  nome: string;
+  morada?: string;
+  codigoPostal?: string;
+  localidade?: string;
+  nif?: string;
+  setor?: string;
 };
 
 export type CreateEstagioDialogProps = {
@@ -71,7 +81,6 @@ export function CreateEstagioDialog({
   const [alunoId, setAlunoId] = useState("");
   const [tutorId, setTutorId] = useState("");
   const [titulo, setTitulo] = useState("");
-  const [empresa, setEmpresa] = useState("");
   const [dataInicio, setDataInicio] = useState("");
   const [totalHoras, setTotalHoras] = useState(600);
   const [horasDiarias, setHorasDiarias] = useState(7);
@@ -80,22 +89,85 @@ export function CreateEstagioDialog({
   const [studentSearch, setStudentSearch] = useState("");
   const [tutorSearch, setTutorSearch] = useState("");
 
+  const [empresaSearch, setEmpresaSearch] = useState("");
+  const [empresaOptions, setEmpresaOptions] = useState<EmpresaOption[]>([]);
+  const [empresaOpen, setEmpresaOpen] = useState(false);
+  const [empresaHighlight, setEmpresaHighlight] = useState(0);
+  const [selectedEmpresa, setSelectedEmpresa] = useState<EmpresaOption | null>(null);
+  const empresaRootRef = useRef<HTMLDivElement | null>(null);
+  const empresaDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchEmpresas = useCallback(async (query: string) => {
+    try {
+      const res = await fetch(`/api/empresas/search?q=${encodeURIComponent(query)}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as { empresas?: EmpresaOption[] };
+      setEmpresaOptions(data.empresas ?? []);
+    } catch {
+      setEmpresaOptions([]);
+    }
+  }, []);
+
   useEffect(() => {
     if (!open) {
       setAlunoId("");
       setTutorId("");
       setTitulo("");
-      setEmpresa("");
       setDataInicio("");
       setTotalHoras(600);
       setHorasDiarias(7);
       setDiasSemana(DEFAULT_DIAS_SEMANA);
       setStudentSearch("");
       setTutorSearch("");
+      setEmpresaSearch("");
+      setEmpresaOptions([]);
+      setEmpresaOpen(false);
+      setSelectedEmpresa(null);
       setErrorMessage(null);
       setSubmitting(false);
     }
   }, [open]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (empresaRootRef.current && !empresaRootRef.current.contains(event.target as Node)) {
+        setEmpresaOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    setEmpresaHighlight(0);
+  }, [empresaOptions]);
+
+  const handleEmpresaInput = (value: string) => {
+    setEmpresaSearch(value);
+    setSelectedEmpresa(null);
+    if (empresaDebounceRef.current) clearTimeout(empresaDebounceRef.current);
+    const q = value.trim();
+    if (!q) {
+      setEmpresaOptions([]);
+      setEmpresaOpen(false);
+      return;
+    }
+    setEmpresaOpen(true);
+    empresaDebounceRef.current = setTimeout(() => fetchEmpresas(q), 250);
+  };
+
+  const selectEmpresa = (opt: EmpresaOption) => {
+    setSelectedEmpresa(opt);
+    setEmpresaSearch(opt.nome);
+    setEmpresaOpen(false);
+    setEmpresaOptions([]);
+  };
+
+  const clearEmpresa = () => {
+    setSelectedEmpresa(null);
+    setEmpresaSearch("");
+    setEmpresaOpen(false);
+  };
 
   const eligibleStudents = useMemo(() => students.filter(canCreateForStudent), [students, canCreateForStudent]);
 
@@ -129,6 +201,26 @@ export function CreateEstagioDialog({
     setDiasSemana((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const handleEmpresaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!empresaOpen || empresaOptions.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setEmpresaHighlight((prev) => Math.min(prev + 1, empresaOptions.length - 1));
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setEmpresaHighlight((prev) => Math.max(prev - 1, 0));
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const opt = empresaOptions[empresaHighlight];
+      if (opt) selectEmpresa(opt);
+    }
+    if (e.key === "Escape") {
+      setEmpresaOpen(false);
+    }
+  };
+
   const handleSubmit = async () => {
     setErrorMessage(null);
     if (!alunoId) {
@@ -150,19 +242,34 @@ export function CreateEstagioDialog({
 
     setSubmitting(true);
     try {
+      const empresaNome = selectedEmpresa?.nome ?? empresaSearch.trim();
+
+      const body: Record<string, unknown> = {
+        alunoId,
+        tutorId: tutorId || undefined,
+        titulo: titulo.trim(),
+        empresa: empresaNome,
+        dataInicio,
+        totalHoras,
+        horasDiarias,
+        diasSemana,
+      };
+
+      if (selectedEmpresa) {
+        body.empresaId = selectedEmpresa.id;
+        body.empresaSnapshot = {
+          nome: selectedEmpresa.nome,
+          morada: selectedEmpresa.morada,
+          codigoPostal: selectedEmpresa.codigoPostal,
+          localidade: selectedEmpresa.localidade,
+          nif: selectedEmpresa.nif,
+        };
+      }
+
       const res = await fetch("/api/estagios", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          alunoId,
-          tutorId: tutorId || undefined,
-          titulo: titulo.trim(),
-          empresa: empresa.trim(),
-          dataInicio,
-          totalHoras,
-          horasDiarias,
-          diasSemana,
-        }),
+        body: JSON.stringify(body),
       });
       const data = (await res.json()) as { ok?: boolean; id?: string; error?: string };
       if (!res.ok || !data.ok || !data.id) {
@@ -292,14 +399,74 @@ export function CreateEstagioDialog({
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2" ref={empresaRootRef}>
             <Label htmlFor="estagio-empresa">Entidade de Acolhimento / Empresa</Label>
-            <Input
-              id="estagio-empresa"
-              placeholder="Nome da entidade"
-              value={empresa}
-              onChange={(e) => setEmpresa(e.target.value)}
-            />
+            {selectedEmpresa ? (
+              <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 px-3 py-2">
+                <Building2 className="h-5 w-5 text-muted-foreground shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{selectedEmpresa.nome}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {[selectedEmpresa.localidade, selectedEmpresa.codigoPostal].filter(Boolean).join(" · ")}
+                    {selectedEmpresa.nif ? ` · NIF ${selectedEmpresa.nif}` : ""}
+                  </p>
+                </div>
+                <Button type="button" variant="ghost" size="sm" onClick={clearEmpresa}>
+                  Alterar
+                </Button>
+              </div>
+            ) : (
+              <div className="relative">
+                <Input
+                  id="estagio-empresa"
+                  placeholder="Pesquisar empresa ou escrever livremente..."
+                  value={empresaSearch}
+                  onChange={(e) => handleEmpresaInput(e.target.value)}
+                  onFocus={() => {
+                    if (empresaSearch.trim()) setEmpresaOpen(true);
+                  }}
+                  onKeyDown={handleEmpresaKeyDown}
+                  autoComplete="off"
+                  role="combobox"
+                  aria-expanded={empresaOpen}
+                />
+                {empresaOpen && empresaOptions.length > 0 && (
+                  <div className="absolute z-40 mt-1 max-h-48 w-full overflow-y-auto rounded-md border bg-background shadow-md">
+                    {empresaOptions.map((opt, i) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        className={[
+                          "flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors",
+                          i === empresaHighlight ? "bg-muted" : "hover:bg-muted",
+                        ].join(" ")}
+                        onClick={() => selectEmpresa(opt)}
+                        onMouseEnter={() => setEmpresaHighlight(i)}
+                      >
+                        <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium">{opt.nome}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {[opt.localidade, opt.setor].filter(Boolean).join(" · ")}
+                          </p>
+                        </div>
+                        {opt.localidade && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                            <MapPin className="h-3 w-3" />
+                            {opt.localidade}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {empresaSearch.trim() && !selectedEmpresa && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Se a empresa não aparecer na lista, podes escrever o nome manualmente.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">

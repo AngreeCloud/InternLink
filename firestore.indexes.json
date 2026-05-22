@@ -24,6 +24,23 @@
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "empresas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "schoolId", "order": "ASCENDING" },
+        { "fieldPath": "nomeNormalizado", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "empresas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "schoolId", "order": "ASCENDING" },
+        { "fieldPath": "ativa", "order": "ASCENDING" },
+        { "fieldPath": "nomeNormalizado", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [

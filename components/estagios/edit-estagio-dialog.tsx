@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 import {
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Building2, MapPin } from "lucide-react";
 import {
   calcularDataFimEstimada,
   DEFAULT_DIAS_SEMANA,
@@ -35,11 +36,22 @@ const DAY_LABEL: Record<keyof DiasSemana, string> = {
 
 const DAY_ORDER: (keyof DiasSemana)[] = ["seg", "ter", "qua", "qui", "sex", "sab", "dom"];
 
+type EmpresaOption = {
+  id: string;
+  nome: string;
+  morada?: string;
+  codigoPostal?: string;
+  localidade?: string;
+  nif?: string;
+  setor?: string;
+};
+
 export type EditableEstagio = {
   id: string;
   titulo?: string;
   empresa?: string;
   entidadeAcolhimento?: string;
+  empresaId?: string;
   dataInicio?: string;
   totalHoras?: number;
   horasDiarias?: number;
@@ -67,7 +79,6 @@ function normalize(input?: Partial<DiasSemana>): DiasSemana {
 
 export function EditEstagioDialog({ estagio, open, onOpenChange, onSaved }: Props) {
   const [titulo, setTitulo] = useState("");
-  const [empresa, setEmpresa] = useState("");
   const [dataInicio, setDataInicio] = useState("");
   const [totalHoras, setTotalHoras] = useState<number>(600);
   const [horasDiarias, setHorasDiarias] = useState<number>(7);
@@ -75,18 +86,120 @@ export function EditEstagioDialog({ estagio, open, onOpenChange, onSaved }: Prop
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Reset on open/close.
+  const [empresaSearch, setEmpresaSearch] = useState("");
+  const [empresaOptions, setEmpresaOptions] = useState<EmpresaOption[]>([]);
+  const [empresaOpen, setEmpresaOpen] = useState(false);
+  const [empresaHighlight, setEmpresaHighlight] = useState(0);
+  const [selectedEmpresa, setSelectedEmpresa] = useState<EmpresaOption | null>(null);
+  const [empresaInitialized, setEmpresaInitialized] = useState(false);
+  const empresaRootRef = useRef<HTMLDivElement | null>(null);
+  const empresaDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchEmpresas = useCallback(async (query: string) => {
+    try {
+      const res = await fetch(`/api/empresas/search?q=${encodeURIComponent(query)}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as { empresas?: EmpresaOption[] };
+      setEmpresaOptions(data.empresas ?? []);
+    } catch {
+      setEmpresaOptions([]);
+    }
+  }, []);
+
   useEffect(() => {
     if (!open || !estagio) return;
     setTitulo(estagio.titulo ?? "");
-    setEmpresa(estagio.entidadeAcolhimento ?? estagio.empresa ?? "");
     setDataInicio(estagio.dataInicio ?? "");
     setTotalHoras(Number.isFinite(estagio.totalHoras) ? Number(estagio.totalHoras) : 600);
     setHorasDiarias(Number.isFinite(estagio.horasDiarias) ? Number(estagio.horasDiarias) : 7);
     setDiasSemana(normalize(estagio.diasSemana));
     setErrorMessage(null);
     setSubmitting(false);
+
+    const nome = estagio.entidadeAcolhimento ?? estagio.empresa ?? "";
+    setEmpresaSearch(nome);
+    setSelectedEmpresa(null);
+    setEmpresaInitialized(false);
+    setEmpresaOpen(false);
   }, [open, estagio]);
+
+  useEffect(() => {
+    if (empresaInitialized || !estagio || !open) return;
+    if (estagio.empresaId && estagio.empresaId !== "undefined") {
+      setEmpresaInitialized(true);
+      fetch(`/api/empresas/search?q=${encodeURIComponent(estagio.empresaId)}`)
+        .then((r) => r.json())
+        .then((data: { empresas?: EmpresaOption[] }) => {
+          const match = (data.empresas ?? []).find((e) => e.id === estagio.empresaId);
+          if (match) {
+            setSelectedEmpresa(match);
+            setEmpresaSearch(match.nome);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [estagio, open, empresaInitialized]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (empresaRootRef.current && !empresaRootRef.current.contains(event.target as Node)) {
+        setEmpresaOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    setEmpresaHighlight(0);
+  }, [empresaOptions]);
+
+  const handleEmpresaInput = (value: string) => {
+    setEmpresaSearch(value);
+    setSelectedEmpresa(null);
+    if (empresaDebounceRef.current) clearTimeout(empresaDebounceRef.current);
+    const q = value.trim();
+    if (!q) {
+      setEmpresaOptions([]);
+      setEmpresaOpen(false);
+      return;
+    }
+    setEmpresaOpen(true);
+    empresaDebounceRef.current = setTimeout(() => fetchEmpresas(q), 250);
+  };
+
+  const selectEmpresa = (opt: EmpresaOption) => {
+    setSelectedEmpresa(opt);
+    setEmpresaSearch(opt.nome);
+    setEmpresaOpen(false);
+    setEmpresaOptions([]);
+  };
+
+  const clearEmpresa = () => {
+    setSelectedEmpresa(null);
+    setEmpresaSearch("");
+    setEmpresaOpen(false);
+  };
+
+  const handleEmpresaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!empresaOpen || empresaOptions.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setEmpresaHighlight((prev) => Math.min(prev + 1, empresaOptions.length - 1));
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setEmpresaHighlight((prev) => Math.max(prev - 1, 0));
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const opt = empresaOptions[empresaHighlight];
+      if (opt) selectEmpresa(opt);
+    }
+    if (e.key === "Escape") {
+      setEmpresaOpen(false);
+    }
+  };
 
   const dateResult = useMemo(() => {
     if (!dataInicio || !totalHoras || !horasDiarias) return null;
@@ -138,18 +251,27 @@ export function EditEstagioDialog({ estagio, open, onOpenChange, onSaved }: Prop
         diasSemana,
       });
 
-      const empresaTrim = empresa.trim();
-      await updateDoc(doc(db, "estagios", estagio.id), {
+      const empresaNome = selectedEmpresa?.nome ?? empresaSearch.trim();
+
+      const updatePayload: Record<string, unknown> = {
         titulo: tituloTrim,
-        empresa: empresaTrim,
-        entidadeAcolhimento: empresaTrim,
+        empresa: empresaNome,
+        entidadeAcolhimento: empresaNome,
         dataInicio,
         totalHoras: Number(totalHoras),
         horasDiarias: Number(horasDiarias),
         diasSemana,
         dataFimEstimada: calc.dataFimEstimada,
         updatedAt: serverTimestamp(),
-      });
+      };
+
+      if (selectedEmpresa) {
+        updatePayload.empresaId = selectedEmpresa.id;
+      } else {
+        updatePayload.empresaId = null;
+      }
+
+      await updateDoc(doc(db, "estagios", estagio.id), updatePayload);
 
       onOpenChange(false);
       onSaved?.();
@@ -183,14 +305,74 @@ export function EditEstagioDialog({ estagio, open, onOpenChange, onSaved }: Prop
             />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2" ref={empresaRootRef}>
             <Label htmlFor="edit-empresa">Entidade de acolhimento / Empresa</Label>
-            <Input
-              id="edit-empresa"
-              value={empresa}
-              onChange={(event) => setEmpresa(event.target.value)}
-              placeholder="Nome da entidade"
-            />
+            {selectedEmpresa ? (
+              <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 px-3 py-2">
+                <Building2 className="h-5 w-5 text-muted-foreground shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{selectedEmpresa.nome}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {[selectedEmpresa.localidade, selectedEmpresa.codigoPostal].filter(Boolean).join(" · ")}
+                    {selectedEmpresa.nif ? ` · NIF ${selectedEmpresa.nif}` : ""}
+                  </p>
+                </div>
+                <Button type="button" variant="ghost" size="sm" onClick={clearEmpresa}>
+                  Alterar
+                </Button>
+              </div>
+            ) : (
+              <div className="relative">
+                <Input
+                  id="edit-empresa"
+                  placeholder="Pesquisar empresa ou escrever livremente..."
+                  value={empresaSearch}
+                  onChange={(e) => handleEmpresaInput(e.target.value)}
+                  onFocus={() => {
+                    if (empresaSearch.trim()) setEmpresaOpen(true);
+                  }}
+                  onKeyDown={handleEmpresaKeyDown}
+                  autoComplete="off"
+                  role="combobox"
+                  aria-expanded={empresaOpen}
+                />
+                {empresaOpen && empresaOptions.length > 0 && (
+                  <div className="absolute z-40 mt-1 max-h-48 w-full overflow-y-auto rounded-md border bg-background shadow-md">
+                    {empresaOptions.map((opt, i) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        className={[
+                          "flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors",
+                          i === empresaHighlight ? "bg-muted" : "hover:bg-muted",
+                        ].join(" ")}
+                        onClick={() => selectEmpresa(opt)}
+                        onMouseEnter={() => setEmpresaHighlight(i)}
+                      >
+                        <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium">{opt.nome}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {[opt.localidade, opt.setor].filter(Boolean).join(" · ")}
+                          </p>
+                        </div>
+                        {opt.localidade && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                            <MapPin className="h-3 w-3" />
+                            {opt.localidade}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {empresaSearch.trim() && !selectedEmpresa && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Se a empresa não aparecer na lista, podes escrever o nome manualmente.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
