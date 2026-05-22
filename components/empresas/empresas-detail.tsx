@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Building2, Loader2, Trash2, UserPlus, Search, X, MessageSquare, GraduationCap, Calendar, Clock, Pencil } from "lucide-react";
+import { ArrowLeft, Building2, Loader2, Trash2, UserPlus, Search, X, MessageSquare, GraduationCap, Calendar, Clock, Pencil, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { EmpresasEditForm } from "./empresas-edit-form";
 
@@ -338,7 +338,7 @@ function TutoresTab({
   );
 }
 
-function EstagiosTab({ empresaId }: { empresaId: string }) {
+function EstagiosTab({ empresaId, basePath }: { empresaId: string; basePath: string }) {
   const [estagios, setEstagios] = useState<EstagioItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -393,21 +393,29 @@ function EstagiosTab({ empresaId }: { empresaId: string }) {
               <p className="text-sm font-medium truncate">{estagio.titulo}</p>
               <p className="text-xs text-muted-foreground">{estagio.alunoNome}</p>
             </div>
-            <span
-              className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${
-                estagio.estadoEstagio === "concluido"
-                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+            <div className="flex items-center gap-2 shrink-0">
+              <Link
+                href={`${basePath}/estagios/${estagio.id}`}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </Link>
+              <span
+                className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                  estagio.estadoEstagio === "concluido"
+                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                    : estagio.estadoEstagio === "em_curso"
+                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {estagio.estadoEstagio === "concluido"
+                  ? "Concluído"
                   : estagio.estadoEstagio === "em_curso"
-                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                  : "bg-muted text-muted-foreground"
-              }`}
-            >
-              {estagio.estadoEstagio === "concluido"
-                ? "Concluído"
-                : estagio.estadoEstagio === "em_curso"
-                ? "Em curso"
-                : estagio.estadoEstagio}
-            </span>
+                  ? "Em curso"
+                  : estagio.estadoEstagio}
+              </span>
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -550,7 +558,7 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
         <InfoTab empresa={empresa} />
       ))}
       {tab === "tutores" && <TutoresTab empresaId={empresaId} basePath={basePath} />}
-      {tab === "estagios" && <EstagiosTab empresaId={empresaId} />}
+      {tab === "estagios" && <EstagiosTab empresaId={empresaId} basePath={basePath} />}
     </div>
   );
 }
