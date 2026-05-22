@@ -232,6 +232,17 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
       setTimeout(() => {
         setSavedFlash((s) => (s === day.iso ? null : s));
       }, 2000);
+
+      // Trigger invalidation check for terminoAntecipado (non-blocking)
+      fetch(`/api/estagios/${estagioId}/termino-antecipado/invalidar`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dataPresenca: day.iso,
+          horasTrabalhadas: v.value,
+          horasPrevistasNoDia: horasDiarias || 0,
+        }),
+      }).catch(() => { /* best-effort */ });
     } catch (err) {
       console.error("[v0] save presenca", err);
       setErrors((e) => ({

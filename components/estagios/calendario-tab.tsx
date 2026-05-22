@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { collection, getDocs, onSnapshot, query, where } from "firebase/firestore";
+import { collection, onSnapshot } from "firebase/firestore";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/style.css";
 import { getDbRuntime } from "@/lib/firebase-runtime";
@@ -30,15 +30,20 @@ import {
   type WorkWeek,
 } from "@/lib/estagios/workdays";
 import {
-  canRequestEarlyTermination,
   labelForStatus,
   variantForStatus,
   type ScheduleChangeRequest,
   type ScheduleChangeRequestType,
 } from "@/lib/estagios/schedule-change-requests";
+import {
+  checkEligibility,
+  type TerminoAntecipado,
+  type EligibilityResult,
+} from "@/lib/estagios/termino-antecipado";
 import type { EstagioRole } from "@/lib/estagios/permissions";
 import { ScheduleChangeRequestModal } from "./schedule-change-request-modal";
 import { ScheduleChangeRequestThread } from "./schedule-change-request-thread";
+import { TerminoAntecipadoConfirmationModal } from "./termino-antecipado-confirmation-modal";
 
 type Props = {
   estagioId: string;
@@ -157,7 +162,40 @@ export function CalendarioTab({
 
   const todayIso = toIsoDate(new Date());
 
-  // Calendar starts at current month
+  useEffect(() => {
+    let unsub: (() => void) | undefined;
+    let cancelled = false;
+    (async () => {
+      const db = await getDbRuntime();
+      if (cancelled) return;
+      unsub = onSnapshot(
+        collection(db, "estagios", estagioId, "termino_antecipado"),
+        (snap) => {
+          const docs: TerminoAntecipado[] = [];
+          snap.forEach((d) => {
+            docs.push({ id: d.id, ...d.data() } as TerminoAntecipado);
+          });
+          docs.sort((a, b) => {
+            const at = (a.submittedAt as { seconds?: number })?.seconds ?? 0;
+            const bt = (b.submittedAt as { seconds?: number })?.seconds ?? 0;
+            return bt - at;
+          });
+          setTerminoAntecipado(docs[0] || null);
+          setLoadingTermino(false);
+        },
+        (err) => {
+          if ((err as { code?: string }).code !== "permission-denied") {
+            console.error("[v0] termino_antecipado snapshot", err);
+          }
+          setLoadingTermino(false);
+        }
+      );
+    })();
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
+  }, [estagioId]);
   const [month, setMonth] = useState<Date>(() => new Date());
 
   // View mode
@@ -183,6 +221,12 @@ export function CalendarioTab({
   const [modalDefaultType, setModalDefaultType] = useState<ScheduleChangeRequestType | undefined>();
   const [earlyTerminationLoading, setEarlyTerminationLoading] = useState(false);
   const [earlyTerminationError, setEarlyTerminationError] = useState<string | null>(null);
+
+  // TerminoAntecipado state
+  const [terminoAntecipado, setTerminoAntecipado] = useState<TerminoAntecipado | null>(null);
+  const [loadingTermino, setLoadingTermino] = useState(true);
+  const [eligibility, setEligibility] = useState<EligibilityResult | null>(null);
+  const [confirmationModalOpen, setConfirmationModalOpen] = useState(false);
 
   const presencaSet = useMemo(
     () =>
@@ -229,7 +273,26 @@ export function CalendarioTab({
     );
   }, [presencas]);
   const horasRestantes = Math.max(0, totalHoras - totalRealizado);
-  const eligibleForEarlyTermination = canRequestEarlyTermination(horasRestantes, horasDiarias);
+
+  // New eligibility logic for terminoAntecipado
+  const eligibilityResult = useMemo(() => {
+    if (!dataInicio || !dataFim || totalHoras <= 0 || horasDiarias <= 0) {
+      return null;
+    }
+    return checkEligibility(
+      totalRealizado,
+      totalHoras,
+      horasDiarias,
+      dataInicio,
+      dataFim,
+      dias
+    );
+  }, [totalRealizado, totalHoras, horasDiarias, dataInicio, dataFim, dias]);
+
+  const eligibleForEarlyTermination = eligibilityResult?.elegivel ?? false;
+  const hasActiveTermino = terminoAntecipado && (
+    terminoAntecipado.estado === "pendente" || terminoAntecipado.estado === "aprovado"
+  );
 
   const isAluno = currentUserRole === "aluno";
 
@@ -269,42 +332,9 @@ export function CalendarioTab({
   }
 
   async function handleEarlyTerminationClick() {
-    setEarlyTerminationLoading(true);
-    setEarlyTerminationError(null);
-    try {
-      const db = await getDbRuntime();
-      const sumariosSnap = await getDocs(query(collection(db, "estagios", estagioId, "sumarios")));
-      const allSubmitted = sumariosSnap.docs.every((d) => {
-        const s = d.data();
-        return s.estado === "preenchido" || s.estado === "arquivado";
-      });
-
-      if (!allSubmitted) {
-        const pending = sumariosSnap.docs.filter(
-          (d) => d.data().estado !== "preenchido" && d.data().estado !== "arquivado"
-        ).length;
-        setEarlyTerminationError(
-          `Ainda tens ${pending} sumário(s) por preencher. Submete todos os sumários antes de solicitar o término antecipado.`
-        );
-        return;
-      }
-
-      // Find next future workday
-      const nextFuture = workDays.find((d: WorkDay) => d.iso > todayIso);
-      if (!nextFuture) {
-        setEarlyTerminationError("Não foi encontrado um dia futuro para associar ao pedido.");
-        return;
-      }
-
-      setModalDate(nextFuture.iso);
-      setModalDefaultType("early_termination");
-      setModalOpen(true);
-    } catch (err) {
-      console.error("Erro ao verificar sumários:", err);
-      setEarlyTerminationError("Erro ao verificar sumários. Tenta novamente.");
-    } finally {
-      setEarlyTerminationLoading(false);
-    }
+    if (!eligibilityResult?.elegivel) return;
+    setEligibility(eligibilityResult);
+    setConfirmationModalOpen(true);
   }
 
   function handleWeekPrev() {
@@ -389,6 +419,34 @@ export function CalendarioTab({
       return isoToDate(iso);
     });
 
+  // TerminoAntecipado date modifiers
+  const terminoPendingDates = useMemo(() => {
+    if (!terminoAntecipado || terminoAntecipado.estado !== "pendente") return [];
+    if (!terminoAntecipado.diaDeDispensa) return [];
+    return [isoToDate(terminoAntecipado.diaDeDispensa)];
+  }, [terminoAntecipado]);
+
+  const terminoApprovedDates = useMemo(() => {
+    if (!terminoAntecipado || terminoAntecipado.estado !== "aprovado") return [];
+    if (!terminoAntecipado.diaDeDispensa) return [];
+    return [isoToDate(terminoAntecipado.diaDeDispensa)];
+  }, [terminoAntecipado]);
+
+  const terminoObrigatoriosSet = useMemo(() => {
+    if (!terminoAntecipado || terminoAntecipado.estado !== "aprovado") return new Set<string>();
+    return new Set(terminoAntecipado.diasParaCumprir || []);
+  }, [terminoAntecipado]);
+
+  const terminoObrigatorioDates = useMemo(() => {
+    return [...terminoObrigatoriosSet].map(isoToDate);
+  }, [terminoObrigatoriosSet]);
+
+  const terminoInvalidatedDates = useMemo(() => {
+    if (!terminoAntecipado || terminoAntecipado.estado !== "invalidado_por_incumprimento") return [];
+    if (!terminoAntecipado.diaDeDispensa) return [];
+    return [isoToDate(terminoAntecipado.diaDeDispensa)];
+  }, [terminoAntecipado]);
+
   const startDate = (() => {
     const [y, m, d] = dataInicio.split("-").map(Number);
     return new Date(y, m - 1, d);
@@ -426,17 +484,28 @@ export function CalendarioTab({
               <LegendItem color="bg-card ring-2 ring-emerald-500" label="Aprovado/justificado" />
               <LegendItem color="bg-card ring-2 ring-red-500" label="Rejeitado" />
             </div>
+            {terminoAntecipado && (
+              <div className="flex flex-wrap gap-3 border-t pt-2">
+                <LegendItem color="bg-yellow-200 border-2 border-yellow-500" label="Dispensa pendente" />
+                <LegendItem color="bg-teal-200 border-2 border-teal-500" label="Dispensa aprovada" />
+                <LegendItem color="bg-orange-200 border-2 border-orange-500" label="Dia obrigatório (dispensa)" />
+              </div>
+            )}
           </div>
 
-          {isAluno && eligibleForEarlyTermination && (
+          {/* Banner: eligible with no active request */}
+          {isAluno && eligibleForEarlyTermination && !hasActiveTermino && (
             <div className="rounded-md border border-teal-200 bg-teal-50 px-4 py-3 dark:border-teal-800 dark:bg-teal-950">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="space-y-0.5">
                   <p className="text-sm font-medium text-teal-800 dark:text-teal-200">
-                    Tens horas restantes inferiores a um dia de trabalho
+                    Tens menos de {5} dias completos de horas restantes
                   </p>
                   <p className="text-xs text-teal-600 dark:text-teal-400">
-                    Podes solicitar o término antecipado do estágio.
+                    Podes solicitar ao tutor o término antecipado do estágio.
+                    {eligibilityResult?.diaDeDispensa && (
+                      <> Se o pedido for aprovado e cumprires integralmente os dias remanescentes, poderás ficar dispensado no dia {formatIsoPt(eligibilityResult.diaDeDispensa)}.</>
+                    )}
                   </p>
                 </div>
                 <Button
@@ -444,20 +513,75 @@ export function CalendarioTab({
                   size="sm"
                   className="shrink-0 bg-teal-600 hover:bg-teal-700 text-white"
                   onClick={handleEarlyTerminationClick}
-                  disabled={earlyTerminationLoading}
                 >
-                  {earlyTerminationLoading ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="mr-2 h-4 w-4" />
-                  )}
+                  <Send className="mr-2 h-4 w-4" />
                   Solicitar término antecipado
                 </Button>
               </div>
-              {earlyTerminationError && (
-                <p className="mt-2 text-xs text-red-600 dark:text-red-400">
-                  {earlyTerminationError}
-                </p>
+            </div>
+          )}
+
+          {/* Banner: active terminoAntecipado status */}
+          {isAluno && terminoAntecipado && (
+            <div className={`rounded-md border px-4 py-3 ${
+              terminoAntecipado.estado === "pendente"
+                ? "border-yellow-300 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950"
+                : terminoAntecipado.estado === "aprovado"
+                  ? "border-teal-300 bg-teal-50 dark:border-teal-800 dark:bg-teal-950"
+                  : terminoAntecipado.estado === "recusado"
+                    ? "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950"
+                    : "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950"
+            }`}>
+              {terminoAntecipado.estado === "pendente" && (
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                    Pedido de término antecipado pendente
+                  </p>
+                  <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                    Aguarda a decisão do tutor. Dispensa solicitada para {formatIsoPt(terminoAntecipado.diaDeDispensa)}.
+                  </p>
+                </div>
+              )}
+              {terminoAntecipado.estado === "aprovado" && (
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium text-teal-800 dark:text-teal-200">
+                    Término antecipado aprovado
+                  </p>
+                  <p className="text-xs text-teal-600 dark:text-teal-400">
+                    Dispensado no dia {formatIsoPt(terminoAntecipado.diaDeDispensa)} se cumprires integralmente os dias obrigatórios.
+                  </p>
+                </div>
+              )}
+              {terminoAntecipado.estado === "recusado" && (
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                    Término antecipado recusado
+                  </p>
+                  <p className="text-xs text-red-600 dark:text-red-400">
+                    {terminoAntecipado.motivoRecusa ? `Motivo: "${terminoAntecipado.motivoRecusa}"` : "O estágio mantém-se nos termos inicialmente previstos."}
+                  </p>
+                </div>
+              )}
+              {terminoAntecipado.estado === "invalidado_por_incumprimento" && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                    Solicitação invalidada por incumprimento
+                  </p>
+                  <p className="text-xs text-red-600 dark:text-red-400">
+                    Foi registado incumprimento horário{terminoAntecipado.diaDeIncumprimento ? ` no dia ${formatIsoPt(terminoAntecipado.diaDeIncumprimento)}` : ""}. A comparência no dia {formatIsoPt(terminoAntecipado.diaDeDispensa)} volta a ser obrigatória.
+                  </p>
+                  {eligibilityResult?.elegivel && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-teal-300 text-teal-700 hover:bg-teal-50 dark:border-teal-700 dark:text-teal-300"
+                      onClick={handleEarlyTerminationClick}
+                    >
+                      <Send className="mr-2 h-3.5 w-3.5" />
+                      Submeter nova solicitação
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -510,6 +634,10 @@ export function CalendarioTab({
               .rdp-day--status-pending .rdp-day_button { box-shadow: 0 0 0 2px rgb(245 158 11); }
               .rdp-day--status-approved .rdp-day_button { box-shadow: 0 0 0 2px rgb(16 185 129); }
               .rdp-day--status-rejected .rdp-day_button { box-shadow: 0 0 0 2px rgb(239 68 68); }
+              .rdp-day--termino-pending .rdp-day_button { background-color: rgb(254 240 138); border: 2px solid rgb(234 179 8); border-radius: 9999px; color: rgb(113 63 18); }
+              .rdp-day--termino-approved .rdp-day_button { background-color: rgb(204 251 241); border: 2px solid rgb(20 184 166); border-radius: 9999px; color: rgb(15 118 110); }
+              .rdp-day--termino-obrigatorio .rdp-day_button { background-color: rgb(255 237 213); border: 2px solid rgb(249 115 22); border-radius: 9999px; color: rgb(154 52 18); }
+              .rdp-day--termino-invalidated .rdp-day_button { background-color: rgb(254 202 202); border: 2px solid rgb(239 68 68); border-radius: 9999px; color: rgb(153 27 27); }
               .rdp-day--can-click .rdp-day_button:hover { cursor: pointer; opacity: 0.8; }
             `}</style>
             <DayPicker
@@ -528,6 +656,10 @@ export function CalendarioTab({
                 statusPending: pendingDates,
                 statusApproved: approvedReqDates,
                 statusRejected: rejectedReqDates,
+                terminoPending: terminoPendingDates,
+                terminoApproved: terminoApprovedDates,
+                terminoObrigatorio: terminoObrigatorioDates,
+                terminoInvalidated: terminoInvalidatedDates,
               }}
               modifiersClassNames={{
                 worked: "rdp-day--worked",
@@ -539,6 +671,10 @@ export function CalendarioTab({
                 statusPending: "rdp-day--status-pending",
                 statusApproved: "rdp-day--status-approved",
                 statusRejected: "rdp-day--status-rejected",
+                terminoPending: "rdp-day--termino-pending",
+                terminoApproved: "rdp-day--termino-approved",
+                terminoObrigatorio: "rdp-day--termino-obrigatorio",
+                terminoInvalidated: "rdp-day--termino-invalidated",
               }}
               onDayClick={isAluno ? handleDayClick : undefined}
               className="mx-auto w-fit"
@@ -645,6 +781,21 @@ export function CalendarioTab({
                           Trabalhado
                         </Badge>
                       )}
+                      {terminoAntecipado?.estado === "pendente" && terminoAntecipado.diaDeDispensa === day.iso && (
+                        <Badge variant="secondary" className="bg-yellow-200 text-yellow-800 border-yellow-500">
+                          Dispensa pendente
+                        </Badge>
+                      )}
+                      {terminoAntecipado?.estado === "aprovado" && terminoAntecipado.diaDeDispensa === day.iso && (
+                        <Badge variant="default" className="bg-teal-200 text-teal-800 border-teal-500">
+                          Dispensa aprovada
+                        </Badge>
+                      )}
+                      {terminoAntecipado?.estado === "aprovado" && terminoAntecipado.diasParaCumprir?.includes(day.iso) && (
+                        <Badge variant="outline" className="border-orange-500 text-orange-700">
+                          Dia obrigatório
+                        </Badge>
+                      )}
                     </div>
 
                     {notes && (
@@ -717,6 +868,17 @@ export function CalendarioTab({
         canRequestEarlyTermination={eligibleForEarlyTermination}
         onCreated={handleUpdated}
         defaultType={modalDefaultType}
+      />
+
+      {/* TerminoAntecipado confirmation modal */}
+      <TerminoAntecipadoConfirmationModal
+        open={confirmationModalOpen}
+        onClose={() => {
+          setConfirmationModalOpen(false);
+          setEligibility(null);
+        }}
+        estagioId={estagioId}
+        eligibility={eligibility}
       />
     </div>
   );
