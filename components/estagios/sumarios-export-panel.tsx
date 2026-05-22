@@ -8,6 +8,8 @@ import Link from "next/link";
 
 type PreflightResult = {
   allSumariosArchived: boolean;
+  totalSumarios: number;
+  archivedCount: number;
   pastWeekCount: number;
   pendingWeeks: string[];
   alunoHasSignature: boolean;
@@ -106,8 +108,8 @@ export function SumariosExportPanel({ estagioId, currentUserRole, alunoId, tutor
           <RequirementItem
             ok={preflight.allSumariosArchived}
             label={
-              preflight.pastWeekCount > 0
-                ? `Todos os sumários validados pelo tutor (${preflight.pastWeekCount}/${preflight.pastWeekCount})`
+              preflight.totalSumarios > 0
+                ? `Todos os sumários validados pelo tutor (${preflight.archivedCount}/${preflight.totalSumarios})`
                 : "Sumários das semanas decorridas validados pelo tutor"
             }
             detail={

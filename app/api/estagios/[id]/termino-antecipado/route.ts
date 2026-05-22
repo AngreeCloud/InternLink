@@ -12,6 +12,7 @@ import {
   buildTerminoAntecipadoNotification,
   buildTutorSubmittedNotification,
 } from "@/lib/notifications/termino-antecipado-notifications";
+import type { ScheduleChangeRequest } from "@/lib/estagios/schedule-change-requests";
 
 export const runtime = "nodejs";
 
@@ -109,6 +110,12 @@ export async function POST(
       notificadosReadOnly: [],
     };
 
+    // Strip undefined (Firestore rejeita undefined como valor).
+    Object.keys(payload).forEach((k) => {
+      const key = k as keyof Omit<TerminoAntecipado, "id">;
+      if (payload[key] === undefined) delete payload[key];
+    });
+
     await newRef.set(payload);
 
     // Create notifications
@@ -165,6 +172,31 @@ export async function POST(
     if (encarregadoEducacaoId) readOnlyIds.push(encarregadoEducacaoId);
 
     batch.update(newRef, { notificadosReadOnly: readOnlyIds } as Record<string, unknown>);
+
+    // Criar registo em schedule_change_requests como log (acknowledged)
+    const scrCol = db.collection("estagios").doc(id).collection("schedule_change_requests");
+    const scrPayload: Omit<ScheduleChangeRequest, "id"> = {
+      estagioId: id,
+      studentId: session.uid,
+      professorId,
+      tutorId,
+      type: "early_termination",
+      targetDate: projection.diaDeDispensa || projection.diasParaCumprir[projection.diasParaCumprir.length - 1] || "",
+      hoursAffected: 0,
+      reason: `Pedido de término antecipado submetido — último dia útil obrigatório: ${projection.diasParaCumprir.length > 0 ? projection.diasParaCumprir[projection.diasParaCumprir.length - 1] : "—"}, dispensa solicitada: ${projection.diaDeDispensa || "—"}`,
+      status: "acknowledged",
+      comments: [],
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+
+    // Strip undefined
+    Object.keys(scrPayload).forEach((k) => {
+      const key = k as keyof Omit<ScheduleChangeRequest, "id">;
+      if (scrPayload[key] === undefined) delete scrPayload[key];
+    });
+
+    batch.set(scrCol.doc(), scrPayload);
 
     await batch.commit();
 

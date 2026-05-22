@@ -28,6 +28,8 @@ export async function GET(
 
     const pastWeeks: Array<{ weekId: string; weekNumber: number; weekYear: number }> = [];
     const notArchivedWeeks: string[] = [];
+    let totalSumarios = 0;
+    let archivedCount = 0;
 
     sumariosSnap.forEach((d) => {
       const data = d.data() as {
@@ -37,21 +39,22 @@ export async function GET(
         estado?: string;
         content?: string;
       };
+      totalSumarios++;
+      if (data.estado === "arquivado") {
+        archivedCount++;
+      } else {
+        notArchivedWeeks.push(`Semana ${data.weekNumber ?? "?"}`);
+      }
       if (data.weekEnd && data.weekEnd < todayIso) {
         pastWeeks.push({
           weekId: d.id,
           weekNumber: data.weekNumber ?? 0,
           weekYear: data.weekYear ?? 0,
         });
-        if (!data.content) {
-          notArchivedWeeks.push(`Semana ${data.weekNumber ?? "?"}`);
-        } else if (data.estado !== "arquivado") {
-          notArchivedWeeks.push(`Semana ${data.weekNumber ?? "?"}`);
-        }
       }
     });
 
-    const allPastArchived = notArchivedWeeks.length === 0 && pastWeeks.length > 0;
+    const allSumariosArchived = archivedCount === totalSumarios && totalSumarios > 0;
 
     const alunoId = session.estagio.alunoId;
     const tutorId = session.estagio.tutorId;
@@ -70,19 +73,20 @@ export async function GET(
     const tutorHasSignature =
       tutorSigSnap?.exists && !!tutorSigSnap.data()?.dataUrl;
 
-    const hasAnySumario = sumariosSnap.size > 0;
     const canExportSigned =
-      allPastArchived && alunoHasSignature && tutorHasSignature && hasAnySumario;
+      allSumariosArchived && alunoHasSignature && tutorHasSignature;
 
     return NextResponse.json({
       ok: true,
-      allSumariosArchived: allPastArchived,
+      allSumariosArchived,
+      totalSumarios,
+      archivedCount,
       pastWeekCount: pastWeeks.length,
       pendingWeeks: notArchivedWeeks,
       alunoHasSignature,
       tutorHasSignature,
       canExportSigned,
-      hasAnySumario,
+      hasAnySumario: totalSumarios > 0,
     });
   } catch (error) {
     const { body, status } = toApiErrorResponse(error);
