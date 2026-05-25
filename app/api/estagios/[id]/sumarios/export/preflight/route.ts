@@ -38,9 +38,11 @@ export async function GET(
         weekYear?: number;
         estado?: string;
         content?: string;
+        signedByTutor?: boolean;
       };
       totalSumarios++;
-      if (data.estado === "arquivado") {
+      const isArchived = data.estado === "arquivado" || data.signedByTutor === true;
+      if (isArchived) {
         archivedCount++;
       } else {
         notArchivedWeeks.push(`Semana ${data.weekNumber ?? "?"}`);
