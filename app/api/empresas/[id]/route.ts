@@ -127,6 +127,34 @@ export async function PATCH(
       updateData.nomeNormalizado = (updateData.nome as string).toLowerCase().replace(/\s+/g, " ").trim();
     }
 
+    if (updateData.nif !== undefined) {
+      const nifRaw = updateData.nif as string;
+      const nifNormalizado = nifRaw
+        ? nifRaw.replace(/\s+/g, "").replace(/[^0-9]/g, "")
+        : "";
+
+      if (nifNormalizado) {
+        updateData.nifNormalizado = nifNormalizado;
+
+        const nifExists = await db
+          .collection("empresas")
+          .where("schoolId", "==", schoolId)
+          .where("nifNormalizado", "==", nifNormalizado)
+          .limit(2)
+          .get();
+
+        const otherMatch = nifExists.docs.find((doc) => doc.id !== id);
+        if (otherMatch) {
+          return NextResponse.json(
+            { error: "Já existe uma empresa com este NIF nesta escola" },
+            { status: 409 }
+          );
+        }
+      } else {
+        updateData.nifNormalizado = null;
+      }
+    }
+
     if (body.ativa !== undefined) {
       updateData.ativa = Boolean(body.ativa);
       if (!body.ativa) {
