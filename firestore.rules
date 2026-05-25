@@ -406,7 +406,11 @@ service cloud.firestore {
         && request.resource.data.schoolId == currentUserData().schoolId;
 
       allow update: if isSchoolStaffFor(resource.data.schoolId)
-        && request.resource.data.schoolId == resource.data.schoolId;
+        && request.resource.data.schoolId == resource.data.schoolId
+        && (
+          !("empresaGrants" in request.resource.data.diff(resource.data).affectedKeys())
+          || isSchoolAdminFor(resource.data.schoolId)
+        );
 
       allow delete: if false;
 

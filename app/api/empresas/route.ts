@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { buildEmpresaSnapshot } from "@/lib/types/empresa";
+import { filterEmpresasByAccess } from "@/lib/empresas/empresa-access";
 
 export const runtime = "nodejs";
 
@@ -63,14 +64,14 @@ export async function GET() {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { schoolId, db } = auth;
+    const { uid, schoolId, role, db } = auth;
     const q = db
       .collection("empresas")
       .where("schoolId", "==", schoolId)
       .orderBy("nomeNormalizado", "asc");
 
     const snap = await q.get();
-    const empresas = snap.docs.map((doc) => {
+    let empresas = snap.docs.map((doc) => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -82,8 +83,18 @@ export async function GET() {
         logoUrl: data.logoUrl as string | undefined,
         ativa: data.ativa as boolean,
         tutorIds: (data.tutorIds as string[]) ?? [],
+        empresaGrants: (data.empresaGrants as Record<string, "read" | "write"> | undefined) ?? null,
       };
     });
+
+    if (role !== "admin_escolar") {
+      const schoolSnap = await db.collection("schools").doc(schoolId).get();
+      const globalProfAccess = (schoolSnap.data()?.empresasPageAccess as
+        | { professores?: string }
+        | undefined)?.professores as "none" | "read" | "write" | undefined;
+
+      empresas = filterEmpresasByAccess(empresas, uid, role, globalProfAccess);
+    }
 
     return NextResponse.json({ empresas });
   } catch (error) {

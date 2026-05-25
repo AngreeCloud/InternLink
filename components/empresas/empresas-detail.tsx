@@ -16,6 +16,7 @@ import {
 import { Archive, ArrowLeft, Building2, Loader2, Trash2, UserPlus, Search, X, MessageSquare, GraduationCap, Calendar, Clock, Pencil, ExternalLink, Save, Phone, Briefcase, StickyNote } from "lucide-react";
 import Link from "next/link";
 import { EmpresasEditForm } from "./empresas-edit-form";
+import { EmpresaPermissions } from "./empresa-permissions";
 
 type EmpresaFull = {
   id: string;
@@ -34,6 +35,7 @@ type EmpresaFull = {
   telefone?: string;
   logoUrl?: string;
   ativa: boolean;
+  empresaGrants?: Record<string, "read" | "write"> | null;
 };
 
 type TutorItem = {
@@ -595,7 +597,9 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
   const [empresa, setEmpresa] = useState<EmpresaFull | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"info" | "tutores" | "estagios">("info");
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [canWrite, setCanWrite] = useState(false);
+  const [tab, setTab] = useState<"info" | "tutores" | "estagios" | "acessos">("info");
   const [editing, setEditing] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
@@ -612,9 +616,11 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
         const d = (await res.json()) as { error?: string };
         throw new Error(d.error || "Erro ao carregar empresa");
       }
-      const data = (await res.json()) as { empresa?: EmpresaFull };
+      const data = (await res.json()) as { empresa?: EmpresaFull; role?: string; canWrite?: boolean };
       if (!data.empresa) throw new Error("Empresa não encontrada");
       setEmpresa(data.empresa);
+      setUserRole(data.role ?? null);
+      setCanWrite(data.canWrite ?? false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro inesperado");
     } finally {
@@ -691,10 +697,12 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
     );
   }
 
+    const isAdmin = userRole === "admin_escolar";
     const tabs = [
     { key: "info" as const, label: "Informações" },
     { key: "tutores" as const, label: "Tutores" },
     { key: "estagios" as const, label: "Estágios" },
+    ...(isAdmin ? [{ key: "acessos" as const, label: "Acessos" }] : []),
   ];
 
   return (
@@ -715,39 +723,45 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
             {empresa.setor && <p className="text-sm text-muted-foreground">{empresa.setor}</p>}
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setEditing(!editing)}>
-          <Pencil className="mr-2 h-4 w-4" />
-          {editing ? "Fechar" : "Editar"}
-        </Button>
+        {canWrite && (
+          <Button variant="outline" size="sm" onClick={() => setEditing(!editing)}>
+            <Pencil className="mr-2 h-4 w-4" />
+            {editing ? "Fechar" : "Editar"}
+          </Button>
+        )}
         <div className="ml-auto flex items-center gap-2">
           {empresa.ativa ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setConfirmArchive(true)}
-              disabled={archiving}
-            >
-              <Archive className="mr-2 h-4 w-4" />
-              Arquivar
-            </Button>
+            canWrite && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmArchive(true)}
+                disabled={archiving}
+              >
+                <Archive className="mr-2 h-4 w-4" />
+                Arquivar
+              </Button>
+            )
           ) : (
             <>
               <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                 Arquivada
               </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRestore}
-                disabled={archiving}
-              >
-                {archiving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Archive className="mr-2 h-4 w-4" />
-                )}
-                Restaurar
-              </Button>
+              {canWrite && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRestore}
+                  disabled={archiving}
+                >
+                  {archiving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Archive className="mr-2 h-4 w-4" />
+                  )}
+                  Restaurar
+                </Button>
+              )}
             </>
           )}
         </div>
@@ -791,6 +805,13 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
       ))}
       {tab === "tutores" && <TutoresTab empresaId={empresaId} basePath={basePath} />}
       {tab === "estagios" && <EstagiosTab empresaId={empresaId} basePath={basePath} />}
+      {tab === "acessos" && isAdmin && (
+        <EmpresaPermissions
+          empresaId={empresaId}
+          currentGrants={empresa.empresaGrants}
+          onGrantsSaved={() => fetchEmpresa()}
+        />
+      )}
 
       <Dialog open={confirmArchive} onOpenChange={setConfirmArchive}>
         <DialogContent>

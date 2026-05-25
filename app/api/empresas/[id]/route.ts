@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { buildEmpresaSnapshot } from "@/lib/types/empresa";
+import { hasEmpresaAccess } from "@/lib/empresas/empresa-access";
 
 export const runtime = "nodejs";
 
@@ -49,7 +50,7 @@ export async function GET(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { schoolId, db } = auth;
+    const { uid, schoolId, role, db } = auth;
     const { id } = await params;
 
     const docSnap = await db.collection("empresas").doc(id).get();
@@ -62,7 +63,30 @@ export async function GET(
       return NextResponse.json({ error: "Empresa não pertence a esta escola" }, { status: 403 });
     }
 
-    return NextResponse.json({ empresa: { id: docSnap.id, ...data } });
+    let empresasPageAccess: "none" | "read" | "write" = "none";
+
+    if (role !== "admin_escolar") {
+      const schoolSnap = await db.collection("schools").doc(schoolId).get();
+      empresasPageAccess = (schoolSnap.data()?.empresasPageAccess as
+        | { professores?: string }
+        | undefined)?.professores as "none" | "read" | "write" ?? "none";
+
+      if (!hasEmpresaAccess({
+        uid,
+        role,
+        empresaGrants: data?.empresaGrants,
+        requiredLevel: "read",
+        globalProfAccess: empresasPageAccess,
+      })) {
+        return NextResponse.json({ error: "Sem permissão para aceder a esta empresa" }, { status: 403 });
+      }
+    }
+
+    const canWrite = role === "admin_escolar" || (
+      (data?.empresaGrants?.[uid] === "write") && empresasPageAccess === "write"
+    );
+
+    return NextResponse.json({ empresa: { id: docSnap.id, ...data }, role, canWrite });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro inesperado";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -92,17 +116,33 @@ export async function PATCH(
       return NextResponse.json({ error: "Empresa não pertence a esta escola" }, { status: 403 });
     }
 
+    let empresasPageAccess: "none" | "read" | "write" | undefined;
+
     if (role !== "admin_escolar") {
       const schoolSnap = await db.collection("schools").doc(schoolId).get();
       const schoolData = schoolSnap.data();
       const access = schoolData?.empresasPageAccess as
-        | { professores?: string; courseDirectors?: string }
+        | { professores?: string }
         | undefined;
 
-      const profAccess = access?.professores ?? "none";
-      if (profAccess !== "write") {
+      empresasPageAccess = (access?.professores ?? "none") as "none" | "read" | "write";
+
+      if (empresasPageAccess !== "write") {
         return NextResponse.json(
           { error: "Professores não têm permissão de edição de empresas" },
+          { status: 403 }
+        );
+      }
+
+      if (!hasEmpresaAccess({
+        uid,
+        role,
+        empresaGrants: currentData?.empresaGrants,
+        requiredLevel: "write",
+        globalProfAccess: empresasPageAccess,
+      })) {
+        return NextResponse.json(
+          { error: "Não tens permissão de escrita nesta empresa" },
           { status: 403 }
         );
       }
@@ -164,6 +204,29 @@ export async function PATCH(
         updateData.archivedAt = null;
         updateData.archivedBy = null;
       }
+    }
+
+    if (body.empresaGrants !== undefined) {
+      if (role !== "admin_escolar") {
+        return NextResponse.json(
+          { error: "Apenas o administrador escolar pode gerir permissões" },
+          { status: 403 }
+        );
+      }
+
+      const incoming = body.empresaGrants as Record<string, unknown>;
+      const existing: Record<string, "read" | "write"> = (currentData?.empresaGrants as Record<string, "read" | "write"> | undefined) ?? {};
+      const merged: Record<string, "read" | "write"> = { ...existing };
+
+      for (const [key, val] of Object.entries(incoming)) {
+        if (val === "read" || val === "write") {
+          merged[key] = val;
+        } else {
+          delete merged[key];
+        }
+      }
+
+      updateData.empresaGrants = merged;
     }
 
     updateData.updatedAt = FieldValue.serverTimestamp();

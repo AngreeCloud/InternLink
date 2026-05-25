@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
+import { filterEmpresasByAccess } from "@/lib/empresas/empresa-access";
 
 export const runtime = "nodejs";
 
@@ -40,6 +41,7 @@ export async function GET(request: Request) {
       );
     }
 
+    const { role, schoolId } = userData as { role: string; schoolId: string };
     const { searchParams } = new URL(request.url);
     const q = (searchParams.get("q") ?? "").trim().toLowerCase();
 
@@ -49,12 +51,12 @@ export async function GET(request: Request) {
 
     const snap = await db
       .collection("empresas")
-      .where("schoolId", "==", userData.schoolId)
+      .where("schoolId", "==", schoolId)
       .where("ativa", "==", true)
       .orderBy("nomeNormalizado", "asc")
       .get();
 
-    const results = snap.docs
+    let results = snap.docs
       .filter((doc) => {
         const d = doc.data();
         const nomeNorm = (d.nomeNormalizado as string) ?? "";
@@ -66,7 +68,6 @@ export async function GET(request: Request) {
           nif.includes(q)
         );
       })
-      .slice(0, 8)
       .map((doc) => {
         const d = doc.data();
         return {
@@ -77,10 +78,22 @@ export async function GET(request: Request) {
           localidade: d.localidade as string | undefined,
           nif: d.nif as string | undefined,
           setor: d.setor as string | undefined,
+          empresaGrants: (d.empresaGrants as Record<string, "read" | "write"> | undefined) ?? null,
         };
       });
 
-    return NextResponse.json({ empresas: results });
+    if (role !== "admin_escolar") {
+      const schoolSnap = await db.collection("schools").doc(schoolId).get();
+      const globalProfAccess = (schoolSnap.data()?.empresasPageAccess as
+        | { professores?: string }
+        | undefined)?.professores as "none" | "read" | "write" | undefined;
+
+      results = filterEmpresasByAccess(results, uid, role, globalProfAccess);
+    }
+
+    const output = results.slice(0, 8).map(({ empresaGrants: _eg, ...rest }) => rest);
+
+    return NextResponse.json({ empresas: output });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro inesperado";
     return NextResponse.json({ error: message }, { status: 500 });

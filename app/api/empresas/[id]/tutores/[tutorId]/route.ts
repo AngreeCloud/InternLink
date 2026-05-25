@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { cookies } from "next/headers";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
+import { hasEmpresaAccess } from "@/lib/empresas/empresa-access";
 
 export const runtime = "nodejs";
 
@@ -47,7 +48,7 @@ export async function PATCH(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { uid, schoolId, db } = auth;
+    const { uid, schoolId, role, db } = auth;
     const { id, tutorId } = await params;
 
     const empresaSnap = await db.collection("empresas").doc(id).get();
@@ -57,6 +58,22 @@ export async function PATCH(
     const empresaData = empresaSnap.data();
     if (empresaData?.schoolId !== schoolId) {
       return NextResponse.json({ error: "Empresa não pertence a esta escola" }, { status: 403 });
+    }
+
+    if (role !== "admin_escolar") {
+      const schoolSnap = await db.collection("schools").doc(schoolId).get();
+      const empresasPageAccess = (schoolSnap.data()?.empresasPageAccess as
+        | { professores?: string }
+        | undefined)?.professores as "none" | "read" | "write" | undefined;
+
+      if (!hasEmpresaAccess({
+        uid, role,
+        empresaGrants: empresaData?.empresaGrants,
+        requiredLevel: "write",
+        globalProfAccess: empresasPageAccess,
+      })) {
+        return NextResponse.json({ error: "Sem permissão de escrita nesta empresa" }, { status: 403 });
+      }
     }
 
     const body = (await request.json()) as {
@@ -105,7 +122,7 @@ export async function DELETE(
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { uid, schoolId, db } = auth;
+    const { uid, schoolId, role, db } = auth;
     const { id, tutorId } = await params;
 
     const empresaSnap = await db.collection("empresas").doc(id).get();
@@ -115,6 +132,22 @@ export async function DELETE(
     const empresaData = empresaSnap.data();
     if (empresaData?.schoolId !== schoolId) {
       return NextResponse.json({ error: "Empresa não pertence a esta escola" }, { status: 403 });
+    }
+
+    if (role !== "admin_escolar") {
+      const schoolSnap = await db.collection("schools").doc(schoolId).get();
+      const empresasPageAccess = (schoolSnap.data()?.empresasPageAccess as
+        | { professores?: string }
+        | undefined)?.professores as "none" | "read" | "write" | undefined;
+
+      if (!hasEmpresaAccess({
+        uid, role,
+        empresaGrants: empresaData?.empresaGrants,
+        requiredLevel: "write",
+        globalProfAccess: empresasPageAccess,
+      })) {
+        return NextResponse.json({ error: "Sem permissão de escrita nesta empresa" }, { status: 403 });
+      }
     }
 
     const currentIds = (empresaData?.tutorIds as string[]) ?? [];
