@@ -9,10 +9,22 @@ import { EstagioAccessError, toApiErrorResponse } from "@/lib/estagios/estagio-a
 
 export const runtime = "nodejs";
 
+type EmpresaSnapshot = {
+  nome: string;
+  morada?: string;
+  codigoPostal?: string;
+  localidade?: string;
+  nif?: string;
+  emailGeral?: string;
+  telefone?: string;
+};
+
 type CreateEstagioBody = {
   alunoId?: string;
   tutorId?: string;
   empresa?: string;
+  empresaId?: string;
+  empresaSnapshot?: EmpresaSnapshot;
   titulo?: string;
   dataInicio?: string;
   totalHoras?: number;
@@ -70,11 +82,35 @@ export async function POST(request: Request) {
     const alunoId = (body.alunoId ?? "").trim();
     const titulo = (body.titulo ?? "").trim();
     const empresa = (body.empresa ?? "").trim();
+    const empresaId = (body.empresaId ?? "").trim();
+    const empresaSnapshot = body.empresaSnapshot ?? null;
     const dataInicio = (body.dataInicio ?? "").trim();
     const totalHoras = Number(body.totalHoras);
     const horasDiarias = Number(body.horasDiarias);
     const tutorId = (body.tutorId ?? "").trim();
     const diasSemana = normalizeDiasSemana(body.diasSemana);
+
+    let resolvedEmpresaNome = empresa;
+    let resolvedEmpresaMorada: string | undefined;
+    let resolvedEmpresaCodigoPostal: string | undefined;
+
+    if (empresaId) {
+      const empresaSnap = await db.collection("empresas").doc(empresaId).get();
+      if (empresaSnap.exists) {
+        const ed = empresaSnap.data() as {
+          nome?: string;
+          morada?: string;
+          codigoPostal?: string;
+          localidade?: string;
+          nif?: string;
+          emailGeral?: string;
+          telefone?: string;
+        };
+        resolvedEmpresaNome = ed.nome || empresa;
+        resolvedEmpresaMorada = ed.morada;
+        resolvedEmpresaCodigoPostal = ed.codigoPostal;
+      }
+    }
 
     if (!alunoId || !titulo || !isIsoDate(dataInicio)) {
       throw new EstagioAccessError(400, "missing_fields", "Aluno, título e data de início são obrigatórios.");
@@ -170,9 +206,13 @@ export async function POST(request: Request) {
       tutorId: tutorInfo?.id || "",
       tutorNome: tutorInfo?.nome || "",
       tutorEmail: tutorInfo?.email || "",
-      tutorEmpresa: tutorInfo?.empresa || empresa || "",
-      empresa: tutorInfo?.empresa || empresa || "",
-      entidadeAcolhimento: tutorInfo?.empresa || empresa || "",
+      tutorEmpresa: tutorInfo?.empresa || resolvedEmpresaNome || "",
+      empresa: resolvedEmpresaNome,
+      entidadeAcolhimento: resolvedEmpresaNome,
+      empresaId: empresaId || undefined,
+      empresaSnapshot: empresaSnapshot || undefined,
+      empresaMorada: resolvedEmpresaMorada,
+      empresaCodigoPostal: resolvedEmpresaCodigoPostal,
       dataInicio,
       totalHoras,
       horasDiarias,

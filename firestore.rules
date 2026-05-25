@@ -386,6 +386,37 @@ service cloud.firestore {
         && resource.data.schoolId == currentUserData().schoolId;
     }
 
+    // EMPRESAS — base de dados institucional de entidades de acolhimento
+    function isSchoolStaff() {
+      return isSignedIn()
+        && currentUserExists()
+        && currentUserData().role in ["admin_escolar", "professor"]
+        && currentUserData().estado == "ativo";
+    }
+
+    function isSchoolStaffFor(schoolId) {
+      return isSchoolStaff()
+        && currentUserData().schoolId == schoolId;
+    }
+
+    match /empresas/{empresaId} {
+      allow read: if isSchoolStaffFor(resource.data.schoolId);
+
+      allow create: if isSchoolStaff()
+        && request.resource.data.schoolId == currentUserData().schoolId;
+
+      allow update: if isSchoolStaffFor(resource.data.schoolId)
+        && request.resource.data.schoolId == resource.data.schoolId;
+
+      allow delete: if false;
+
+      // Tutor override data (per-company local overrides)
+      match /tutores/{tutorId} {
+        allow read: if isSchoolStaffFor(get(/databases/$(database)/documents/empresas/$(empresaId)).data.schoolId);
+        allow write: if isSchoolStaffFor(get(/databases/$(database)/documents/empresas/$(empresaId)).data.schoolId);
+      }
+    }
+
     // INTERNSHIP STRUCTURE (usada no dashboard do aluno)
     match /internships/{internshipId} {
       allow read: if isSignedIn()

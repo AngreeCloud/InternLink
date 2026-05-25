@@ -23,6 +23,7 @@ type ProfileData = {
   dataNascimento: string;
   photoURL: string;
   role: string;
+  funcaoEmpresa: string;
 };
 
 export function ProfileEditor() {
@@ -37,6 +38,7 @@ export function ProfileEditor() {
     dataNascimento: "",
     photoURL: "",
     role: "",
+    funcaoEmpresa: "",
   });
   const [photoPreview, setPhotoPreview] = useState("");
   const [cropSource, setCropSource] = useState("");
@@ -108,6 +110,7 @@ export function ProfileEditor() {
           dataNascimento?: string;
           photoURL?: string;
           role?: string;
+          funcaoEmpresa?: string;
         };
 
         setProfile({
@@ -118,6 +121,7 @@ export function ProfileEditor() {
           dataNascimento: data.dataNascimento || "",
           photoURL: data.photoURL || "",
           role: data.role || "",
+          funcaoEmpresa: data.funcaoEmpresa || "",
         });
         setEmailVerified(Boolean(user.emailVerified));
         setPhotoPreview(data.photoURL || "");
@@ -205,6 +209,7 @@ export function ProfileEditor() {
         telefone: profile.telefone,
         localidade: profile.localidade,
         dataNascimento: profile.dataNascimento,
+        funcaoEmpresa: profile.funcaoEmpresa || "",
         photoURL: nextPhotoURL,
       });
 
@@ -409,6 +414,24 @@ export function ProfileEditor() {
               placeholder="O seu contacto"
             />
           </div>
+
+          {/* Função na empresa */}
+          {profile.role === "tutor" && (
+            <div className="space-y-2">
+              <Label htmlFor="profileFuncao">Função na empresa</Label>
+              <Input
+                id="profileFuncao"
+                value={profile.funcaoEmpresa}
+                onChange={(e) => setProfile((prev) => ({ ...prev, funcaoEmpresa: e.target.value }))}
+                placeholder="Ex: Diretor de TI, Engenheiro de Software..."
+              />
+              {!profile.funcaoEmpresa && (
+                <p className="text-xs text-amber-600">
+                  Preenche a tua função na empresa para que apareça nos documentos do estágio.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Location */}
           <div className="space-y-2">

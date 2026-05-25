@@ -4,6 +4,7 @@ import { getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { assertEstagioAccess, toApiErrorResponse } from "@/lib/estagios/estagio-access";
 import {
   calcularDataFimEstimada,
+  recalcularDataFimEstimada,
   DEFAULT_DIAS_SEMANA,
   type DiasSemana,
 } from "@/lib/estagios/date-calc";
@@ -100,20 +101,29 @@ export async function PATCH(
         dataInicio?: string;
         totalHoras?: number;
         horasDiarias?: number;
+        horasRealizadas?: number;
         diasSemana?: Partial<DiasSemana>;
       };
       const dataInicio = body.dataInicio ?? existing.dataInicio ?? "";
       const totalHoras = Number(body.totalHoras ?? existing.totalHoras ?? 0);
       const horasDiarias = Number(body.horasDiarias ?? existing.horasDiarias ?? 0);
       const diasSemana = normalizeDiasSemana(body.diasSemana ?? existing.diasSemana);
+      const horasRealizadas = Number(existing.horasRealizadas ?? 0);
 
       if (dataInicio && totalHoras > 0 && horasDiarias > 0) {
-        const dateCalc = calcularDataFimEstimada({
-          dataInicio,
-          totalHoras,
-          horasDiarias,
-          diasSemana,
-        });
+        const dateCalc = horasRealizadas > 0
+          ? recalcularDataFimEstimada({
+              totalHoras,
+              horasRealizadas,
+              horasDiarias,
+              diasSemana,
+            })
+          : calcularDataFimEstimada({
+              dataInicio,
+              totalHoras,
+              horasDiarias,
+              diasSemana,
+            });
         updates.dataInicio = dataInicio;
         updates.totalHoras = totalHoras;
         updates.horasDiarias = horasDiarias;

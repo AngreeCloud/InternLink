@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, FileDown, Loader2, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { Download, FileDown, Loader2, CheckCircle2, XCircle, AlertCircle, Eye } from "lucide-react";
 import Link from "next/link";
+import { FullscreenDocumentViewer } from "@/components/estagios/documentos/fullscreen-document-viewer";
 
 type PreflightResult = {
   allSumariosArchived: boolean;
@@ -16,6 +17,7 @@ type PreflightResult = {
   tutorHasSignature: boolean;
   canExportSigned: boolean;
   hasAnySumario: boolean;
+  schoolHasAddress: boolean;
 };
 
 type Props = {
@@ -30,6 +32,9 @@ export function SumariosExportPanel({ estagioId, currentUserRole, alunoId, tutor
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState<"signed" | "unsigned" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState<"signed" | "unsigned" | null>(null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [lastGeneratedMode, setLastGeneratedMode] = useState<"signed" | "unsigned" | null>(null);
   const normalizedRole = currentUserRole.toLowerCase();
   const currentUserIsAluno = normalizedRole === "aluno";
   const currentUserIsTutor = normalizedRole === "tutor";
@@ -52,17 +57,26 @@ export function SumariosExportPanel({ estagioId, currentUserRole, alunoId, tutor
     return () => { cancelled = true; };
   }, [estagioId]);
 
+  const generatePdfBlob = async (mode: "signed" | "unsigned"): Promise<Blob | null> => {
+    if (lastGeneratedMode === mode && previewBlobUrl) {
+      const res = await fetch(previewBlobUrl);
+      return res.blob();
+    }
+    const res = await fetch(`/api/estagios/${estagioId}/sumarios/export?mode=${mode}`);
+    if (!res.ok) {
+      const data = await res.json() as { error?: string };
+      setError(data.error || "Erro ao gerar PDF.");
+      return null;
+    }
+    return res.blob();
+  };
+
   const handleDownload = async (mode: "signed" | "unsigned") => {
     setDownloading(mode);
     setError(null);
     try {
-      const res = await fetch(`/api/estagios/${estagioId}/sumarios/export?mode=${mode}`);
-      if (!res.ok) {
-        const data = await res.json() as { error?: string };
-        setError(data.error || "Erro ao gerar PDF.");
-        return;
-      }
-      const blob = await res.blob();
+      const blob = await generatePdfBlob(mode);
+      if (!blob) return;
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -75,6 +89,25 @@ export function SumariosExportPanel({ estagioId, currentUserRole, alunoId, tutor
       setError(err instanceof Error ? err.message : "Erro inesperado.");
     } finally {
       setDownloading(null);
+    }
+  };
+
+  const handlePreview = async (mode: "signed" | "unsigned") => {
+    setError(null);
+    try {
+      if (lastGeneratedMode === mode && previewBlobUrl) {
+        setPreviewMode(mode);
+        return;
+      }
+      const blob = await generatePdfBlob(mode);
+      if (!blob) return;
+      if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
+      const url = URL.createObjectURL(blob);
+      setPreviewBlobUrl(url);
+      setLastGeneratedMode(mode);
+      setPreviewMode(mode);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro inesperado.");
     }
   };
 
@@ -134,6 +167,13 @@ export function SumariosExportPanel({ estagioId, currentUserRole, alunoId, tutor
           />
         </div>
 
+        {!preflight.schoolHasAddress && ["admin_escolar", "professor", "diretor"].includes(normalizedRole) && (
+          <div className="rounded-md border border-amber-400/40 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <AlertCircle className="mr-1.5 inline h-3.5 w-3.5" />
+            A morada da escola ainda n&atilde;o est&aacute; configurada. O PDF ser&aacute; gerado sem essa informa&ccedil;&atilde;o institucional.
+          </div>
+        )}
+
         <div className="border-t pt-3 flex flex-wrap gap-2">
           <Button
             type="button"
@@ -164,6 +204,31 @@ export function SumariosExportPanel({ estagioId, currentUserRole, alunoId, tutor
             )}
             Descarregar com assinaturas
           </Button>
+
+          <div className="w-full flex gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={downloading !== null}
+              onClick={() => handlePreview("unsigned")}
+            >
+              <Eye className="mr-2 h-4 w-4" />
+              Pré-visualizar PDF
+            </Button>
+            {preflight.canExportSigned && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={downloading !== null}
+                onClick={() => handlePreview("signed")}
+              >
+                <Eye className="mr-2 h-4 w-4" />
+                Pré-visualizar (c/ assinaturas)
+              </Button>
+            )}
+          </div>
         </div>
 
         {error && (
@@ -172,6 +237,15 @@ export function SumariosExportPanel({ estagioId, currentUserRole, alunoId, tutor
           </div>
         )}
       </CardContent>
+
+      {previewMode && previewBlobUrl && (
+        <FullscreenDocumentViewer
+          fileUrl={previewBlobUrl}
+          fileName={`Registo_Sumarios.${previewMode === "signed" ? "assinado" : "sem_assinaturas"}.pdf`}
+          fileType="pdf"
+          onClose={() => setPreviewMode(null)}
+        />
+      )}
     </Card>
   );
 }

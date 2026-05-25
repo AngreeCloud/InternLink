@@ -105,6 +105,18 @@ export const professorRegisterFormSchema = z
     path: ["confirmPassword"],
   });
 
+const funcaoEmpresaSchema = z
+  .string()
+  .trim()
+  .min(2, "A função na empresa é obrigatória.")
+  .max(120, "A função na empresa é demasiado longa.");
+
+const optionalFuncaoEmpresaSchema = z
+  .string()
+  .trim()
+  .max(120, "A função na empresa é demasiado longa.")
+  .optional();
+
 export const tutorRegisterFormSchema = z
   .object({
     nome: nomeSchema,
@@ -112,6 +124,7 @@ export const tutorRegisterFormSchema = z
     password: passwordSchema,
     confirmPassword: passwordSchema,
     empresa: z.string().trim().min(1, "A empresa é obrigatória.").max(160, "A empresa é demasiado longa."),
+    funcaoEmpresa: funcaoEmpresaSchema,
     dataNascimento: optionalBirthDateSchema.optional(),
     localidade: localidadeSchema,
     telefone: telefoneSchema.optional(),
@@ -157,6 +170,7 @@ export const tutorRegisterActionSchema = z
     email: emailSchema,
     password: passwordSchema,
     empresa: z.string().trim().min(1, "A empresa é obrigatória.").max(160, "A empresa é demasiado longa."),
+    funcaoEmpresa: funcaoEmpresaSchema,
     recaptchaToken: z.string().trim().optional(),
     dataNascimento: optionalBirthDateSchema.optional(),
     localidade: localidadeSchema,

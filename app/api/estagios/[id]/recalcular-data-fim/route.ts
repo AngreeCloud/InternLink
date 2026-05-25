@@ -98,6 +98,7 @@ export async function POST(
     // Atualizar no Firestore
     await estagioRef.update({
       dataFimEstimada: newDataFim,
+      horasRealizadas,
       updatedAt: FieldValue.serverTimestamp(),
     });
 

@@ -13,7 +13,7 @@ import assert from "node:assert";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
-import { collectionGroup, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore";
+import { collectionGroup, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore";
 
 let testEnv;
 
@@ -147,6 +147,14 @@ test.beforeEach(async () => {
       reviewedBy: "profA",
     });
 
+    await setDoc(doc(db, "users", "tutorA"), {
+      role: "tutor",
+      estado: "ativo",
+      schoolId: "schoolA",
+      nome: "Tutor A",
+      email: "tutor-a@empresa.pt",
+    });
+
     await setDoc(doc(db, "courses", "courseA"), {
       schoolId: "schoolA",
       name: "Informática - Sistemas A",
@@ -257,6 +265,43 @@ test.beforeEach(async () => {
         createdAt: Date.now(),
       }
     );
+
+    await setDoc(doc(db, "empresas", "empresaA"), {
+      schoolId: "schoolA",
+      nome: "Empresa A",
+      nomeNormalizado: "empresa a",
+      nif: "501234567",
+      setor: "TI",
+      localidade: "Porto",
+      distrito: "Porto",
+      ativa: true,
+      tutorIds: [],
+      createdBy: "profA",
+      updatedBy: "profA",
+    });
+
+    await setDoc(doc(db, "empresas", "empresaB"), {
+      schoolId: "schoolB",
+      nome: "Empresa B",
+      nomeNormalizado: "empresa b",
+      nif: "501234568",
+      setor: "Saúde",
+      localidade: "Lisboa",
+      ativa: true,
+      tutorIds: [],
+      createdBy: "profB",
+      updatedBy: "profB",
+    });
+
+    await setDoc(doc(db, "empresas", "empresaArquivada"), {
+      schoolId: "schoolA",
+      nome: "Empresa Arquivada",
+      nomeNormalizado: "empresa arquivada",
+      ativa: false,
+      tutorIds: [],
+      createdBy: "profA",
+      updatedBy: "profA",
+    });
   });
 });
 
@@ -541,4 +586,84 @@ test("outro utilizador não consegue ler notificações alheias via collection g
       )
     )
   );
+});
+
+// ---------------------------------------------------------------------------
+// EMPRESAS
+// ---------------------------------------------------------------------------
+test("professor da mesma escola consegue ler empresa da sua escola", async () => {
+  const db = testEnv.authenticatedContext("profA").firestore();
+
+  await assertSucceeds(getDoc(doc(db, "empresas", "empresaA")));
+});
+
+test("professor não consegue ler empresa de outra escola", async () => {
+  const db = testEnv.authenticatedContext("profA").firestore();
+
+  await assertFails(getDoc(doc(db, "empresas", "empresaB")));
+});
+
+test("admin escolar da mesma escola consegue ler empresa", async () => {
+  const db = testEnv.authenticatedContext("adminSchoolA").firestore();
+
+  await assertSucceeds(getDoc(doc(db, "empresas", "empresaA")));
+});
+
+test("admin escolar não consegue ler empresa de outra escola", async () => {
+  const db = testEnv.authenticatedContext("adminSchoolA").firestore();
+
+  await assertFails(getDoc(doc(db, "empresas", "empresaB")));
+});
+
+test("professor não consegue listar empresas via collection group (só admin SDK)", async () => {
+  const db = testEnv.authenticatedContext("profA").firestore();
+
+  await assertFails(
+    getDocs(
+      query(
+        collectionGroup(db, "empresas"),
+        where("schoolId", "==", "schoolA")
+      )
+    )
+  );
+});
+
+test("professor consegue criar empresa na sua escola", async () => {
+  const db = testEnv.authenticatedContext("profA").firestore();
+
+  await assertSucceeds(
+    setDoc(doc(db, "empresas", "novaEmpresa"), {
+      schoolId: "schoolA",
+      nome: "Nova Empresa",
+      nomeNormalizado: "nova empresa",
+      ativa: true,
+      tutorIds: [],
+    })
+  );
+});
+
+test("professor não consegue criar empresa noutra escola", async () => {
+  const db = testEnv.authenticatedContext("profA").firestore();
+
+  await assertFails(
+    setDoc(doc(db, "empresas", "novaEmpresa"), {
+      schoolId: "schoolB",
+      nome: "Nova Empresa",
+      nomeNormalizado: "nova empresa",
+      ativa: true,
+      tutorIds: [],
+    })
+  );
+});
+
+test("tutor não consegue ler empresas", async () => {
+  const db = testEnv.authenticatedContext("tutorA").firestore();
+
+  await assertFails(getDoc(doc(db, "empresas", "empresaA")));
+});
+
+test("ninguém consegue apagar empresas", async () => {
+  const db = testEnv.authenticatedContext("adminSchoolA").firestore();
+
+  await assertFails(deleteDoc(doc(db, "empresas", "empresaA")));
 });

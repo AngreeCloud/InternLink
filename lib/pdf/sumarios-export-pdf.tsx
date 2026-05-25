@@ -443,6 +443,7 @@ const SumarioPage = ({
 const SignaturesPage = ({
   alunoName,
   tutorName,
+  tutorRole,
   empresa,
   includeSignatures,
   alunoSignatureDataUrl,
@@ -451,6 +452,7 @@ const SignaturesPage = ({
 }: {
   alunoName: string;
   tutorName: string;
+  tutorRole: string;
   empresa: string;
   includeSignatures: boolean;
   alunoSignatureDataUrl?: string;
@@ -492,7 +494,7 @@ const SignaturesPage = ({
         )}
         <View style={styles.sigLine} />
         <Text style={styles.sigName}>{tutorName}</Text>
-        <Text style={styles.sigRole}>Tutor de Estagio</Text>
+        <Text style={styles.sigRole}>{tutorRole}</Text>
         <Text style={styles.sigCompany}>{empresa}</Text>
       </View>
     </View>
@@ -529,6 +531,7 @@ type CoverData = {
   periodofim: string;
   totalSemanas: number;
   generatedAt: string;
+  tutorRole?: string;
 };
 
 const SumariosPDF = ({
@@ -556,6 +559,7 @@ const SumariosPDF = ({
     <SignaturesPage
       alunoName={coverData.alunoName}
       tutorName={coverData.tutorName}
+      tutorRole={coverData.tutorRole || "Tutor de Estagio"}
       empresa={coverData.empresa}
       includeSignatures={includeSignatures}
       alunoSignatureDataUrl={alunoSignatureDataUrl}

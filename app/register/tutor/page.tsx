@@ -43,6 +43,7 @@ export default function TutorRegisterPage() {
       password: "",
       confirmPassword: "",
       empresa: "",
+      funcaoEmpresa: "",
       dataNascimento: "",
       localidade: "",
       telefone: "",
@@ -171,6 +172,7 @@ export default function TutorRegisterPage() {
           nome: values.nome,
           email: values.email,
           empresa: values.empresa,
+          funcaoEmpresa: values.funcaoEmpresa,
           dataNascimento: values.dataNascimento || "",
           localidade: values.localidade || "",
           telefone: values.telefone || "",
@@ -200,6 +202,7 @@ export default function TutorRegisterPage() {
           email: values.email,
           password: values.password,
           empresa: values.empresa,
+          funcaoEmpresa: values.funcaoEmpresa,
           dataNascimento: values.dataNascimento,
           localidade: values.localidade,
           telefone: values.telefone,
@@ -439,6 +442,19 @@ export default function TutorRegisterPage() {
                         <FormLabel>Empresa</FormLabel>
                         <FormControl>
                           <Input placeholder="Nome da sua empresa" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="funcaoEmpresa"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Função na empresa</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Ex: Diretor de TI, Engenheiro de Software..." {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
