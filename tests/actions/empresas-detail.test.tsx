@@ -9,6 +9,7 @@ vi.mock("@/components/ui/button", () => ({
 }));
 
 vi.mock("lucide-react", () => ({
+  Archive: () => <svg data-testid="archive-icon" />,
   ArrowLeft: () => <svg data-testid="arrow-left-icon" />,
   Building2: () => <svg data-testid="building-icon" />,
   Loader2: () => <svg data-testid="loader-icon" />,
@@ -19,6 +20,7 @@ vi.mock("lucide-react", () => ({
   UserPlus: () => <svg data-testid="user-plus-icon" />,
   Search: () => <svg data-testid="search-icon" />,
   X: () => <svg data-testid="x-icon" />,
+  XIcon: () => <svg data-testid="x-icon" />,
   MessageSquare: () => <svg data-testid="message-icon" />,
   Pencil: () => <svg data-testid="pencil-icon" />,
 }));
@@ -167,6 +169,7 @@ describe("EmpresasDetail", () => {
       await new Promise((r) => setTimeout(r, 0));
     });
 
-    expect(findText(renderer!.root, "Empresa arquivada.").length).toBe(1);
+    expect(findText(renderer!.root, "Esta empresa está arquivada").length).toBe(1);
+    expect(findText(renderer!.root, "Arquivada").length).toBe(1);
   });
 });
