@@ -37,6 +37,64 @@ async function requireAuth() {
   return { uid, schoolId: userData.schoolId, role: userData.role, db } as const;
 }
 
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string; tutorId: string }> }
+) {
+  try {
+    const auth = await requireAuth();
+    if ("error" in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
+
+    const { uid, schoolId, db } = auth;
+    const { id, tutorId } = await params;
+
+    const empresaSnap = await db.collection("empresas").doc(id).get();
+    if (!empresaSnap.exists) {
+      return NextResponse.json({ error: "Empresa não encontrada" }, { status: 404 });
+    }
+    const empresaData = empresaSnap.data();
+    if (empresaData?.schoolId !== schoolId) {
+      return NextResponse.json({ error: "Empresa não pertence a esta escola" }, { status: 403 });
+    }
+
+    const body = (await request.json()) as {
+      funcaoEmpresaOverride?: string;
+      telefoneOverride?: string;
+      notasInternas?: string;
+    };
+
+    const updateData: Record<string, unknown> = {
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: uid,
+    };
+
+    if (body.funcaoEmpresaOverride !== undefined) {
+      updateData.funcaoEmpresaOverride = body.funcaoEmpresaOverride;
+    }
+    if (body.telefoneOverride !== undefined) {
+      updateData.telefoneOverride = body.telefoneOverride;
+    }
+    if (body.notasInternas !== undefined) {
+      updateData.notasInternas = body.notasInternas;
+    }
+
+    await db.collection("empresas").doc(id).collection("tutores").doc(tutorId).set(
+      {
+        tutorId,
+        ...updateData,
+      },
+      { merge: true }
+    );
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro inesperado";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string; tutorId: string }> }

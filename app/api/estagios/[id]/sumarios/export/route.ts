@@ -384,6 +384,7 @@ async function createSignaturesPage(
     alunoName: string;
     tutorName: string;
     empresa: string;
+    tutorRole: string;
   },
   includeSignatures: boolean,
   alunoSignatureBytes: Uint8Array | null,
@@ -466,7 +467,7 @@ async function createSignaturesPage(
   };
 
   await drawSigBlock(leftX, cy, data.alunoName, "Formando", null, alunoSignatureBytes);
-  await drawSigBlock(rightX, cy, data.tutorName, "Tutor de Estagio", data.empresa, tutorSignatureBytes);
+  await drawSigBlock(rightX, cy, data.tutorName, data.tutorRole, data.empresa, tutorSignatureBytes);
 
   cy -= 120;
   page.drawText(sanitze(`Documento gerado pela plataforma InternLink em ${generatedAt}`), {
@@ -545,6 +546,34 @@ export async function GET(
     const professorName = getField(professorId, "nome") || getField(professorId, "displayName") || "Professor";
     const empresa = getField(tutorId, "empresa") || "-";
 
+    // Resolve tutor role: override > profile > fallback
+    let tutorRole = "Tutor de Estagio";
+    if (tutorId) {
+      const empresaId = estagio.empresaId as string | undefined;
+      if (empresaId) {
+        try {
+          const overrideSnap = await db
+            .collection("empresas")
+            .doc(empresaId)
+            .collection("tutores")
+            .doc(tutorId)
+            .get();
+          if (overrideSnap.exists) {
+            const overrideData = overrideSnap.data() as { funcaoEmpresaOverride?: string };
+            if (overrideData.funcaoEmpresaOverride) {
+              tutorRole = overrideData.funcaoEmpresaOverride;
+            }
+          }
+        } catch {
+          // fallback
+        }
+      }
+      if (tutorRole === "Tutor de Estagio") {
+        const tutorFuncao = getField(tutorId, "funcaoEmpresa");
+        tutorRole = tutorFuncao || "Tutor de Estagio";
+      }
+    }
+
     let alunoSignatureBytes: Uint8Array | null = null;
     let tutorSignatureBytes: Uint8Array | null = null;
 
@@ -611,7 +640,7 @@ export async function GET(
     // Last page: Signatures
     await createSignaturesPage(
       doc, font, bold,
-      { alunoName, tutorName, empresa },
+      { alunoName, tutorName, empresa, tutorRole },
       includeSignatures,
       alunoSignatureBytes, tutorSignatureBytes,
       totalPages, totalPages, generatedAt

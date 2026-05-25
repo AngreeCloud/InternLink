@@ -91,6 +91,7 @@ function makeTutorPayload() {
     email: "tutor@example.com",
     password: "secret123",
     empresa: "Empresa XPTO",
+    funcaoEmpresa: "Diretor de TI",
     recaptchaToken: undefined,
     dataNascimento: "1980-03-15",
     localidade: "Porto",

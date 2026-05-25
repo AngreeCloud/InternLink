@@ -3,7 +3,17 @@
 import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Building2, Loader2, Trash2, UserPlus, Search, X, MessageSquare, GraduationCap, Calendar, Clock, Pencil, ExternalLink } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { ArrowLeft, Building2, Loader2, Trash2, UserPlus, Search, X, MessageSquare, GraduationCap, Calendar, Clock, Pencil, ExternalLink, Save, Phone, Briefcase, StickyNote } from "lucide-react";
 import Link from "next/link";
 import { EmpresasEditForm } from "./empresas-edit-form";
 
@@ -31,6 +41,12 @@ type TutorItem = {
   nome?: string;
   email?: string;
   telefone?: string;
+  photoURL?: string;
+  funcaoEmpresa?: string;
+  funcaoEmpresaOverride?: string | null;
+  telefoneOverride?: string | null;
+  notasInternas?: string | null;
+  empresa?: string;
 };
 
 type Props = {
@@ -133,6 +149,11 @@ function TutoresTab({
   const [searchResults, setSearchResults] = useState<TutorItem[]>([]);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editTutor, setEditTutor] = useState<TutorItem | null>(null);
+  const [editFuncao, setEditFuncao] = useState("");
+  const [editTelefone, setEditTelefone] = useState("");
+  const [editNotas, setEditNotas] = useState("");
+  const [savingOverride, setSavingOverride] = useState(false);
 
   const fetchTutores = useCallback(async () => {
     setLoading(true);
@@ -214,6 +235,40 @@ function TutoresTab({
       setError(err instanceof Error ? err.message : "Erro inesperado");
     }
   };
+
+  const openEditDialog = (tutor: TutorItem) => {
+    setEditTutor(tutor);
+    setEditFuncao(tutor.funcaoEmpresaOverride || tutor.funcaoEmpresa || "");
+    setEditTelefone(tutor.telefoneOverride || tutor.telefone || "");
+    setEditNotas(tutor.notasInternas || "");
+  };
+
+  const saveOverride = async () => {
+    if (!editTutor) return;
+    setSavingOverride(true);
+    try {
+      const res = await fetch(`/api/empresas/${empresaId}/tutores/${editTutor.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          funcaoEmpresaOverride: editFuncao || "",
+          telefoneOverride: editTelefone || "",
+          notasInternas: editNotas || "",
+        }),
+      });
+      if (!res.ok) throw new Error("Erro ao guardar override");
+      setEditTutor(null);
+      await fetchTutores();
+    } catch {
+      setError("Erro ao guardar dados do tutor.");
+    } finally {
+      setSavingOverride(false);
+    }
+  };
+
+  const resolvedFuncao = (t: TutorItem) => t.funcaoEmpresaOverride || t.funcaoEmpresa || "";
+  const resolvedTelefone = (t: TutorItem) => t.telefoneOverride || t.telefone || "";
+  const hasOverrideFuncao = (t: TutorItem) => Boolean(t.funcaoEmpresaOverride);
 
   if (loading) {
     return (
@@ -303,37 +358,127 @@ function TutoresTab({
           {tutores.map((tutor) => (
             <div
               key={tutor.id}
-              className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
+              className="rounded-lg border border-border bg-card p-4"
             >
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-sm font-medium shrink-0">
-                  {(tutor.nome || "T")[0].toUpperCase()}
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <Avatar className="h-10 w-10 shrink-0">
+                    <AvatarImage src={tutor.photoURL || undefined} alt={tutor.nome} />
+                    <AvatarFallback>{(tutor.nome || "T")[0].toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="text-sm font-medium truncate">{tutor.nome || "Tutor sem nome"}</p>
+                    {resolvedFuncao(tutor) && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Briefcase className="h-3 w-3 shrink-0" />
+                        {resolvedFuncao(tutor)}
+                        {hasOverrideFuncao(tutor) && (
+                          <span className="text-[10px] text-primary ml-1">(override)</span>
+                        )}
+                      </p>
+                    )}
+                    {tutor.email && (
+                      <p className="text-xs text-muted-foreground truncate">{tutor.email}</p>
+                    )}
+                    {resolvedTelefone(tutor) && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Phone className="h-3 w-3 shrink-0" />
+                        {resolvedTelefone(tutor)}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{tutor.nome || "Tutor sem nome"}</p>
-                  {tutor.email && (
-                    <p className="text-xs text-muted-foreground truncate">{tutor.email}</p>
-                  )}
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button variant="ghost" size="sm" onClick={() => openEditDialog(tutor)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href={`${basePath}/chat?userId=${tutor.id}`}>
+                      <MessageSquare className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => desassociateTutor(tutor.id)}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href={`${basePath}/chat?userId=${tutor.id}`}>
-                    <MessageSquare className="h-4 w-4" />
-                  </Link>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => desassociateTutor(tutor.id)}
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
+              {tutor.notasInternas && (
+                <div className="mt-2 border-t pt-2 text-xs text-muted-foreground">
+                  <span className="font-medium">Notas internas:</span>{" "}
+                  &ldquo;{tutor.notasInternas}&rdquo;
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
+
+      <Dialog open={editTutor !== null} onOpenChange={(o) => { if (!o) setEditTutor(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar dados do tutor</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="editFuncao">Função na empresa (override)</Label>
+              <Input
+                id="editFuncao"
+                value={editFuncao}
+                onChange={(e) => setEditFuncao(e.target.value)}
+                placeholder={editTutor?.funcaoEmpresa || "Ex: Diretor de TI"}
+              />
+              {editTutor?.funcaoEmpresa && (
+                <p className="text-xs text-muted-foreground">
+                  Perfil do tutor: {editTutor.funcaoEmpresa}
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editTelefone">Telefone (override)</Label>
+              <Input
+                id="editTelefone"
+                value={editTelefone}
+                onChange={(e) => setEditTelefone(e.target.value)}
+                placeholder={editTutor?.telefone || "O seu contacto"}
+              />
+              {editTutor?.telefone && (
+                <p className="text-xs text-muted-foreground">
+                  Perfil do tutor: {editTutor.telefone}
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editNotas">Notas internas</Label>
+              <Textarea
+                id="editNotas"
+                value={editNotas}
+                onChange={(e) => setEditNotas(e.target.value)}
+                placeholder="Notas internas da escola (não visível ao tutor)"
+                maxLength={500}
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">{editNotas.length}/500</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTutor(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={saveOverride} disabled={savingOverride}>
+              {savingOverride ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

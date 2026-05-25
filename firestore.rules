@@ -409,6 +409,12 @@ service cloud.firestore {
         && request.resource.data.schoolId == resource.data.schoolId;
 
       allow delete: if false;
+
+      // Tutor override data (per-company local overrides)
+      match /tutores/{tutorId} {
+        allow read: if isSchoolStaffFor(get(/databases/$(database)/documents/empresas/$(empresaId)).data.schoolId);
+        allow write: if isSchoolStaffFor(get(/databases/$(database)/documents/empresas/$(empresaId)).data.schoolId);
+      }
     }
 
     // INTERNSHIP STRUCTURE (usada no dashboard do aluno)

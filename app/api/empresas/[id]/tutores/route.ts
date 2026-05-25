@@ -68,14 +68,28 @@ export async function GET(
 
     const tutorDocs = await Promise.all(
       tutorIds.map(async (tutorId) => {
-        const docSnap = await db
-          .collection("schools")
-          .doc(schoolId)
-          .collection("tutors")
-          .doc(tutorId)
-          .get();
-        if (!docSnap.exists) return null;
-        return { id: tutorId, ...docSnap.data() };
+        const [schoolTutorSnap, userSnap, overrideSnap] = await Promise.all([
+          db.collection("schools").doc(schoolId).collection("tutors").doc(tutorId).get(),
+          db.collection("users").doc(tutorId).get(),
+          db.collection("empresas").doc(id).collection("tutores").doc(tutorId).get(),
+        ]);
+
+        const schoolTutor = schoolTutorSnap.exists ? (schoolTutorSnap.data() as Record<string, unknown>) : {};
+        const userData = userSnap.exists ? (userSnap.data() as Record<string, unknown>) : {};
+        const override = overrideSnap.exists ? (overrideSnap.data() as Record<string, unknown>) : {};
+
+        return {
+          id: tutorId,
+          nome: (schoolTutor.nome as string) || (userData.nome as string) || "Tutor",
+          email: (schoolTutor.email as string) || (userData.email as string) || "",
+          telefone: (userData.telefone as string) || "",
+          photoURL: (userData.photoURL as string) || "",
+          funcaoEmpresa: (userData.funcaoEmpresa as string) || "",
+          empresa: (userData.empresa as string) || "",
+          funcaoEmpresaOverride: (override.funcaoEmpresaOverride as string) || null,
+          telefoneOverride: (override.telefoneOverride as string) || null,
+          notasInternas: (override.notasInternas as string) || null,
+        };
       })
     );
 

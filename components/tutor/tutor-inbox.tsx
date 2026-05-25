@@ -19,7 +19,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, CheckCircle2, ChevronDown, ChevronUp, Inbox, Mail, MessageSquare, School } from "lucide-react";
+import { Building2, CheckCircle2, ChevronDown, ChevronUp, Inbox, Mail, MessageSquare, School, ShieldCheck } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type TutorInvite = {
   id: string;
@@ -65,6 +75,7 @@ export function TutorInbox() {
   const [associatedSchools, setAssociatedSchools] = useState<AssociatedSchool[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [expandedSchoolId, setExpandedSchoolId] = useState("");
+  const [consentInvite, setConsentInvite] = useState<TutorInvite | null>(null);
 
   const pendingInvites = useMemo(
     () => invites.filter((invite) => (invite.estado || "pendente") === "pendente"),
@@ -320,7 +331,7 @@ export function TutorInbox() {
 
       const userSnap = await getDoc(doc(db, "users", user.uid));
       const userData = userSnap.exists()
-        ? (userSnap.data() as { nome?: string; email?: string; photoURL?: string; empresa?: string })
+        ? (userSnap.data() as { nome?: string; email?: string; photoURL?: string; empresa?: string; funcaoEmpresa?: string })
         : {};
 
       await updateDoc(doc(db, "tutorInvites", invite.id), {
@@ -345,6 +356,7 @@ export function TutorInbox() {
           email: userData.email || user.email || invite.email,
           photoURL: userData.photoURL || "",
           empresa: userData.empresa || "",
+          funcaoEmpresa: userData.funcaoEmpresa || "",
           approvedByProfessorId: invite.professorId,
           approvedByProfessorName: invite.professorName,
           approvedByProfessorPhotoURL: invite.professorPhotoURL,
@@ -462,7 +474,7 @@ export function TutorInbox() {
                       <Button
                         type="button"
                         size="sm"
-                        onClick={() => handleAcceptInvite(invite)}
+                        onClick={() => setConsentInvite(invite)}
                         disabled={actionLoading === invite.id}
                       >
                         {actionLoading === invite.id ? "A aceitar..." : "Aceitar e abrir chat"}
@@ -585,6 +597,51 @@ export function TutorInbox() {
           </CardContent>
         </Card>
       ) : null}
+
+      <AlertDialog
+        open={consentInvite !== null}
+        onOpenChange={(open) => { if (!open) setConsentInvite(null); }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              Partilha de dados
+            </AlertDialogTitle>
+          </AlertDialogHeader>
+          <div className="space-y-3 text-sm">
+            <p>
+              Ao juntares-te à escola <strong>{consentInvite?.schoolName}</strong>, os seguintes dados do teu perfil ficam visíveis para os professores desta escola na plataforma InternLink:
+            </p>
+            <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+              <li>Nome completo</li>
+              <li>Email profissional</li>
+              <li>Função na empresa (se configurada)</li>
+              <li>Fotografia de perfil (se configurada)</li>
+              <li>Telefone (se configurado)</li>
+            </ul>
+            <p className="text-muted-foreground">
+              Os teus dados não são partilhados fora da plataforma nem com terceiros.
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionLoading === consentInvite?.id}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={actionLoading === consentInvite?.id}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!consentInvite) return;
+                handleAcceptInvite(consentInvite);
+                setConsentInvite(null);
+              }}
+            >
+              {actionLoading === consentInvite?.id ? "A aceitar..." : "Aceitar e continuar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

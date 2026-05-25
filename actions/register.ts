@@ -191,7 +191,7 @@ export async function registerProfessor(data: z.input<typeof professorRegisterAc
 
 export async function registerTutor(data: z.input<typeof tutorRegisterActionSchema>) {
   const parsed = tutorRegisterActionSchema.parse(data);
-  const { nome, email, password, empresa, recaptchaToken, dataNascimento, localidade, telefone } = parsed;
+  const { nome, email, password, empresa, funcaoEmpresa, recaptchaToken, dataNascimento, localidade, telefone } = parsed;
 
   if (process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
     if (!recaptchaToken) {
@@ -212,6 +212,7 @@ export async function registerTutor(data: z.input<typeof tutorRegisterActionSche
     nome,
     email,
     empresa,
+    funcaoEmpresa,
     dataNascimento: dataNascimento || "",
     localidade: localidade || "",
     telefone: telefone || "",
