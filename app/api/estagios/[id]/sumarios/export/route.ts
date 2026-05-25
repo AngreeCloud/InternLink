@@ -245,6 +245,10 @@ async function createCoverPage(
     generatedAt: string;
     schoolName?: string;
     schoolAddress?: string;
+    schoolCodigoPostal?: string;
+    schoolLocalidade?: string;
+    schoolDistrito?: string;
+    schoolPais?: string;
     companyNome?: string;
     companyMorada?: string;
     companyCodigoPostal?: string;
@@ -285,6 +289,10 @@ async function createCoverPage(
 
   const schoolLines: string[] = [];
   if (data.schoolAddress) schoolLines.push(data.schoolAddress);
+  const schoolCpLoc = [data.schoolCodigoPostal, data.schoolLocalidade].filter(Boolean).join(" ");
+  if (schoolCpLoc) schoolLines.push(schoolCpLoc);
+  const schoolDistPais = [data.schoolDistrito, data.schoolPais].filter(Boolean).join(" · ");
+  if (schoolDistPais) schoolLines.push(schoolDistPais);
 
   const companyLines: string[] = [];
   if (data.companyMorada) companyLines.push(data.companyMorada);
@@ -606,6 +614,10 @@ export async function GET(
     // School data for cover page
     let schoolName: string | undefined;
     let schoolAddress: string | undefined;
+    let schoolCodigoPostal: string | undefined;
+    let schoolLocalidade: string | undefined;
+    let schoolDistrito: string | undefined;
+    let schoolPais: string | undefined;
     if (estagio.schoolId) {
       try {
         const schoolSnap = await db.collection("schools").doc(estagio.schoolId).get();
@@ -613,6 +625,10 @@ export async function GET(
           const schoolRaw = schoolSnap.data() as Record<string, unknown>;
           schoolName = schoolRaw.name as string | undefined;
           schoolAddress = schoolRaw.address as string | undefined;
+          schoolCodigoPostal = schoolRaw.codigoPostal as string | undefined;
+          schoolLocalidade = schoolRaw.localidade as string | undefined;
+          schoolDistrito = schoolRaw.distrito as string | undefined;
+          schoolPais = schoolRaw.pais as string | undefined;
         }
       } catch {
         // skip
@@ -723,7 +739,8 @@ export async function GET(
       alunoName, tutorName, professorName, empresa, courseName,
       periodoInicio, periodofim,
       totalSemanas: formattedSumarios.length, generatedAt,
-      schoolName, schoolAddress,
+      schoolName, schoolAddress, schoolCodigoPostal, schoolLocalidade,
+      schoolDistrito, schoolPais,
       companyNome,
       companyMorada,
       companyCodigoPostal,

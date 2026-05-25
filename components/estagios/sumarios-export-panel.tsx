@@ -17,6 +17,7 @@ type PreflightResult = {
   tutorHasSignature: boolean;
   canExportSigned: boolean;
   hasAnySumario: boolean;
+  schoolHasAddress: boolean;
 };
 
 type Props = {
@@ -165,6 +166,13 @@ export function SumariosExportPanel({ estagioId, currentUserRole, alunoId, tutor
             actionLabel={!preflight.tutorHasSignature && currentUserIsTutor ? "Configurar assinatura no perfil" : undefined}
           />
         </div>
+
+        {!preflight.schoolHasAddress && ["admin_escolar", "professor", "diretor"].includes(normalizedRole) && (
+          <div className="rounded-md border border-amber-400/40 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <AlertCircle className="mr-1.5 inline h-3.5 w-3.5" />
+            A morada da escola ainda n&atilde;o est&aacute; configurada. O PDF ser&aacute; gerado sem essa informa&ccedil;&atilde;o institucional.
+          </div>
+        )}
 
         <div className="border-t pt-3 flex flex-wrap gap-2">
           <Button

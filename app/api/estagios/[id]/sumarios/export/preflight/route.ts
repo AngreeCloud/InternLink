@@ -75,6 +75,21 @@ export async function GET(
     const tutorHasSignature =
       tutorSigSnap?.exists && !!tutorSigSnap.data()?.dataUrl;
 
+    // Check school address for cover page
+    let schoolHasAddress = true;
+    const schoolId = session.estagio.schoolId as string | undefined;
+    if (schoolId) {
+      try {
+        const schoolSnap = await db.collection("schools").doc(schoolId).get();
+        if (schoolSnap.exists) {
+          const schoolData = schoolSnap.data() as Record<string, unknown>;
+          schoolHasAddress = !!(schoolData.address as string | undefined);
+        }
+      } catch {
+        // skip
+      }
+    }
+
     const canExportSigned =
       allSumariosArchived && alunoHasSignature && tutorHasSignature;
 
@@ -89,6 +104,7 @@ export async function GET(
       tutorHasSignature,
       canExportSigned,
       hasAnySumario: totalSumarios > 0,
+      schoolHasAddress,
     });
   } catch (error) {
     const { body, status } = toApiErrorResponse(error);
