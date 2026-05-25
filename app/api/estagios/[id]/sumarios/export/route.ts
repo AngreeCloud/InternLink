@@ -243,6 +243,12 @@ async function createCoverPage(
     periodofim: string;
     totalSemanas: number;
     generatedAt: string;
+    schoolName?: string;
+    schoolAddress?: string;
+    companyNome?: string;
+    companyMorada?: string;
+    companyCodigoPostal?: string;
+    companyLocalidade?: string;
   },
   pageNum: number,
   totalPages: number
@@ -269,16 +275,67 @@ async function createCoverPage(
     cy -= 18;
   }
 
-  // Info table
-  const tableY = cy;
-  cy = drawInfoRow(page, font, bold, "Formando", data.alunoName, MARGIN, tableY, CONTENT_W);
+  cy -= 8;
+
+  // ── Two-column block: School | Company ────────────────
+  const colGap = 12;
+  const colW = (CONTENT_W - colGap) / 2;
+  const leftX = MARGIN;
+  const rightX = MARGIN + colW + colGap;
+
+  const schoolLines: string[] = [];
+  if (data.schoolAddress) schoolLines.push(data.schoolAddress);
+
+  const companyLines: string[] = [];
+  if (data.companyMorada) companyLines.push(data.companyMorada);
+  const cpLoc = [data.companyCodigoPostal, data.companyLocalidade].filter(Boolean).join(" ");
+  if (cpLoc) companyLines.push(cpLoc);
+
+  const labelRowH = 14;
+  const nameRowH = 16;
+  const addrRowH = 11;
+  const pad = 10;
+
+  const hasSchool = !!data.schoolName;
+  const hasCompany = !!data.companyNome;
+  const col1H = hasSchool ? labelRowH + nameRowH + schoolLines.length * addrRowH + pad : 0;
+  const col2H = hasCompany ? labelRowH + nameRowH + companyLines.length * addrRowH + pad : 0;
+  const boxH = Math.max(col1H, col2H, 40);
+
+  // Left column — School
+  drawRect(page, leftX, cy - boxH, colW, boxH, BEGE);
+  if (hasSchool) {
+    page.drawText("ESCOLA", { x: leftX + 8, y: cy - 11, size: 7, font: bold, color: TEAL });
+    page.drawText(sanitze(data.schoolName!), { x: leftX + 8, y: cy - 28, size: 10, font: bold, color: DARK });
+    let lc = cy - 46;
+    for (const line of schoolLines) {
+      page.drawText(sanitze(line), { x: leftX + 8, y: lc, size: 8, font, color: MUTED });
+      lc -= addrRowH;
+    }
+  }
+
+  // Right column — Company
+  drawRect(page, rightX, cy - boxH, colW, boxH, BEGE);
+  if (hasCompany) {
+    page.drawText("EMPRESA DE ACOLHIMENTO", { x: rightX + 8, y: cy - 11, size: 7, font: bold, color: TEAL });
+    page.drawText(sanitze(data.companyNome!), { x: rightX + 8, y: cy - 28, size: 10, font: bold, color: DARK });
+    let lc = cy - 46;
+    for (const line of companyLines) {
+      page.drawText(sanitze(line), { x: rightX + 8, y: lc, size: 8, font, color: MUTED });
+      lc -= addrRowH;
+    }
+  }
+
+  cy = cy - boxH - 16;
+
+  // ── Intervenients ─────────────────────────────────────
+  cy = drawInfoRow(page, font, bold, "Formando", data.alunoName, MARGIN, cy, CONTENT_W);
   cy = drawInfoRow(page, font, bold, "Tutor", data.tutorName, MARGIN, cy, CONTENT_W);
   cy = drawInfoRow(page, font, bold, "Orientador", data.professorName, MARGIN, cy, CONTENT_W);
-  cy = drawInfoRow(page, font, bold, "Empresa", data.empresa, MARGIN, cy, CONTENT_W);
 
   cy -= 18;
 
-  // Period box
+  // ── Period box ────────────────────────────────────────
   drawRect(page, MARGIN, cy - 54, CONTENT_W, 54, BEGE);
   page.drawText("PERÍODO", { x: MARGIN + 12, y: cy - 14, size: 7, font: bold, color: TEAL });
   page.drawText(sanitze(`${data.periodoInicio} - ${data.periodofim}`), {
@@ -544,7 +601,33 @@ export async function GET(
     const alunoName = getField(alunoId, "nome") || getField(alunoId, "displayName") || "Aluno";
     const tutorName = getField(tutorId, "nome") || getField(tutorId, "displayName") || "Tutor";
     const professorName = getField(professorId, "nome") || getField(professorId, "displayName") || "Professor";
-    const empresa = getField(tutorId, "empresa") || "-";
+    const empresa = (estagio.entidadeAcolhimento as string) || getField(tutorId, "empresa") || "-";
+
+    // School data for cover page
+    let schoolName: string | undefined;
+    let schoolAddress: string | undefined;
+    if (estagio.schoolId) {
+      try {
+        const schoolSnap = await db.collection("schools").doc(estagio.schoolId).get();
+        if (schoolSnap.exists) {
+          const schoolRaw = schoolSnap.data() as Record<string, unknown>;
+          schoolName = schoolRaw.name as string | undefined;
+          schoolAddress = schoolRaw.address as string | undefined;
+        }
+      } catch {
+        // skip
+      }
+    }
+
+    // Company snapshot for cover page
+    const empresaSnapshot = estagio.empresaSnapshot as
+      | { nome?: string; morada?: string; codigoPostal?: string; localidade?: string }
+      | undefined;
+      
+    let companyNome = empresaSnapshot?.nome;
+    let companyMorada = empresaSnapshot?.morada;
+    let companyCodigoPostal = empresaSnapshot?.codigoPostal;
+    let companyLocalidade = empresaSnapshot?.localidade;
 
     // Resolve tutor role: override > profile > fallback
     let tutorRole = "Tutor de Estagio";
@@ -552,6 +635,15 @@ export async function GET(
       const empresaId = estagio.empresaId as string | undefined;
       if (empresaId) {
         try {
+          const empSnap = await db.collection("empresas").doc(empresaId).get();
+          if (empSnap.exists) {
+            const empData = empSnap.data() as Record<string, unknown>;
+            if (!companyNome) companyNome = empData.nome as string | undefined;
+            if (!companyMorada) companyMorada = empData.morada as string | undefined;
+            if (!companyCodigoPostal) companyCodigoPostal = empData.codigoPostal as string | undefined;
+            if (!companyLocalidade) companyLocalidade = empData.localidade as string | undefined;
+          }
+
           const overrideSnap = await db
             .collection("empresas")
             .doc(empresaId)
@@ -572,6 +664,10 @@ export async function GET(
         const tutorFuncao = getField(tutorId, "funcaoEmpresa");
         tutorRole = tutorFuncao || "Tutor de Estagio";
       }
+    }
+    
+    if (!companyNome && empresa !== "-") {
+      companyNome = empresa;
     }
 
     let alunoSignatureBytes: Uint8Array | null = null;
@@ -627,6 +723,11 @@ export async function GET(
       alunoName, tutorName, professorName, empresa, courseName,
       periodoInicio, periodofim,
       totalSemanas: formattedSumarios.length, generatedAt,
+      schoolName, schoolAddress,
+      companyNome,
+      companyMorada,
+      companyCodigoPostal,
+      companyLocalidade,
     }, 1, totalPages);
 
     // Pages 2..N: Sumario pages
