@@ -509,7 +509,7 @@ export async function GET(
     }
 
     if (includeSignatures) {
-      const notArchived = sumarios.filter((s: any) => s.estado !== "arquivado");
+      const notArchived = sumarios.filter((s: any) => s.estado !== "arquivado" && s.signedByTutor !== true);
       if (notArchived.length > 0) {
         throw new EstagioAccessError(
           422,

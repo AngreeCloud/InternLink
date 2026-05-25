@@ -9,6 +9,7 @@ const mockGetAuthRuntime = vi.fn();
 const mockGetDbRuntime = vi.fn();
 const mockOnAuthStateChanged = vi.fn();
 const mockGetDoc = vi.fn();
+const mockGetDocs = vi.fn();
 const mockDoc = vi.fn();
 const mockChatBadge = vi.fn();
 const mockUseChatNotifications = vi.fn();
@@ -35,6 +36,13 @@ vi.mock("firebase/auth", () => ({
 vi.mock("firebase/firestore", () => ({
   doc: (...args: unknown[]) => mockDoc(...args),
   getDoc: (...args: unknown[]) => mockGetDoc(...args),
+  getDocs: (...args: unknown[]) => mockGetDocs(...args),
+  collection: vi.fn(() => ({})),
+  query: vi.fn(() => ({})),
+  where: vi.fn(() => ({})),
+  orderBy: vi.fn(() => ({})),
+  limit: vi.fn(() => ({})),
+  onSnapshot: vi.fn((_q, cb) => { cb({ docs: [], forEach: () => {} }); return () => {}; }),
 }));
 
 vi.mock("@/lib/firebase-runtime", () => ({
@@ -106,6 +114,7 @@ vi.mock("lucide-react", () => {
     UserCheck: Icon,
     ClipboardCheck: Icon,
     Briefcase: Icon,
+    Building2: Icon,
     FileText: Icon,
     LogOut: Icon,
     Menu: Icon,
@@ -147,6 +156,7 @@ beforeEach(() => {
       photoURL: "",
     })
   );
+  mockGetDocs.mockResolvedValue({ docs: [], forEach: () => {}, empty: true, size: 0 });
 
   mockOnAuthStateChanged.mockImplementation((_auth: unknown, cb: (u: unknown) => void) => {
     void cb({ uid: "profA", displayName: "Professor A", email: "prof@school.pt" });

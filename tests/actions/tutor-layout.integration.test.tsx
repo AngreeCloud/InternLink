@@ -35,6 +35,11 @@ vi.mock("firebase/auth", () => ({
 vi.mock("firebase/firestore", () => ({
   doc: (...args: unknown[]) => mockDoc(...args),
   getDoc: (...args: unknown[]) => mockGetDoc(...args),
+  collection: vi.fn(() => ({})),
+  query: vi.fn(() => ({})),
+  where: vi.fn(() => ({})),
+  orderBy: vi.fn(() => ({})),
+  onSnapshot: vi.fn((_q, cb) => { cb({ docs: [], forEach: () => {} }); return () => {}; }),
 }));
 
 vi.mock("@/lib/firebase-runtime", () => ({
@@ -86,7 +91,9 @@ vi.mock("lucide-react", () => {
   const Icon = () => <svg />;
   return {
     Briefcase: Icon,
+    Building2: Icon,
     CalendarClock: Icon,
+    FileText: Icon,
     GraduationCap: Icon,
     Inbox: Icon,
     LayoutDashboard: Icon,
