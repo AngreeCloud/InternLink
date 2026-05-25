@@ -14,6 +14,7 @@ export const runtime = "nodejs";
 type PatchBody = {
   titulo?: string;
   empresa?: string;
+  empresaId?: string | null;
   entidadeAcolhimento?: string;
   tutorId?: string;
   dataInicio?: string;
@@ -129,6 +130,48 @@ export async function PATCH(
         updates.horasDiarias = horasDiarias;
         updates.diasSemana = diasSemana;
         updates.dataFimEstimada = dateCalc.dataFimEstimada;
+      }
+    }
+
+    if (body.empresaId !== undefined) {
+      const currentEmpresaId = (session.estagio as Record<string, unknown>).empresaId as string | undefined;
+      const newEmpresaId = body.empresaId === null ? null : body.empresaId.trim();
+
+      if (newEmpresaId !== currentEmpresaId) {
+        if (newEmpresaId) {
+          const empresaSnap = await db.collection("empresas").doc(newEmpresaId).get();
+          if (!empresaSnap.exists) {
+            return NextResponse.json(
+              { error: "Empresa não encontrada", code: "empresa_not_found" },
+              { status: 404 }
+            );
+          }
+
+          const empresaData = empresaSnap.data()!;
+          if (empresaData.schoolId !== session.estagio.schoolId) {
+            return NextResponse.json(
+              { error: "Empresa não pertence à mesma escola do estágio", code: "empresa_wrong_school" },
+              { status: 403 }
+            );
+          }
+
+          updates.empresaId = newEmpresaId;
+          updates.empresaSnapshot = {
+            nome: empresaData.nome || "",
+            morada: empresaData.morada || null,
+            codigoPostal: empresaData.codigoPostal || null,
+            localidade: empresaData.localidade || null,
+            nif: empresaData.nif || null,
+            emailGeral: empresaData.emailGeral || null,
+            telefone: empresaData.telefone || null,
+          };
+          updates.empresa = empresaData.nome || "";
+          updates.entidadeAcolhimento = empresaData.nome || "";
+          updates.empresaMorada = empresaData.morada || null;
+          updates.empresaCodigoPostal = empresaData.codigoPostal || null;
+        } else {
+          updates.empresaId = null;
+        }
       }
     }
 

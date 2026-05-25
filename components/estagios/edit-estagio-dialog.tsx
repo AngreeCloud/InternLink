@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
-import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
-import { getDbRuntime } from "@/lib/firebase-runtime";
 import {
   Dialog,
   DialogClose,
@@ -254,43 +252,28 @@ export function EditEstagioDialog({ estagio, open, onOpenChange, onSaved }: Prop
 
     setSubmitting(true);
     try {
-      const db = await getDbRuntime();
-      const hrsRealizadas = estagio.horasRealizadas ?? 0;
-      const calc = hrsRealizadas > 0
-        ? recalcularDataFimEstimada({
-            totalHoras: Number(totalHoras),
-            horasRealizadas: hrsRealizadas,
-            horasDiarias: Number(horasDiarias),
-            diasSemana,
-          })
-        : calcularDataFimEstimada({
-            dataInicio,
-            totalHoras: Number(totalHoras),
-            horasDiarias: Number(horasDiarias),
-            diasSemana,
-          });
-
       const empresaNome = selectedEmpresa?.nome ?? empresaSearch.trim();
 
-      const updatePayload: Record<string, unknown> = {
+      const payload: Record<string, unknown> = {
         titulo: tituloTrim,
         empresa: empresaNome,
-        entidadeAcolhimento: empresaNome,
+        empresaId: selectedEmpresa ? selectedEmpresa.id : null,
         dataInicio,
         totalHoras: Number(totalHoras),
         horasDiarias: Number(horasDiarias),
         diasSemana,
-        dataFimEstimada: calc.dataFimEstimada,
-        updatedAt: serverTimestamp(),
       };
 
-      if (selectedEmpresa) {
-        updatePayload.empresaId = selectedEmpresa.id;
-      } else {
-        updatePayload.empresaId = null;
-      }
+      const res = await fetch(`/api/estagios/${estagio.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-      await updateDoc(doc(db, "estagios", estagio.id), updatePayload);
+      if (!res.ok) {
+        const err = (await res.json()) as { error?: string };
+        throw new Error(err.error || "Erro ao guardar alterações.");
+      }
 
       onOpenChange(false);
       onSaved?.();
