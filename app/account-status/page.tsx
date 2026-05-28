@@ -333,7 +333,7 @@ export default function AccountStatusPage() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Criada em</span>
                 <span className="font-medium">
-                  {createdDate ? createdDate.toLocaleString() : "—"}
+                  {createdDate ? createdDate.toLocaleString("pt-PT") : "—"}
                 </span>
               </div>
               {state.schoolName && !canReRequestAccess ? (

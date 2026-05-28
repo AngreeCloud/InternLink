@@ -71,11 +71,7 @@ const DIAS_LABEL = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 function formatDate(iso?: string) {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleDateString("pt-PT", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-    });
+    return new Date(iso).toLocaleDateString("pt-PT");
   } catch {
     return iso;
   }

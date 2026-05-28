@@ -119,11 +119,7 @@ function formatMessageDateTime(timestamp: number): string {
 }
 
 function formatDayDivider(timestamp: number): string {
-  return new Date(timestamp).toLocaleDateString("pt-PT", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
+  return new Date(timestamp).toLocaleDateString("pt-PT");
 }
 
 function getRoleLabel(role: ChatRole): string {

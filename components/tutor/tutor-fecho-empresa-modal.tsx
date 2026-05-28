@@ -5,8 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Loader2, CalendarX2, Trash2 } from "lucide-react";
+import { DatePicker } from "@/components/ui/date-picker";
 
 type FechoDoc = {
   id: string;
@@ -203,7 +203,10 @@ export function TutorFechoEmpresaModal({ empresaId, open, onClose, onSuccess }: 
             </h3>
             <div className="space-y-2">
               <Label>Data de encerramento</Label>
-              <Input type="date" value={date} onChange={e => setDate(e.target.value)} required />
+              <DatePicker
+                value={date}
+                onChange={(iso) => setDate(iso)}
+              />
             </div>
 
             <div className="space-y-2">
@@ -222,7 +225,7 @@ export function TutorFechoEmpresaModal({ empresaId, open, onClose, onSuccess }: 
 
             <div className="space-y-2">
               <Label>Motivo (opcional)</Label>
-              <Textarea value={reason} onChange={e => setReason(e.target.value)} placeholder="Ex: Tolerância de ponto de Natal" />
+              <Textarea value={reason} onChange={e => setReason(e.target.value)} placeholder="Ex: Tolerância de ponto pós-feriado" />
             </div>
 
             <p className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
