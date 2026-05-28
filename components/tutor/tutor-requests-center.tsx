@@ -5,8 +5,11 @@ import { doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { CalendarX2 } from "lucide-react";
 import { ScheduleChangeRequestsList, type EstagioMetaLite } from "@/components/estagios/schedule-change-requests-list";
 import type { ScheduleChangeRequest, ScheduleChangeRequestType } from "@/lib/estagios/schedule-change-requests";
+import { TutorFechoEmpresaModal } from "./tutor-fecho-empresa-modal";
 
 const SCHEDULE_TYPES: ScheduleChangeRequestType[] = ["future_absence", "early_termination"];
 
@@ -34,6 +37,7 @@ export function TutorRequestsCenter() {
   const [loadingRequests, setLoadingRequests] = useState(true);
   const [requests, setRequests] = useState<ScheduleChangeRequest[]>([]);
   const [estagiosById, setEstagiosById] = useState<Record<string, EstagioMetaLite | undefined>>({});
+  const [showFechoModal, setShowFechoModal] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -116,6 +120,7 @@ export function TutorRequestsCenter() {
                 (raw.entidadeAcolhimento as string | undefined) ||
                 (raw.companyName as string | undefined) ||
                 "",
+              companyId: raw.companyId as string | undefined,
               courseNome: (raw.courseNome as string | undefined) || (raw.courseName as string | undefined) || "",
               schoolId: (raw.schoolId as string | undefined) || "",
             };
@@ -149,11 +154,17 @@ export function TutorRequestsCenter() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Solicitações de mudança de horário</h1>
-        <p className="text-muted-foreground">
-          Pedidos de faltas futuras e término antecipado dos seus formandos.
-        </p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Solicitações de mudança de horário</h1>
+          <p className="text-muted-foreground">
+            Pedidos de faltas futuras e término antecipado dos seus formandos.
+          </p>
+        </div>
+        <Button onClick={() => setShowFechoModal(true)}>
+          <CalendarX2 className="w-4 h-4 mr-2" />
+          Dia sem Estágio
+        </Button>
       </div>
 
       <ScheduleChangeRequestsList
@@ -165,6 +176,17 @@ export function TutorRequestsCenter() {
         emptyTitle="Sem solicitações de mudança"
         emptyDescription="Quando um aluno pedir uma falta futura, aparece aqui."
       />
+
+      {Object.values(estagiosById).find(e => e?.companyId) && (
+        <TutorFechoEmpresaModal
+          empresaId={
+            Object.values(estagiosById).find(e => e?.companyId)?.companyId || ""
+          }
+          open={showFechoModal}
+          onClose={() => setShowFechoModal(false)}
+          onSuccess={() => fetchRequests(userId)}
+        />
+      )}
     </div>
   );
 }

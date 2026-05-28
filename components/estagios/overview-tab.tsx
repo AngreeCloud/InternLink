@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +39,33 @@ type Props = {
   participants: Record<string, ParticipantInfo>;
 };
 
+import { normalizeDiasSemana, listWorkDays, toIsoDate } from "@/lib/estagios/workdays";
+
+function formatProvisionalDate(realEndDate: string | undefined, pendingHours: number, horasPorDia: number, diasSemana: number[] | undefined) {
+  if (!realEndDate || pendingHours <= 0 || !horasPorDia) return null;
+  const missedDays = Math.ceil(pendingHours / horasPorDia);
+  if (missedDays <= 0) return null;
+
+  const rawMap = diasSemana?.reduce((acc, d) => {
+    acc[["dom","seg","ter","qua","qui","sex","sab"][d]] = true;
+    return acc;
+  }, {} as Record<string, boolean>) ?? {};
+  
+  const diasMap = normalizeDiasSemana(rawMap);
+  
+  // Extend calculation window
+  const startD = new Date(realEndDate);
+  startD.setDate(startD.getDate() + 1);
+  const endD = new Date(startD);
+  endD.setDate(endD.getDate() + Math.max(30, missedDays * 5)); 
+  
+  const workDays = listWorkDays(toIsoDate(startD), toIsoDate(endD), diasMap);
+  if (workDays.length >= missedDays) {
+    return workDays[missedDays - 1].iso;
+  }
+  return null;
+}
+
 const DIAS_LABEL = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 function formatDate(iso?: string) {
@@ -75,15 +102,18 @@ export function OverviewTab({ estagio, participants }: Props) {
   const [presencasSummary, setPresencasSummary] = useState<
     { total: number; count: number } | null
   >(null);
+  const [pendingAbsenceHours, setPendingAbsenceHours] = useState<number>(0);
 
   useEffect(() => {
     if (!estagio.id) return;
-    let unsub: (() => void) | undefined;
+    let unsubPresencas: (() => void) | undefined;
+    let unsubRequests: (() => void) | undefined;
     let cancelled = false;
     (async () => {
       const db = await getDbRuntime();
       if (cancelled) return;
-      unsub = onSnapshot(
+      
+      unsubPresencas = onSnapshot(
         collection(db, "estagios", estagio.id, "presencas"),
         (snap) => {
           let total = 0;
@@ -104,12 +134,32 @@ export function OverviewTab({ estagio, participants }: Props) {
           }
         }
       );
+
+      const q = query(
+        collection(db, "estagios", estagio.id, "schedule_change_requests"),
+        where("type", "==", "future_absence"),
+        where("status", "in", ["pending_professor", "pending_tutor"])
+      );
+      
+      unsubRequests = onSnapshot(q, (snap) => {
+        let totalHours = 0;
+        snap.forEach(doc => {
+          const data = doc.data() as { absenceType?: string, hoursAffected?: number };
+          if (data.absenceType === "partial" && typeof data.hoursAffected === "number") {
+            totalHours += data.hoursAffected;
+          } else if (estagio.horasPorDia) {
+            totalHours += estagio.horasPorDia;
+          }
+        });
+        setPendingAbsenceHours(totalHours);
+      });
     })();
     return () => {
       cancelled = true;
-      unsub?.();
+      unsubPresencas?.();
+      unsubRequests?.();
     };
-  }, [estagio.id]);
+  }, [estagio.id, estagio.horasPorDia]);
 
   const dias = (estagio.diasSemana ?? [])
     .slice()
@@ -128,6 +178,10 @@ export function OverviewTab({ estagio, participants }: Props) {
   );
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   const status = statusLabel(estagio.status);
+
+  const provisionalEndDate = useMemo(() => {
+    return formatProvisionalDate(estagio.dataFim, pendingAbsenceHours, estagio.horasPorDia ?? 0, estagio.diasSemana);
+  }, [estagio.dataFim, pendingAbsenceHours, estagio.horasPorDia, estagio.diasSemana]);
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -155,7 +209,7 @@ export function OverviewTab({ estagio, participants }: Props) {
           <Detail
             icon={<Calendar className="h-4 w-4" />}
             label="Fim previsto"
-            value={formatDate(estagio.dataFim)}
+            value={provisionalEndDate ? `${formatDate(estagio.dataFim)} (Provisório: ${formatDate(provisionalEndDate)})` : formatDate(estagio.dataFim)}
           />
           <Detail
             icon={<Clock className="h-4 w-4" />}
