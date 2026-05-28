@@ -38,6 +38,7 @@ export function TutorRequestsCenter() {
   const [requests, setRequests] = useState<ScheduleChangeRequest[]>([]);
   const [estagiosById, setEstagiosById] = useState<Record<string, EstagioMetaLite | undefined>>({});
   const [showFechoModal, setShowFechoModal] = useState(false);
+  const [empresaId, setEmpresaId] = useState<string>("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -90,6 +91,24 @@ export function TutorRequestsCenter() {
     };
   }, [userId, fetchRequests]);
 
+  // Fetch tutor's empresa via server API (bypasses Firestore rules)
+  useEffect(() => {
+    if (!userId) {
+      setEmpresaId("");
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/tutor/empresa")
+      .then(r => r.json())
+      .then(data => {
+        if (!cancelled && data.ok) {
+          setEmpresaId(data.empresaId || "");
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [userId]);
+
   useEffect(() => {
     if (requests.length === 0) return;
 
@@ -120,7 +139,7 @@ export function TutorRequestsCenter() {
                 (raw.entidadeAcolhimento as string | undefined) ||
                 (raw.companyName as string | undefined) ||
                 "",
-              companyId: raw.companyId as string | undefined,
+              empresaId: raw.empresaId as string | undefined,
               courseNome: (raw.courseNome as string | undefined) || (raw.courseName as string | undefined) || "",
               schoolId: (raw.schoolId as string | undefined) || "",
             };
@@ -177,11 +196,9 @@ export function TutorRequestsCenter() {
         emptyDescription="Quando um aluno pedir uma falta futura, aparece aqui."
       />
 
-      {Object.values(estagiosById).find(e => e?.companyId) && (
+      {empresaId && (
         <TutorFechoEmpresaModal
-          empresaId={
-            Object.values(estagiosById).find(e => e?.companyId)?.companyId || ""
-          }
+          empresaId={empresaId}
           open={showFechoModal}
           onClose={() => setShowFechoModal(false)}
           onSuccess={() => fetchRequests(userId)}

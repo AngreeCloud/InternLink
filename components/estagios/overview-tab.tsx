@@ -141,18 +141,27 @@ export function OverviewTab({ estagio, participants }: Props) {
         where("status", "in", ["pending_professor", "pending_tutor"])
       );
       
-      unsubRequests = onSnapshot(q, (snap) => {
-        let totalHours = 0;
-        snap.forEach(doc => {
-          const data = doc.data() as { absenceType?: string, hoursAffected?: number };
-          if (data.absenceType === "partial" && typeof data.hoursAffected === "number") {
-            totalHours += data.hoursAffected;
-          } else if (estagio.horasPorDia) {
-            totalHours += estagio.horasPorDia;
+      unsubRequests = onSnapshot(
+        q,
+        (snap) => {
+          let totalHours = 0;
+          snap.forEach((doc) => {
+            const data = doc.data() as { absenceType?: string; hoursAffected?: number };
+            if (data.absenceType === "partial" && typeof data.hoursAffected === "number") {
+              totalHours += data.hoursAffected;
+            } else if (estagio.horasPorDia) {
+              totalHours += estagio.horasPorDia;
+            }
+          });
+          setPendingAbsenceHours(totalHours);
+        },
+        (err) => {
+          const code = (err as { code?: string })?.code;
+          if (code !== "permission-denied") {
+            console.error("[v0] requests overview snapshot", err);
           }
-        });
-        setPendingAbsenceHours(totalHours);
-      });
+        }
+      );
     })();
     return () => {
       cancelled = true;

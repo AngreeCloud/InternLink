@@ -21,6 +21,38 @@ async function requireAuth() {
   }
 }
 
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const decoded = await requireAuth();
+    if (!decoded) {
+      return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+    }
+    const sessionUid = decoded.uid;
+    const { id: empresaId } = await context.params;
+    const db = getFirebaseAdminDb();
+
+    const empresaSnap = await db.collection("empresas").doc(empresaId).get();
+    if (!empresaSnap.exists) {
+      return NextResponse.json({ error: "Empresa não encontrada." }, { status: 404 });
+    }
+    const empresa = empresaSnap.data() as { tutorIds?: string[] };
+    if (!empresa.tutorIds?.includes(sessionUid)) {
+      return NextResponse.json({ error: "Sem permissão." }, { status: 403 });
+    }
+
+    const snap = await db.collection("empresas").doc(empresaId).collection("fechos").orderBy("createdAt", "desc").get();
+    const fechos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    return NextResponse.json({ ok: true, fechos });
+  } catch (error) {
+    console.error("GET fechos error", error);
+    return NextResponse.json({ error: "Erro interno do servidor." }, { status: 500 });
+  }
+}
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> }
@@ -75,7 +107,7 @@ export async function POST(
     }
 
     // Now process the batch
-    let estagiosQuery = db.collection("estagios").where("companyId", "==", empresaId).where("estado", "==", "ativo");
+    let estagiosQuery = db.collection("estagios").where("empresaId", "==", empresaId).where("estado", "==", "ativo");
     
     if (scope === "mine") {
       estagiosQuery = estagiosQuery.where("tutorId", "==", sessionUid);
