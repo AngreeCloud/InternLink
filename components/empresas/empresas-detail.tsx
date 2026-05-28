@@ -13,9 +13,10 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Building2, Loader2, Trash2, UserPlus, Search, X, MessageSquare, GraduationCap, Calendar, Clock, Pencil, ExternalLink, Save, Phone, Briefcase, StickyNote } from "lucide-react";
+import { Archive, ArrowLeft, Building2, Loader2, Trash2, UserPlus, Search, X, MessageSquare, GraduationCap, Calendar, Clock, Pencil, ExternalLink, Save, Phone, Briefcase, StickyNote } from "lucide-react";
 import Link from "next/link";
 import { EmpresasEditForm } from "./empresas-edit-form";
+import { EmpresaPermissions } from "./empresa-permissions";
 
 type EmpresaFull = {
   id: string;
@@ -34,6 +35,7 @@ type EmpresaFull = {
   telefone?: string;
   logoUrl?: string;
   ativa: boolean;
+  empresaGrants?: Record<string, "read" | "write"> | null;
 };
 
 type TutorItem = {
@@ -128,7 +130,7 @@ function InfoTab({ empresa }: { empresa: EmpresaFull }) {
       )}
 
       {!empresa.ativa && (
-        <p className="text-sm text-muted-foreground italic">Empresa arquivada.</p>
+        <p className="text-sm text-muted-foreground italic">Esta empresa está arquivada. Os estágios associados continuam ativos.</p>
       )}
     </div>
   );
@@ -595,8 +597,13 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
   const [empresa, setEmpresa] = useState<EmpresaFull | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"info" | "tutores" | "estagios">("info");
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [canWrite, setCanWrite] = useState(false);
+  const [tab, setTab] = useState<"info" | "tutores" | "estagios" | "acessos">("info");
   const [editing, setEditing] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const fetchEmpresa = useCallback(async () => {
     setLoading(true);
@@ -609,9 +616,11 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
         const d = (await res.json()) as { error?: string };
         throw new Error(d.error || "Erro ao carregar empresa");
       }
-      const data = (await res.json()) as { empresa?: EmpresaFull };
+      const data = (await res.json()) as { empresa?: EmpresaFull; role?: string; canWrite?: boolean };
       if (!data.empresa) throw new Error("Empresa não encontrada");
       setEmpresa(data.empresa);
+      setUserRole(data.role ?? null);
+      setCanWrite(data.canWrite ?? false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro inesperado");
     } finally {
@@ -622,6 +631,49 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
   useEffect(() => {
     fetchEmpresa();
   }, [fetchEmpresa]);
+
+  const handleArchive = async () => {
+    setArchiving(true);
+    setConfirmArchive(false);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/empresas/${empresaId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ativa: false }),
+      });
+      if (!res.ok) {
+        const d = (await res.json()) as { error?: string };
+        throw new Error(d.error || "Erro ao arquivar empresa");
+      }
+      await fetchEmpresa();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Erro inesperado");
+    } finally {
+      setArchiving(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    setArchiving(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/empresas/${empresaId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ativa: true }),
+      });
+      if (!res.ok) {
+        const d = (await res.json()) as { error?: string };
+        throw new Error(d.error || "Erro ao restaurar empresa");
+      }
+      await fetchEmpresa();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Erro inesperado");
+    } finally {
+      setArchiving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -645,10 +697,12 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
     );
   }
 
+    const isAdmin = userRole === "admin_escolar";
     const tabs = [
     { key: "info" as const, label: "Informações" },
     { key: "tutores" as const, label: "Tutores" },
     { key: "estagios" as const, label: "Estágios" },
+    ...(isAdmin ? [{ key: "acessos" as const, label: "Acessos" }] : []),
   ];
 
   return (
@@ -669,11 +723,58 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
             {empresa.setor && <p className="text-sm text-muted-foreground">{empresa.setor}</p>}
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setEditing(!editing)}>
-          <Pencil className="mr-2 h-4 w-4" />
-          {editing ? "Fechar" : "Editar"}
-        </Button>
+        {canWrite && (
+          <Button variant="outline" size="sm" onClick={() => setEditing(!editing)}>
+            <Pencil className="mr-2 h-4 w-4" />
+            {editing ? "Fechar" : "Editar"}
+          </Button>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          {empresa.ativa ? (
+            canWrite && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmArchive(true)}
+                disabled={archiving}
+              >
+                <Archive className="mr-2 h-4 w-4" />
+                Arquivar
+              </Button>
+            )
+          ) : (
+            <>
+              <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                Arquivada
+              </span>
+              {canWrite && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRestore}
+                  disabled={archiving}
+                >
+                  {archiving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Archive className="mr-2 h-4 w-4" />
+                  )}
+                  Restaurar
+                </Button>
+              )}
+            </>
+          )}
+        </div>
       </div>
+
+      {actionError && (
+        <div className="flex items-center justify-between rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+          <span>{actionError}</span>
+          <button type="button" onClick={() => setActionError(null)} className="text-destructive/70 hover:text-destructive">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-1 border-b border-border">
         {tabs.map((t) => (
@@ -704,6 +805,37 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
       ))}
       {tab === "tutores" && <TutoresTab empresaId={empresaId} basePath={basePath} />}
       {tab === "estagios" && <EstagiosTab empresaId={empresaId} basePath={basePath} />}
+      {tab === "acessos" && isAdmin && (
+        <EmpresaPermissions
+          empresaId={empresaId}
+          currentGrants={empresa.empresaGrants}
+          onGrantsSaved={() => fetchEmpresa()}
+        />
+      )}
+
+      <Dialog open={confirmArchive} onOpenChange={setConfirmArchive}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Arquivar empresa</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Tens a certeza que queres arquivar esta empresa? Os estágios associados continuam ativos.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmArchive(false)} disabled={archiving}>
+              Cancelar
+            </Button>
+            <Button onClick={handleArchive} disabled={archiving}>
+              {archiving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Archive className="mr-2 h-4 w-4" />
+              )}
+              Arquivar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

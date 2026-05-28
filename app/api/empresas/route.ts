@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { buildEmpresaSnapshot } from "@/lib/types/empresa";
+import { filterEmpresasByAccess } from "@/lib/empresas/empresa-access";
 
 export const runtime = "nodejs";
 
@@ -63,14 +64,14 @@ export async function GET() {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { schoolId, db } = auth;
+    const { uid, schoolId, role, db } = auth;
     const q = db
       .collection("empresas")
       .where("schoolId", "==", schoolId)
       .orderBy("nomeNormalizado", "asc");
 
     const snap = await q.get();
-    const empresas = snap.docs.map((doc) => {
+    let empresas = snap.docs.map((doc) => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -82,8 +83,18 @@ export async function GET() {
         logoUrl: data.logoUrl as string | undefined,
         ativa: data.ativa as boolean,
         tutorIds: (data.tutorIds as string[]) ?? [],
+        empresaGrants: (data.empresaGrants as Record<string, "read" | "write"> | undefined) ?? null,
       };
     });
+
+    if (role !== "admin_escolar") {
+      const schoolSnap = await db.collection("schools").doc(schoolId).get();
+      const globalProfAccess = (schoolSnap.data()?.empresasPageAccess as
+        | { professores?: string }
+        | undefined)?.professores as "none" | "read" | "write" | undefined;
+
+      empresas = filterEmpresasByAccess(empresas, uid, role, globalProfAccess);
+    }
 
     return NextResponse.json({ empresas });
   } catch (error) {
@@ -123,6 +134,27 @@ export async function POST(request: Request) {
       );
     }
 
+    const nifRaw = optional(body.nif);
+    const nifNormalizado = nifRaw
+      ? nifRaw.replace(/\s+/g, "").replace(/[^0-9]/g, "")
+      : undefined;
+
+    if (nifNormalizado) {
+      const nifExists = await db
+        .collection("empresas")
+        .where("schoolId", "==", schoolId)
+        .where("nifNormalizado", "==", nifNormalizado)
+        .limit(1)
+        .get();
+
+      if (!nifExists.empty) {
+        return NextResponse.json(
+          { error: "Já existe uma empresa com este NIF nesta escola" },
+          { status: 409 }
+        );
+      }
+    }
+
     const now = FieldValue.serverTimestamp();
     const empresaRef = db.collection("empresas").doc();
 
@@ -133,7 +165,8 @@ export async function POST(request: Request) {
       schoolId,
       nome,
       nomeNormalizado,
-      nif: optional(body.nif),
+      nif: nifRaw,
+      nifNormalizado,
       setor: optional(body.setor),
       website: optional(body.website),
       descricao: optional(body.descricao),

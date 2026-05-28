@@ -34,6 +34,8 @@ export interface Empresa {
 
   tutorIds: string[];
 
+  empresaGrants?: Record<string, "read" | "write">;
+
   ativa: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
