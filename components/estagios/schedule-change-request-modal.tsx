@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
 import { formatIsoPt } from "@/lib/estagios/workdays";
 import type { ScheduleChangeRequestType } from "@/lib/estagios/schedule-change-requests";
@@ -38,10 +39,29 @@ type Props = {
 
 const schema = z.object({
   type: z.enum(["future_absence", "past_absence_justification", "early_termination"]),
+  absenceType: z.enum(["total", "partial"]).optional(),
+  hoursAffected: z.number().min(1).max(24).optional(),
   reason: z
     .string()
     .min(10, "O motivo deve ter pelo menos 10 caracteres.")
     .max(1000, "O motivo não pode exceder 1000 caracteres."),
+}).superRefine((data, ctx) => {
+  if (data.type !== "early_termination") {
+    if (!data.absenceType) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Seleciona se a falta é de um dia inteiro ou parcial.",
+        path: ["absenceType"],
+      });
+    }
+    if (data.absenceType === "partial" && !data.hoursAffected) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Indica o número de horas em falta.",
+        path: ["hoursAffected"],
+      });
+    }
+  }
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -79,16 +99,21 @@ export function ScheduleChangeRequestModal({
     resolver: zodResolver(schema),
     defaultValues: {
       type: defaultType || (isPastOrToday ? "past_absence_justification" : "future_absence"),
+      absenceType: "total",
+      hoursAffected: undefined,
       reason: "",
     },
   });
 
   const selectedType = watch("type");
+  const selectedAbsenceType = watch("absenceType");
 
   useEffect(() => {
     if (!open) return;
     reset({
       type: defaultType || (isPastOrToday ? "past_absence_justification" : "future_absence"),
+      absenceType: "total",
+      hoursAffected: undefined,
       reason: "",
     });
 
@@ -111,7 +136,8 @@ export function ScheduleChangeRequestModal({
           type: values.type,
           targetDate,
           reason: values.reason,
-          hoursAffected: 0, // server reads from estagio
+          absenceType: values.type === "early_termination" ? undefined : values.absenceType,
+          hoursAffected: values.type !== "early_termination" && values.absenceType === "partial" ? values.hoursAffected : 0,
         }),
       });
 
@@ -192,6 +218,56 @@ export function ScheduleChangeRequestModal({
               </p>
             )}
           </div>
+
+          {selectedType !== "early_termination" && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Detalhes da falta</Label>
+                <div className="flex flex-col space-y-1">
+                  <label className="flex items-center space-x-2 font-normal cursor-pointer text-sm">
+                    <input 
+                      type="radio" 
+                      value="total" 
+                      checked={selectedAbsenceType === "total"} 
+                      onChange={() => setValue("absenceType", "total", { shouldValidate: true })} 
+                      className="w-4 h-4 text-primary" 
+                    />
+                    <span>O dia todo (total)</span>
+                  </label>
+                  <label className="flex items-center space-x-2 font-normal cursor-pointer text-sm">
+                    <input 
+                      type="radio" 
+                      value="partial" 
+                      checked={selectedAbsenceType === "partial"} 
+                      onChange={() => setValue("absenceType", "partial", { shouldValidate: true })} 
+                      className="w-4 h-4 text-primary" 
+                    />
+                    <span>Apenas algumas horas (parcial)</span>
+                  </label>
+                </div>
+                {errors.absenceType && (
+                  <p className="text-xs text-destructive">{errors.absenceType.message}</p>
+                )}
+              </div>
+
+              {selectedAbsenceType === "partial" && (
+                <div className="space-y-2">
+                  <Label htmlFor="hoursAffected">Número de horas em falta</Label>
+                  <Input
+                    id="hoursAffected"
+                    type="number"
+                    min={1}
+                    max={24}
+                    {...register("hoursAffected", { valueAsNumber: true })}
+                    placeholder="Ex: 2"
+                  />
+                  {errors.hoursAffected && (
+                    <p className="text-xs text-destructive">{errors.hoursAffected.message}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="request-reason">

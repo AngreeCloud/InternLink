@@ -104,19 +104,38 @@ export async function PATCH(
     const estagioUpdates: Record<string, unknown> = {};
     if (transition.nextStatus === "approved") {
       if (req.type === "future_absence") {
-        // Extend the estagio end date by one workday
-        const currentEnd =
+        const diasSemana = normalizeDiasSemana(estagioData.diasSemana);
+        const horasPorDia = (estagioData.horasPorDia as number) || 0;
+        
+        let addedHours = req.absenceType === "partial" && typeof req.hoursAffected === "number"
+          ? req.hoursAffected
+          : horasPorDia;
+
+        let accumulated = (estagioData.horasAusenciaAcumuladas as number) || 0;
+        accumulated += addedHours;
+
+        let currentEnd =
           (estagioData.dataFimEstimada as string | undefined) ??
           (estagioData.dataFim as string | undefined) ??
           "";
-        const diasSemana = normalizeDiasSemana(estagioData.diasSemana);
-        if (currentEnd) {
-          const newEnd = calcNewEndDate(currentEnd, diasSemana);
-          if (newEnd !== currentEnd) {
-            estagioUpdates.dataFimEstimada = newEnd;
-            estagioUpdates.updatedAt = FieldValue.serverTimestamp();
+
+        let daysToPush = 0;
+        if (horasPorDia > 0) {
+          while (accumulated >= horasPorDia) {
+            accumulated -= horasPorDia;
+            daysToPush += 1;
           }
         }
+
+        if (daysToPush > 0 && currentEnd) {
+          for (let i = 0; i < daysToPush; i++) {
+            currentEnd = calcNewEndDate(currentEnd, diasSemana);
+          }
+          estagioUpdates.dataFimEstimada = currentEnd;
+        }
+        
+        estagioUpdates.horasAusenciaAcumuladas = accumulated;
+        estagioUpdates.updatedAt = FieldValue.serverTimestamp();
       } else if (req.type === "early_termination") {
         // Mark the estagio as concluded
         estagioUpdates.estadoEstagio = "concluido";

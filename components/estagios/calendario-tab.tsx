@@ -89,6 +89,13 @@ export function CalendarioTab({
 
   const weeks = useMemo(() => groupWorkDaysByWeek(workDays), [workDays]);
 
+  // Tooltip state
+  const [tooltipDay, setTooltipDay] = useState<string | null>(null);
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+  const dayPickerRef = useRef<HTMLDivElement>(null);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoveredIsoRef = useRef<string | null>(null);
+
   // Subscriptions
   const [presencas, setPresencas] = useState<Record<string, PresencaDoc>>({});
   const [requests, setRequests] = useState<ScheduleChangeRequest[]>([]);
@@ -196,6 +203,7 @@ export function CalendarioTab({
       unsub?.();
     };
   }, [estagioId]);
+
   const [month, setMonth] = useState<Date>(() => new Date());
 
   // View mode
@@ -251,6 +259,36 @@ export function CalendarioTab({
 
   const requestDateSet = useMemo(() => new Set(requestsByDate.keys()), [requestsByDate]);
 
+  function effectiveHoursForDay(iso: string): number {
+    const req = requestsByDate.get(iso);
+    if (!req || (req.status !== "approved" && req.status !== "acknowledged")) return horasDiarias;
+    if (req.absenceType === "total") return 0;
+    if (req.absenceType === "partial" && typeof req.hoursAffected === "number") {
+      return Math.max(0, horasDiarias - req.hoursAffected);
+    }
+    return horasDiarias;
+  }
+
+  const pendingRequestsMap = useMemo(() => {
+    const map = new Map<string, ScheduleChangeRequest>();
+    for (const r of requests) {
+      if (r.status === "pending_professor" || r.status === "pending_tutor") {
+        map.set(r.targetDate, r);
+      }
+    }
+    return map;
+  }, [requests]);
+
+  function previewIfApproved(iso: string): number | null {
+    const req = pendingRequestsMap.get(iso);
+    if (!req) return null;
+    if (req.absenceType === "total") return 0;
+    if (req.absenceType === "partial" && typeof req.hoursAffected === "number") {
+      return Math.max(0, horasDiarias - req.hoursAffected);
+    }
+    return horasDiarias;
+  }
+
   // Missing hours days (past workdays without registered hours or below expected)
   const missingHoursSet = useMemo(() => {
     const set = new Set<string>();
@@ -273,6 +311,22 @@ export function CalendarioTab({
     );
   }, [presencas]);
   const horasRestantes = Math.max(0, totalHoras - totalRealizado);
+
+  // Tooltip data
+  const tooltipData = useMemo(() => {
+    if (!tooltipDay) return null;
+    const effectiveDaily = effectiveHoursForDay(tooltipDay);
+    const pendingPrev = previewIfApproved(tooltipDay);
+    const cumPlanned = workDays.filter((wd) => wd.iso <= tooltipDay).length * horasDiarias;
+    const pct = totalHoras > 0 ? ((cumPlanned / totalHoras) * 100).toFixed(1) : "0.0";
+    return {
+      data: tooltipDay,
+      previstasAcumuladas: cumPlanned,
+      previstasDia: effectiveDaily,
+      pendingPreview: pendingPrev,
+      percentagem: pct,
+    };
+  }, [tooltipDay, horasDiarias, totalHoras, workDays]);
 
   // New eligibility logic for terminoAntecipado
   const eligibilityResult = useMemo(() => {
@@ -623,7 +677,15 @@ export function CalendarioTab({
         </Card>
       ) : viewMode === "month" ? (
         <Card>
-          <CardContent className="pt-4">
+          <CardContent className="pt-4" ref={dayPickerRef}
+            onMouseLeave={() => {
+              hoveredIsoRef.current = null;
+              if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+              hoverTimeoutRef.current = null;
+              setTooltipDay(null);
+              setTooltipPos(null);
+            }}
+          >
             <style>{`
               .rdp-day--worked .rdp-day_button { background-color: rgb(16 185 129); color: white; border-radius: 9999px; }
               .rdp-day--scheduled .rdp-day_button { background-color: hsl(var(--primary) / 0.12); border: 1px solid hsl(var(--primary) / 0.5); border-radius: 9999px; }
@@ -677,9 +739,35 @@ export function CalendarioTab({
                 terminoInvalidated: "rdp-day--termino-invalidated",
               }}
               onDayClick={isAluno ? handleDayClick : undefined}
+              onDayMouseEnter={(date: Date, _modifiers: unknown, e: React.MouseEvent) => {
+                const iso = toIsoDate(date);
+                if (!workDaySet.has(iso)) return;
+                if (hoveredIsoRef.current === iso) return;
+                hoveredIsoRef.current = iso;
+                if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+                hoverTimeoutRef.current = setTimeout(() => {
+                  setTooltipDay(iso);
+                  setTooltipPos({ x: e.clientX, y: e.clientY });
+                }, 800);
+              }}
               className="mx-auto w-fit"
               showOutsideDays={false}
             />
+            {tooltipData && tooltipPos && (
+              <div
+                className="fixed z-50 rounded-md border bg-popover px-3 py-2 text-xs shadow-md pointer-events-none"
+                style={{ left: tooltipPos.x + 12, top: tooltipPos.y - 10 }}
+              >
+                <p className="font-medium">{formatIsoPt(tooltipData.data)}</p>
+                <p>Previstas acumuladas: {tooltipData.previstasAcumuladas}h</p>
+                <p>Previstas do dia: {tooltipData.previstasDia}h
+                  {tooltipData.pendingPreview !== null && (
+                    <span className="text-muted-foreground"> (Se aprovado: {tooltipData.pendingPreview}h)</span>
+                  )}
+                </p>
+                <p>Percentagem concluída: {tooltipData.percentagem}%</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : currentWeek ? (
@@ -758,7 +846,7 @@ export function CalendarioTab({
                               ? `${hours}h registadas`
                               : isPast
                                 ? "Sem horas registadas"
-                                : `${horasDiarias}h previstas`}
+                                : `${effectiveHoursForDay(day.iso)}h previstas${previewIfApproved(day.iso) !== null ? ` (Se aprovado: ${previewIfApproved(day.iso)}h)` : ""}`}
                           </span>
                         </div>
                       </div>

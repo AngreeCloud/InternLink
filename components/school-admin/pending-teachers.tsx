@@ -251,7 +251,7 @@ export function PendingTeachersSection({
                 </div>
                 <div className="flex items-center gap-3">
                   <p className="text-xs text-muted-foreground">
-                    {teacher.createdAt ? teacher.createdAt.toLocaleString() : "—"}
+                    {teacher.createdAt ? teacher.createdAt.toLocaleString("pt-PT") : "—"}
                   </p>
                   {showActions ? (
                     <div className="flex items-center gap-2">

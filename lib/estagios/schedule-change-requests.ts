@@ -38,6 +38,7 @@ export type ScheduleChangeRequest = {
   type: ScheduleChangeRequestType;
   /** ISO date — the targeted absence day (or the termination effective date) */
   targetDate: string;
+  absenceType?: "total" | "partial";
   hoursAffected: number;
   reason: string;
   status: ScheduleChangeRequestStatus;
@@ -72,8 +73,8 @@ export function canRequestEarlyTermination(
 // State machine
 // ---------------------------------------------------------------------------
 
-export type Actor = "professor" | "tutor" | "diretor";
-export type DecisionAction = "approve" | "reject";
+export type Actor = "professor" | "tutor" | "diretor" | "aluno";
+export type DecisionAction = "approve" | "reject" | "cancel";
 
 type Transition = {
   from: ScheduleChangeRequestStatus;
@@ -83,6 +84,19 @@ type Transition = {
 };
 
 const TRANSITIONS: Transition[] = [
+  // Aluno can cancel pending requests
+  {
+    from: "pending_professor",
+    actors: ["aluno"],
+    action: "cancel",
+    to: "cancelled",
+  },
+  {
+    from: "pending_tutor",
+    actors: ["aluno"],
+    action: "cancel",
+    to: "cancelled",
+  },
   // Professor (or diretor acting as professor) approves → awaiting tutor
   {
     from: "pending_professor",

@@ -54,6 +54,7 @@ type CreateBody = {
   type: ScheduleChangeRequestType;
   targetDate: string;
   reason: string;
+  absenceType?: "total" | "partial";
   hoursAffected: number;
 };
 
@@ -139,6 +140,7 @@ export async function POST(
       tutorId,
       type: body.type,
       targetDate: body.targetDate,
+      absenceType: body.absenceType,
       hoursAffected: Number.isFinite(body.hoursAffected) ? body.hoursAffected : 0,
       reason: body.reason.trim(),
       status: initialStatus,

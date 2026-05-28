@@ -157,7 +157,7 @@ export async function GET(
     cursorY -= 14;
     const nowStr = new Date().toLocaleString("pt-PT", {
       day: "2-digit",
-      month: "long",
+      month: "2-digit",
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
@@ -233,7 +233,7 @@ export async function GET(
       if (sig.signedAt?.toDate) {
         const dateStr = sig.signedAt.toDate().toLocaleString("pt-PT", {
           day: "2-digit",
-          month: "long",
+          month: "2-digit",
           year: "numeric",
           hour: "2-digit",
           minute: "2-digit",

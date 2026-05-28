@@ -32,6 +32,7 @@ export type EstagioMetaLite = {
   titulo: string;
   alunoNome: string;
   empresa: string;
+  empresaId?: string;
   courseNome: string;
   schoolId: string;
 };

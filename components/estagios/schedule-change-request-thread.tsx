@@ -127,14 +127,18 @@ export function ScheduleChangeRequestThread({
     return `/api/estagios/${estagioId}/schedule-change-requests/${request.id}/tutor-decision`;
   }
 
-  async function handleDecision(action: "approve" | "reject") {
+  async function handleDecision(action: "approve" | "reject" | "cancel") {
     setDecisionError(null);
     setIsSubmitting(true);
     try {
-      const res = await fetch(decisionEndpoint(), {
-        method: "PATCH",
+      const endpoint = action === "cancel" 
+        ? `/api/estagios/${estagioId}/schedule-change-requests/${request.id}/cancel`
+        : decisionEndpoint();
+
+      const res = await fetch(endpoint, {
+        method: action === "cancel" ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: action === "cancel" ? undefined : JSON.stringify({ action }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) {
@@ -222,9 +226,9 @@ export function ScheduleChangeRequestThread({
               <span className="text-muted-foreground">Data:</span>{" "}
               <span className="font-medium">{formatIsoPt(request.targetDate)}</span>
             </p>
-            {request.hoursAffected > 0 && (
+            {request.absenceType === "partial" && request.hoursAffected > 0 && (
               <p>
-                <span className="text-muted-foreground">Horas afetadas:</span>{" "}
+                <span className="text-muted-foreground">Falta parcial:</span>{" "}
                 <span className="font-medium">{request.hoursAffected}h</span>
               </p>
             )}
@@ -305,6 +309,27 @@ export function ScheduleChangeRequestThread({
                   {isJustificacao ? "Falta não justificada" : "Rejeitar"}
                 </Button>
               </div>
+            </div>
+          )}
+
+          {/* Student cancel action */}
+          {currentUserRole === "aluno" && request.studentId === currentUserId && (request.status === "pending_professor" || request.status === "pending_tutor") && (
+            <div className="space-y-2 mt-4">
+              {decisionError && <p className="text-xs text-destructive">{decisionError}</p>}
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full text-destructive hover:text-destructive"
+                disabled={isSubmitting}
+                onClick={() => handleDecision("cancel")}
+              >
+                {isSubmitting ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <XCircle className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Cancelar pedido
+              </Button>
             </div>
           )}
 

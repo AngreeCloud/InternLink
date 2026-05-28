@@ -99,7 +99,7 @@ export function ApprovalHistorySection() {
                 </div>
                 <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
                   <span>Por: {item.decidedByName}</span>
-                  <span>{item.createdAt ? item.createdAt.toLocaleString() : "—"}</span>
+                  <span>{item.createdAt ? item.createdAt.toLocaleString("pt-PT") : "—"}</span>
                 </div>
               </div>
             ))}
