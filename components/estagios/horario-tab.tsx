@@ -28,6 +28,7 @@ import {
   weekdayLabel,
   type WorkDay,
 } from "@/lib/estagios/workdays";
+import type { ScheduleChangeRequest } from "@/lib/estagios/schedule-change-requests";
 import type { EstagioRole } from "@/lib/estagios/permissions";
 
 type Props = {
@@ -60,9 +61,42 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
   const totalHoras = Number(estagio.totalHoras ?? 0) || 0;
   const dias = useMemo(() => normalizeDiasSemana(estagio.diasSemana), [estagio.diasSemana]);
 
+  const [fechoExcludedDates, setFechoExcludedDates] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    let unsub: (() => void) | undefined;
+    let cancelled = false;
+    (async () => {
+      const db = await getDbRuntime();
+      if (cancelled) return;
+      unsub = onSnapshot(
+        collection(db, "estagios", estagioId, "schedule_change_requests"),
+        (snap) => {
+          const dates = new Set<string>();
+          snap.forEach((d) => {
+            const req = d.data() as ScheduleChangeRequest;
+            if (req.type === "future_absence" && req.status === "approved") {
+              if (req.targetDate) dates.add(req.targetDate);
+            }
+          });
+          setFechoExcludedDates(dates);
+        },
+        (err) => {
+          if ((err as { code?: string }).code !== "permission-denied") {
+            console.error("[horario] schedule_change_requests snapshot", err);
+          }
+        }
+      );
+    })();
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
+  }, [estagioId]);
+
   const workDays = useMemo(
-    () => listWorkDays(dataInicio, dataFim, dias),
-    [dataInicio, dataFim, dias]
+    () => listWorkDays(dataInicio, dataFim, dias, fechoExcludedDates),
+    [dataInicio, dataFim, dias, fechoExcludedDates]
   );
   const weeks = useMemo(() => groupWorkDaysByWeek(workDays), [workDays]);
 
