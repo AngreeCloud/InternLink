@@ -126,7 +126,8 @@ export type WorkWeek = {
 export function listWorkDays(
   dataInicio: string,
   dataFim: string,
-  diasSemana: DiasSemanaMap
+  diasSemana: DiasSemanaMap,
+  excludedDates?: Set<string>
 ): WorkDay[] {
   const start = parseIsoDate(dataInicio);
   const end = parseIsoDate(dataFim);
@@ -147,7 +148,7 @@ export function listWorkDays(
     const key = WEEKDAY_KEYS[weekday];
     const isWorkday = Boolean(diasSemana[key]);
     const isHoliday = holidays.has(iso);
-    if (isWorkday && !isHoliday) {
+    if (isWorkday && !isHoliday && !excludedDates?.has(iso)) {
       const isoWeek = getIsoWeek(cursor);
       const relativeWeekNumber = getRelativeWeekNumber(cursor, start);
       const weekStart = getIsoWeekStart(cursor);

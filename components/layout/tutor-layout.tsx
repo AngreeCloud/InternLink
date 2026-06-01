@@ -14,6 +14,7 @@ import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
 import { NotificationsInbox } from "@/components/chat/notifications-inbox";
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications";
 import { usePendingSummaries } from "@/lib/estagios/use-pending-summaries";
+import { usePendingRequests } from "@/lib/estagios/use-pending-requests";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -61,7 +62,7 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
   const navItems = [
     { href: "/tutor", label: "Dashboard", icon: LayoutDashboard },
     { href: "/tutor/inbox", label: "Caixa de Entrada", icon: Inbox },
-    { href: "/tutor/solicitacoes-horario", label: "Solicitações de horário", icon: CalendarClock },
+    { href: "/tutor/solicitacoes-horario", label: "Sol. Mudança Hor.", icon: CalendarClock },
     { href: "/tutor/estagios", label: "Estágios", icon: Briefcase },
     { href: "/tutor/sumarios", label: "Validação de sumários", icon: FileText },
     { href: "/tutor/chat", label: "Chat", icon: MessageSquare },
@@ -71,6 +72,7 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
   const isChatPage = pathname === "/tutor/chat" || pathname.startsWith("/tutor/chat/");
 
   const pendingSummariesCount = usePendingSummaries(state.userId);
+  const pendingRequestsCount = usePendingRequests(state.userId);
 
   const { notifications, handleOpenConversation } = useChatNotifications({
     userId: state.userId,
@@ -177,6 +179,11 @@ export function TutorLayout({ children }: { children: React.ReactNode }) {
                   {item.href === "/tutor/sumarios" && pendingSummariesCount > 0 && (
                     <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground">
                       {pendingSummariesCount}
+                    </span>
+                  )}
+                  {item.href === "/tutor/solicitacoes-horario" && pendingRequestsCount > 0 && (
+                    <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground">
+                      {pendingRequestsCount}
                     </span>
                   )}
                 </Link>

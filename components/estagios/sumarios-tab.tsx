@@ -373,7 +373,7 @@ export function SumariosTab({
             const isFuture = week.weekStartIso > todayIso;
             const error = errors[week.weekId];
             const isSavedFlash = savedFlash === week.weekId;
-            const isArchived = persisted?.estado === "arquivado";
+            const isArchived = persisted?.estado === "arquivado" || persisted?.signedByTutor === true;
             const status = isArchived
               ? { label: "Arquivado", variant: "default" as const }
               : persisted?.content
