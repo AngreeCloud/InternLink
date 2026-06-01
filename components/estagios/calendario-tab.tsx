@@ -262,7 +262,9 @@ export function CalendarioTab({
 
   function effectiveHoursForDay(iso: string): number {
     const req = requestsByDate.get(iso);
-    if (!req || (req.status !== "approved" && req.status !== "acknowledged")) return horasDiarias;
+    if (!req) return horasDiarias;
+    const activeStatuses = ["pending_professor", "pending_tutor", "approved", "acknowledged"];
+    if (!activeStatuses.includes(req.status)) return horasDiarias;
     if (req.absenceType === "total") return 0;
     if (req.absenceType === "partial" && typeof req.hoursAffected === "number") {
       return Math.max(0, horasDiarias - req.hoursAffected);
@@ -316,26 +318,26 @@ export function CalendarioTab({
   // Tooltip data
   const tooltipData = useMemo(() => {
     if (!tooltipDay) return null;
-    const { hasRegistered, acumuladas, registadasDia } = calcTooltipDayInfo(
+    const { hasRegistered, acumuladas, registadasDia, previstasDia } = calcTooltipDayInfo(
       tooltipDay,
       workDays,
       presencas,
       presencaSet,
-      effectiveHoursForDay,
+      requestsByDate,
+      horasDiarias,
     );
-    const effectiveDaily = effectiveHoursForDay(tooltipDay);
     const pendingPrev = previewIfApproved(tooltipDay);
     const pct = totalHoras > 0 ? ((acumuladas / totalHoras) * 100).toFixed(1) : "0.0";
     return {
       data: tooltipDay,
       isReal: hasRegistered,
       acumuladas,
-      previstasDia: effectiveDaily,
+      previstasDia,
       registadasDia: hasRegistered ? registadasDia : null,
       pendingPreview: pendingPrev,
       percentagem: pct,
     };
-  }, [tooltipDay, horasDiarias, totalHoras, workDays, presencas, presencaSet]);
+  }, [tooltipDay, horasDiarias, totalHoras, workDays, presencas, presencaSet, requestsByDate]);
 
   // New eligibility logic for terminoAntecipado
   const eligibilityResult = useMemo(() => {
@@ -773,7 +775,7 @@ export function CalendarioTab({
                   <p>Registadas no dia: {tooltipData.registadasDia}h</p>
                 ) : (
                   <p>Previstas do dia: {tooltipData.previstasDia}h
-                    {tooltipData.pendingPreview !== null && (
+                    {tooltipData.pendingPreview !== null && tooltipData.pendingPreview !== tooltipData.previstasDia && (
                       <span className="text-muted-foreground"> (Se aprovado: {tooltipData.pendingPreview}h)</span>
                     )}
                   </p>

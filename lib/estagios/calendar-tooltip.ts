@@ -2,14 +2,39 @@ export type TooltipDayInfo = {
   hasRegistered: boolean;
   acumuladas: number;
   registadasDia: number;
+  previstasDia: number;
 };
+
+type RequestInfo = {
+  status: string;
+  absenceType?: string;
+  hoursAffected?: number;
+};
+
+const ACTIVE_STATUSES = ["pending_professor", "pending_tutor", "approved", "acknowledged"];
+
+function dayEffectiveHours(
+  iso: string,
+  requestsByDate: Map<string, RequestInfo>,
+  horasDiarias: number,
+): number {
+  const req = requestsByDate.get(iso);
+  if (!req) return horasDiarias;
+  if (!ACTIVE_STATUSES.includes(req.status)) return horasDiarias;
+  if (req.absenceType === "total") return 0;
+  if (req.absenceType === "partial" && typeof req.hoursAffected === "number") {
+    return Math.max(0, horasDiarias - req.hoursAffected);
+  }
+  return horasDiarias;
+}
 
 export function calcTooltipDayInfo(
   tooltipDay: string,
   workDays: { iso: string }[],
   presencas: Record<string, { hoursWorked?: number }>,
   presencaSet: Set<string>,
-  effectiveHoursForDay: (iso: string) => number,
+  requestsByDate: Map<string, RequestInfo>,
+  horasDiarias: number,
 ): TooltipDayInfo {
   const hasRegistered = presencaSet.has(tooltipDay);
 
@@ -18,6 +43,8 @@ export function calcTooltipDayInfo(
       ? presencas[tooltipDay].hoursWorked
       : 0;
 
+  const previstasDia = dayEffectiveHours(tooltipDay, requestsByDate, horasDiarias);
+
   const acumuladas = workDays
     .filter((wd) => wd.iso <= tooltipDay)
     .reduce((sum, wd) => {
@@ -25,8 +52,8 @@ export function calcTooltipDayInfo(
       if (p && typeof p.hoursWorked === "number") {
         return sum + p.hoursWorked;
       }
-      return sum + effectiveHoursForDay(wd.iso);
+      return sum + dayEffectiveHours(wd.iso, requestsByDate, horasDiarias);
     }, 0);
 
-  return { hasRegistered, acumuladas, registadasDia: horasRegistadas };
+  return { hasRegistered, acumuladas, registadasDia: horasRegistadas, previstasDia };
 }

@@ -2,13 +2,22 @@ import { describe, expect, it } from "vitest";
 import { calcTooltipDayInfo } from "@/lib/estagios/calendar-tooltip";
 import type { TooltipDayInfo } from "@/lib/estagios/calendar-tooltip";
 
+type ReqEntry = { status: string; absenceType?: string; hoursAffected?: number };
+
+function reqs(
+  entries: [string, ReqEntry][],
+): Map<string, ReqEntry> {
+  return new Map(entries);
+}
+
 function fixt(
   tooltipDay: string,
   overrides?: Partial<{
     workDays: { iso: string }[];
     presencas: Record<string, { hoursWorked?: number }>;
     presencaSet: Set<string>;
-    effectiveHoursForDay: (iso: string) => number;
+    requestsByDate: Map<string, ReqEntry>;
+    horasDiarias: number;
   }>,
 ): TooltipDayInfo {
   const workDays = overrides?.workDays ?? [
@@ -20,14 +29,15 @@ function fixt(
   ];
   const presencas = overrides?.presencas ?? {};
   const presencaSet = overrides?.presencaSet ?? new Set<string>();
-  const effectiveHoursForDay =
-    overrides?.effectiveHoursForDay ?? ((_iso: string) => 7.5);
+  const requestsByDate = overrides?.requestsByDate ?? new Map();
+  const horasDiarias = overrides?.horasDiarias ?? 7.5;
   return calcTooltipDayInfo(
     tooltipDay,
     workDays,
     presencas,
     presencaSet,
-    effectiveHoursForDay,
+    requestsByDate,
+    horasDiarias,
   );
 }
 
@@ -94,10 +104,8 @@ describe("acumuladas", () => {
     expect(r.acumuladas).toBe(24);
   });
 
-  it("uses effectiveHoursForDay when no presenca exists for a day", () => {
-    const r = fixt("2026-05-13", {
-      effectiveHoursForDay: () => 7.5,
-    });
+  it("uses horasDiarias when no presenca exists for a day", () => {
+    const r = fixt("2026-05-13", { horasDiarias: 7.5 });
     expect(r.acumuladas).toBe(22.5); // 3 dias × 7.5
   });
 
@@ -111,7 +119,7 @@ describe("acumuladas", () => {
       ],
       presencas: presenca("2026-05-12", 7),
       presencaSet: presencaSetFrom("2026-05-12"),
-      effectiveHoursForDay: () => 7.5,
+      horasDiarias: 7.5,
     });
     // day11: 7.5 (predicted), day12: 7 (real), day13: 7.5, day14: 7.5
     expect(r.acumuladas).toBe(29.5);
@@ -136,31 +144,85 @@ describe("acumuladas", () => {
 });
 
 // ---------------------------------------------------------------------------
-// approved absences (via effectiveHoursForDay)
+// absences via requestsByDate
 // ---------------------------------------------------------------------------
-describe("approved absences", () => {
-  it("accounts for total absence (effectiveHoursForDay returns 0)", () => {
+describe("absences via requestsByDate", () => {
+  it("total absence → 0 for that day", () => {
     const r = fixt("2026-05-14", {
-      workDays: [
-        { iso: "2026-05-12" },
-        { iso: "2026-05-13" },
-        { iso: "2026-05-14" },
-      ],
-      effectiveHoursForDay: (iso: string) => (iso === "2026-05-13" ? 0 : 7.5),
+      workDays: [{ iso: "2026-05-12" }, { iso: "2026-05-13" }, { iso: "2026-05-14" }],
+      requestsByDate: reqs([["2026-05-13", { status: "approved", absenceType: "total", hoursAffected: 0 }]]),
+      horasDiarias: 7.5,
     });
     expect(r.acumuladas).toBe(15); // 7.5 + 0 + 7.5
   });
 
-  it("accounts for partial absence (effectiveHoursForDay returns reduced)", () => {
+  it("partial absence → reduced hours for that day", () => {
     const r = fixt("2026-05-14", {
-      workDays: [
-        { iso: "2026-05-12" },
-        { iso: "2026-05-13" },
-        { iso: "2026-05-14" },
-      ],
-      effectiveHoursForDay: (iso: string) => (iso === "2026-05-13" ? 4 : 7.5),
+      workDays: [{ iso: "2026-05-12" }, { iso: "2026-05-13" }, { iso: "2026-05-14" }],
+      requestsByDate: reqs([["2026-05-13", { status: "approved", absenceType: "partial", hoursAffected: 3.5 }]]),
+      horasDiarias: 7.5,
     });
     expect(r.acumuladas).toBe(19); // 7.5 + 4 + 7.5
+  });
+
+  it("pending absence treated same as approved", () => {
+    const r = fixt("2026-05-14", {
+      workDays: [{ iso: "2026-05-12" }, { iso: "2026-05-13" }, { iso: "2026-05-14" }],
+      requestsByDate: reqs([["2026-05-13", { status: "pending_professor", absenceType: "total", hoursAffected: 0 }]]),
+      horasDiarias: 7.5,
+    });
+    expect(r.acumuladas).toBe(15);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// previstasDia
+// ---------------------------------------------------------------------------
+describe("previstasDia", () => {
+  it("returns horasDiarias when no request for the day", () => {
+    const r = fixt("2026-05-13");
+    expect(r.previstasDia).toBe(7.5);
+  });
+
+  it("returns 0 when total absence is approved", () => {
+    const r = fixt("2026-05-13", {
+      requestsByDate: reqs([["2026-05-13", { status: "approved", absenceType: "total" }]]),
+    });
+    expect(r.previstasDia).toBe(0);
+  });
+
+  it("returns reduced hours for partial absence", () => {
+    const r = fixt("2026-05-13", {
+      requestsByDate: reqs([["2026-05-13", { status: "approved", absenceType: "partial", hoursAffected: 3 }]]),
+      horasDiarias: 7.5,
+    });
+    expect(r.previstasDia).toBe(4.5);
+  });
+
+  it("returns horasDiarias for rejected request", () => {
+    const r = fixt("2026-05-13", {
+      requestsByDate: reqs([["2026-05-13", { status: "rejected", absenceType: "total" }]]),
+    });
+    expect(r.previstasDia).toBe(7.5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0h registered + pending absence = 0h (not predicted)
+// ---------------------------------------------------------------------------
+describe("0h registadas + pedido de ausência", () => {
+  it("day with 0h and absence returns hasRegistered=false, acumuladas=0 for that day", () => {
+    const r = fixt("2026-05-13", {
+      workDays: [{ iso: "2026-05-12" }, { iso: "2026-05-13" }, { iso: "2026-05-14" }],
+      presencas: { "2026-05-12": { hoursWorked: 7 }, "2026-05-13": { hoursWorked: 0 } },
+      presencaSet: presencaSetFrom("2026-05-12"),
+      requestsByDate: reqs([["2026-05-13", { status: "approved", absenceType: "total" }]]),
+      horasDiarias: 7.5,
+    });
+    expect(r.hasRegistered).toBe(false);
+    expect(r.acumuladas).toBe(7); // 7 (real) + 0 (absence)
+    expect(r.registadasDia).toBe(0);
+    expect(r.previstasDia).toBe(0);
   });
 });
 
@@ -183,7 +245,7 @@ describe("base schedule change 7h -> 7.5h", () => {
         "2026-05-14": { hoursWorked: 7 },
       },
       presencaSet: presencaSetFrom("2026-05-11", "2026-05-12", "2026-05-14"),
-      effectiveHoursForDay: () => 7.5,
+      horasDiarias: 7.5,
     });
     // day11: 7 (real), day12: 7 (real), day13: 7.5 (predicted), day14: 7 (real), day15: 7.5 (predicted)
     expect(r.acumuladas).toBe(36);
@@ -223,7 +285,7 @@ describe("edge cases", () => {
   it("single workday without registered hours", () => {
     const r = fixt("2026-05-11", {
       workDays: [{ iso: "2026-05-11" }],
-      effectiveHoursForDay: () => 7.5,
+      horasDiarias: 7.5,
     });
     expect(r.hasRegistered).toBe(false);
     expect(r.acumuladas).toBe(7.5);
