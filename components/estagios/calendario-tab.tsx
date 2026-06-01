@@ -41,6 +41,7 @@ import {
   type EligibilityResult,
 } from "@/lib/estagios/termino-antecipado";
 import type { EstagioRole } from "@/lib/estagios/permissions";
+import { calcTooltipDayInfo } from "@/lib/estagios/calendar-tooltip";
 import { ScheduleChangeRequestModal } from "./schedule-change-request-modal";
 import { ScheduleChangeRequestThread } from "./schedule-change-request-thread";
 import { TerminoAntecipadoConfirmationModal } from "./termino-antecipado-confirmation-modal";
@@ -261,7 +262,9 @@ export function CalendarioTab({
 
   function effectiveHoursForDay(iso: string): number {
     const req = requestsByDate.get(iso);
-    if (!req || (req.status !== "approved" && req.status !== "acknowledged")) return horasDiarias;
+    if (!req) return horasDiarias;
+    const activeStatuses = ["pending_professor", "pending_tutor", "approved", "acknowledged"];
+    if (!activeStatuses.includes(req.status)) return horasDiarias;
     if (req.absenceType === "total") return 0;
     if (req.absenceType === "partial" && typeof req.hoursAffected === "number") {
       return Math.max(0, horasDiarias - req.hoursAffected);
@@ -315,18 +318,26 @@ export function CalendarioTab({
   // Tooltip data
   const tooltipData = useMemo(() => {
     if (!tooltipDay) return null;
-    const effectiveDaily = effectiveHoursForDay(tooltipDay);
+    const { hasRegistered, acumuladas, registadasDia, previstasDia } = calcTooltipDayInfo(
+      tooltipDay,
+      workDays,
+      presencas,
+      presencaSet,
+      requestsByDate,
+      horasDiarias,
+    );
     const pendingPrev = previewIfApproved(tooltipDay);
-    const cumPlanned = workDays.filter((wd) => wd.iso <= tooltipDay).length * horasDiarias;
-    const pct = totalHoras > 0 ? ((cumPlanned / totalHoras) * 100).toFixed(1) : "0.0";
+    const pct = totalHoras > 0 ? ((acumuladas / totalHoras) * 100).toFixed(1) : "0.0";
     return {
       data: tooltipDay,
-      previstasAcumuladas: cumPlanned,
-      previstasDia: effectiveDaily,
+      isReal: hasRegistered,
+      acumuladas,
+      previstasDia,
+      registadasDia: hasRegistered ? registadasDia : null,
       pendingPreview: pendingPrev,
       percentagem: pct,
     };
-  }, [tooltipDay, horasDiarias, totalHoras, workDays]);
+  }, [tooltipDay, horasDiarias, totalHoras, workDays, presencas, presencaSet, requestsByDate]);
 
   // New eligibility logic for terminoAntecipado
   const eligibilityResult = useMemo(() => {
@@ -759,13 +770,17 @@ export function CalendarioTab({
                 style={{ left: tooltipPos.x + 12, top: tooltipPos.y - 10 }}
               >
                 <p className="font-medium">{formatIsoPt(tooltipData.data)}</p>
-                <p>Previstas acumuladas: {tooltipData.previstasAcumuladas}h</p>
-                <p>Previstas do dia: {tooltipData.previstasDia}h
-                  {tooltipData.pendingPreview !== null && (
-                    <span className="text-muted-foreground"> (Se aprovado: {tooltipData.pendingPreview}h)</span>
-                  )}
-                </p>
-                <p>Percentagem concluída: {tooltipData.percentagem}%</p>
+                <p>{tooltipData.isReal ? "Registadas acumuladas" : "Previstas acumuladas"}: {tooltipData.acumuladas}h</p>
+                {tooltipData.isReal ? (
+                  <p>Registadas no dia: {tooltipData.registadasDia}h</p>
+                ) : (
+                  <p>Previstas do dia: {tooltipData.previstasDia}h
+                    {tooltipData.pendingPreview !== null && tooltipData.pendingPreview !== tooltipData.previstasDia && (
+                      <span className="text-muted-foreground"> (Se aprovado: {tooltipData.pendingPreview}h)</span>
+                    )}
+                  </p>
+                )}
+                <p>{tooltipData.isReal ? "Percentagem real" : "Percentagem prevista"}: {tooltipData.percentagem}%</p>
               </div>
             )}
           </CardContent>
