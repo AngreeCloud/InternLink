@@ -317,16 +317,36 @@ export function CalendarioTab({
     if (!tooltipDay) return null;
     const effectiveDaily = effectiveHoursForDay(tooltipDay);
     const pendingPrev = previewIfApproved(tooltipDay);
-    const cumPlanned = workDays.filter((wd) => wd.iso <= tooltipDay).length * horasDiarias;
-    const pct = totalHoras > 0 ? ((cumPlanned / totalHoras) * 100).toFixed(1) : "0.0";
+    const hasRegistered = typeof presencas[tooltipDay]?.hoursWorked === "number" && presencas[tooltipDay].hoursWorked > 0;
+    if (hasRegistered) {
+      const cumReal = Object.entries(presencas)
+        .filter(([iso]) => iso <= tooltipDay)
+        .reduce((sum, [, p]) => sum + (typeof p.hoursWorked === "number" ? p.hoursWorked : 0), 0);
+      const pct = totalHoras > 0 ? ((cumReal / totalHoras) * 100).toFixed(1) : "0.0";
+      const horasRegistadas = typeof presencas[tooltipDay]?.hoursWorked === "number" ? presencas[tooltipDay].hoursWorked : 0;
+      return {
+        data: tooltipDay,
+        isReal: true as const,
+        acumuladas: cumReal,
+        previstasDia: effectiveDaily,
+        registadasDia: horasRegistadas,
+        pendingPreview: pendingPrev,
+        percentagem: pct,
+      };
+    }
+    const cumPrevisto = workDays
+      .filter((wd) => wd.iso <= tooltipDay)
+      .reduce((sum, wd) => sum + effectiveHoursForDay(wd.iso), 0);
+    const pct = totalHoras > 0 ? ((cumPrevisto / totalHoras) * 100).toFixed(1) : "0.0";
     return {
       data: tooltipDay,
-      previstasAcumuladas: cumPlanned,
+      isReal: false as const,
+      acumuladas: cumPrevisto,
       previstasDia: effectiveDaily,
       pendingPreview: pendingPrev,
       percentagem: pct,
     };
-  }, [tooltipDay, horasDiarias, totalHoras, workDays]);
+  }, [tooltipDay, horasDiarias, totalHoras, workDays, presencas]);
 
   // New eligibility logic for terminoAntecipado
   const eligibilityResult = useMemo(() => {
@@ -759,13 +779,13 @@ export function CalendarioTab({
                 style={{ left: tooltipPos.x + 12, top: tooltipPos.y - 10 }}
               >
                 <p className="font-medium">{formatIsoPt(tooltipData.data)}</p>
-                <p>Previstas acumuladas: {tooltipData.previstasAcumuladas}h</p>
+                <p>{tooltipData.isReal ? "Registadas acumuladas" : "Previstas acumuladas"}: {tooltipData.acumuladas}h</p>
                 <p>Previstas do dia: {tooltipData.previstasDia}h
                   {tooltipData.pendingPreview !== null && (
                     <span className="text-muted-foreground"> (Se aprovado: {tooltipData.pendingPreview}h)</span>
                   )}
                 </p>
-                <p>Percentagem concluída: {tooltipData.percentagem}%</p>
+                <p>{tooltipData.isReal ? "Percentagem real" : "Percentagem prevista"}: {tooltipData.percentagem}%</p>
               </div>
             )}
           </CardContent>
