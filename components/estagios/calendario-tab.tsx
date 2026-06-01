@@ -41,6 +41,7 @@ import {
   type EligibilityResult,
 } from "@/lib/estagios/termino-antecipado";
 import type { EstagioRole } from "@/lib/estagios/permissions";
+import { calcTooltipDayInfo } from "@/lib/estagios/calendar-tooltip";
 import { ScheduleChangeRequestModal } from "./schedule-change-request-modal";
 import { ScheduleChangeRequestThread } from "./schedule-change-request-thread";
 import { TerminoAntecipadoConfirmationModal } from "./termino-antecipado-confirmation-modal";
@@ -315,39 +316,26 @@ export function CalendarioTab({
   // Tooltip data
   const tooltipData = useMemo(() => {
     if (!tooltipDay) return null;
+    const { hasRegistered, acumuladas, registadasDia } = calcTooltipDayInfo(
+      tooltipDay,
+      workDays,
+      presencas,
+      presencaSet,
+      effectiveHoursForDay,
+    );
     const effectiveDaily = effectiveHoursForDay(tooltipDay);
     const pendingPrev = previewIfApproved(tooltipDay);
-    const hasRegistered = typeof presencas[tooltipDay]?.hoursWorked === "number" && presencas[tooltipDay].hoursWorked > 0;
-    if (hasRegistered) {
-      const cumReal = Object.entries(presencas)
-        .filter(([iso]) => iso <= tooltipDay)
-        .reduce((sum, [, p]) => sum + (typeof p.hoursWorked === "number" ? p.hoursWorked : 0), 0);
-      const pct = totalHoras > 0 ? ((cumReal / totalHoras) * 100).toFixed(1) : "0.0";
-      const horasRegistadas = typeof presencas[tooltipDay]?.hoursWorked === "number" ? presencas[tooltipDay].hoursWorked : 0;
-      return {
-        data: tooltipDay,
-        isReal: true as const,
-        acumuladas: cumReal,
-        previstasDia: effectiveDaily,
-        registadasDia: horasRegistadas,
-        pendingPreview: pendingPrev,
-        percentagem: pct,
-      };
-    }
-    const cumPrevisto = workDays
-      .filter((wd) => wd.iso <= tooltipDay)
-      .reduce((sum, wd) => sum + effectiveHoursForDay(wd.iso), 0);
-    const pct = totalHoras > 0 ? ((cumPrevisto / totalHoras) * 100).toFixed(1) : "0.0";
+    const pct = totalHoras > 0 ? ((acumuladas / totalHoras) * 100).toFixed(1) : "0.0";
     return {
       data: tooltipDay,
-      isReal: false as const,
-      acumuladas: cumPrevisto,
+      isReal: hasRegistered,
+      acumuladas,
       previstasDia: effectiveDaily,
-      registadasDia: null,
+      registadasDia: hasRegistered ? registadasDia : null,
       pendingPreview: pendingPrev,
       percentagem: pct,
     };
-  }, [tooltipDay, horasDiarias, totalHoras, workDays, presencas]);
+  }, [tooltipDay, horasDiarias, totalHoras, workDays, presencas, presencaSet]);
 
   // New eligibility logic for terminoAntecipado
   const eligibilityResult = useMemo(() => {
