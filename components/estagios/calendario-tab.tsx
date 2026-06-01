@@ -343,6 +343,7 @@ export function CalendarioTab({
       isReal: false as const,
       acumuladas: cumPrevisto,
       previstasDia: effectiveDaily,
+      registadasDia: null,
       pendingPreview: pendingPrev,
       percentagem: pct,
     };
@@ -780,11 +781,15 @@ export function CalendarioTab({
               >
                 <p className="font-medium">{formatIsoPt(tooltipData.data)}</p>
                 <p>{tooltipData.isReal ? "Registadas acumuladas" : "Previstas acumuladas"}: {tooltipData.acumuladas}h</p>
-                <p>Previstas do dia: {tooltipData.previstasDia}h
-                  {tooltipData.pendingPreview !== null && (
-                    <span className="text-muted-foreground"> (Se aprovado: {tooltipData.pendingPreview}h)</span>
-                  )}
-                </p>
+                {tooltipData.isReal ? (
+                  <p>Registadas no dia: {tooltipData.registadasDia}h</p>
+                ) : (
+                  <p>Previstas do dia: {tooltipData.previstasDia}h
+                    {tooltipData.pendingPreview !== null && (
+                      <span className="text-muted-foreground"> (Se aprovado: {tooltipData.pendingPreview}h)</span>
+                    )}
+                  </p>
+                )}
                 <p>{tooltipData.isReal ? "Percentagem real" : "Percentagem prevista"}: {tooltipData.percentagem}%</p>
               </div>
             )}
