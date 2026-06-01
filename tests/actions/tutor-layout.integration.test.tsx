@@ -93,6 +93,7 @@ vi.mock("lucide-react", () => {
     Briefcase: Icon,
     Building2: Icon,
     CalendarClock: Icon,
+    ChevronDown: Icon,
     FileText: Icon,
     GraduationCap: Icon,
     Inbox: Icon,
