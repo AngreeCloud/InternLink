@@ -62,17 +62,24 @@ export async function POST(
       dom: rawDias.dom ?? false,
     };
 
-    // Recalcular
+    // Recalcular — project from day after last presence with hours > 0
+    const currentDataFim = estagioData.dataFimEstimada as string | undefined;
     const result = recalcularDataFimEstimada({
       totalHoras,
       horasRealizadas,
       horasDiarias,
       diasSemana,
+      startFrom: ultimaPresenca,
     });
 
     let newDataFim = result.dataFimEstimada;
     if (!newDataFim && horasRealizadas >= totalHoras) {
       newDataFim = ultimaPresenca;
+    }
+
+    // Never reduce dataFimEstimada unless internship fully completed
+    if (currentDataFim && newDataFim && newDataFim < currentDataFim && horasRealizadas < totalHoras) {
+      newDataFim = currentDataFim;
     }
 
     console.log("[recalcular-data-fim]", {
@@ -96,7 +103,6 @@ export async function POST(
     }
 
     // Só atualizar Firestore se o valor mudou (evita cascatas de snapshot).
-    const currentDataFim = estagioData.dataFimEstimada as string | undefined;
     if (newDataFim === currentDataFim) {
       return NextResponse.json({
         ok: true,

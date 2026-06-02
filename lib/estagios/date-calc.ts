@@ -112,9 +112,8 @@ export function calcularDataFimEstimada(input: DateCalcInput): DateCalcResult {
 /**
  * Recalcula a data de fim estimada com base nas horas efetivamente realizadas.
  *
- * Ao contrário de `calcularDataFimEstimada` (que projeta a partir de dataInicio),
- * esta função projeta a partir do dia seguinte ao atual, garantindo que o estágio
- * tenha sempre dias futuros suficientes para acomodar as horas em falta.
+ * Projeta a partir de `startFrom`+1 dia (se fornecido) ou hoje+1 (fallback),
+ * garantindo que o estágio tenha sempre dias futuros suficientes.
  *
  * Se horasRestantes <= 0, retorna dataFimEstimada vazia (estágio concluído).
  */
@@ -123,8 +122,9 @@ export function recalcularDataFimEstimada(input: {
   horasRealizadas: number;
   horasDiarias: number;
   diasSemana: DiasSemana;
+  startFrom?: string; // ISO YYYY-MM-DD — project from day AFTER this
 }): DateCalcResult {
-  const { totalHoras, horasRealizadas, horasDiarias, diasSemana } = input;
+  const { totalHoras, horasRealizadas, horasDiarias, diasSemana, startFrom } = input;
 
   if (!Number.isFinite(totalHoras) || !Number.isFinite(horasRealizadas)) {
     return { dataFimEstimada: "", diasUteis: 0, horasPorDia: horasDiarias, totalHoras };
@@ -146,9 +146,15 @@ export function recalcularDataFimEstimada(input: {
 
   const diasNecessarios = Math.ceil(horasRestantes / horasDiarias);
 
-  // Projetar a partir do dia seguinte ao atual
-  const hoje = new Date();
-  const cursor = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1);
+  // Projetar a partir do dia seguinte a startFrom (ou hoje+1 se não fornecido)
+  let cursor: Date;
+  if (startFrom) {
+    const [y, m, d] = startFrom.split("-").map(Number);
+    cursor = new Date(y, m - 1, d + 1);
+  } else {
+    const hoje = new Date();
+    cursor = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1);
+  }
   const holidays = getPortugueseHolidays(cursor.getFullYear(), cursor.getFullYear() + 10);
   let diasUteisRestantes = diasNecessarios;
   let ultimoDiaUtil = toIsoDate(cursor);
