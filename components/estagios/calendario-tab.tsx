@@ -41,6 +41,10 @@ import {
   type EligibilityResult,
 } from "@/lib/estagios/termino-antecipado";
 import type { EstagioRole } from "@/lib/estagios/permissions";
+import {
+  calcularDataFimEstimada,
+  type DiasSemana,
+} from "@/lib/estagios/date-calc";
 import { calcTooltipDayInfo } from "@/lib/estagios/calendar-tooltip";
 import { getPortugueseHolidaysMap } from "@/lib/estagios/pt-holidays";
 import { ScheduleChangeRequestModal } from "./schedule-change-request-modal";
@@ -78,10 +82,33 @@ export function CalendarioTab({
   const horasDiarias = Number(estagio.horasDiarias ?? estagio.horasPorDia ?? 0) || 0;
   const totalHoras = Number(estagio.totalHoras ?? 0) || 0;
   const dias = useMemo(() => normalizeDiasSemana(estagio.diasSemana), [estagio.diasSemana]);
+  const rawDiasSemana = (estagio.diasSemana as Record<string, boolean> | undefined) ?? {};
+
+  const originalEnd = useMemo(() => {
+    if (!dataInicio || totalHoras <= 0 || horasDiarias <= 0) return "";
+    const ds: DiasSemana = {
+      seg: rawDiasSemana.seg ?? false,
+      ter: rawDiasSemana.ter ?? false,
+      qua: rawDiasSemana.qua ?? false,
+      qui: rawDiasSemana.qui ?? false,
+      sex: rawDiasSemana.sex ?? false,
+      sab: rawDiasSemana.sab ?? false,
+      dom: rawDiasSemana.dom ?? false,
+    };
+    return calcularDataFimEstimada({
+      dataInicio,
+      totalHoras,
+      horasDiarias,
+      diasSemana: ds,
+    }).dataFimEstimada;
+  }, [dataInicio, totalHoras, horasDiarias, rawDiasSemana]);
+
+  const effectiveDataFim =
+    originalEnd && originalEnd > dataFim ? originalEnd : dataFim;
 
   const workDays = useMemo(
-    () => listWorkDays(dataInicio, dataFim, dias),
-    [dataInicio, dataFim, dias]
+    () => listWorkDays(dataInicio, effectiveDataFim, dias),
+    [dataInicio, effectiveDataFim, dias]
   );
 
   const workDaySet = useMemo(
@@ -97,11 +124,11 @@ export function CalendarioTab({
   };
 
   const holidayMap = useMemo(() => {
-    if (!dataInicio || !dataFim) return new Map<string, string>();
+    if (!dataInicio || !effectiveDataFim) return new Map<string, string>();
     const startYear = Number(dataInicio.split("-")[0]);
-    const endYear = Number(dataFim.split("-")[0]);
+    const endYear = Number(effectiveDataFim.split("-")[0]);
     return getPortugueseHolidaysMap(startYear, endYear);
-  }, [dataInicio, dataFim]);
+  }, [dataInicio, effectiveDataFim]);
 
   const holidaySet = useMemo(() => new Set(holidayMap.keys()), [holidayMap]);
 
@@ -545,7 +572,7 @@ export function CalendarioTab({
     return new Date(y, m - 1, d);
   })();
   const endDate = (() => {
-    const [y, m, d] = dataFim.split("-").map(Number);
+    const [y, m, d] = effectiveDataFim.split("-").map(Number);
     return new Date(y, m - 1, d);
   })();
 

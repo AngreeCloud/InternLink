@@ -30,6 +30,7 @@ import {
 } from "@/lib/estagios/workdays";
 import type { ScheduleChangeRequest } from "@/lib/estagios/schedule-change-requests";
 import type { EstagioRole } from "@/lib/estagios/permissions";
+import { calcularDataFimEstimada, type DiasSemana } from "@/lib/estagios/date-calc";
 
 type Props = {
   estagioId: string;
@@ -60,6 +61,29 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
   const horasDiarias = Number(estagio.horasDiarias ?? estagio.horasPorDia ?? 0) || 0;
   const totalHoras = Number(estagio.totalHoras ?? 0) || 0;
   const dias = useMemo(() => normalizeDiasSemana(estagio.diasSemana), [estagio.diasSemana]);
+  const rawDiasSemana = (estagio.diasSemana as Record<string, boolean> | undefined) ?? {};
+
+  const originalEnd = useMemo(() => {
+    if (!dataInicio || totalHoras <= 0 || horasDiarias <= 0) return "";
+    const ds: DiasSemana = {
+      seg: rawDiasSemana.seg ?? false,
+      ter: rawDiasSemana.ter ?? false,
+      qua: rawDiasSemana.qua ?? false,
+      qui: rawDiasSemana.qui ?? false,
+      sex: rawDiasSemana.sex ?? false,
+      sab: rawDiasSemana.sab ?? false,
+      dom: rawDiasSemana.dom ?? false,
+    };
+    return calcularDataFimEstimada({
+      dataInicio,
+      totalHoras,
+      horasDiarias,
+      diasSemana: ds,
+    }).dataFimEstimada;
+  }, [dataInicio, totalHoras, horasDiarias, rawDiasSemana]);
+
+  const effectiveDataFim =
+    originalEnd && originalEnd > dataFim ? originalEnd : dataFim;
 
   const [fechoExcludedDates, setFechoExcludedDates] = useState<Set<string>>(new Set());
 
@@ -95,8 +119,8 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
   }, [estagioId]);
 
   const workDays = useMemo(
-    () => listWorkDays(dataInicio, dataFim, dias, fechoExcludedDates),
-    [dataInicio, dataFim, dias, fechoExcludedDates]
+    () => listWorkDays(dataInicio, effectiveDataFim, dias, fechoExcludedDates),
+    [dataInicio, effectiveDataFim, dias, fechoExcludedDates]
   );
   const weeks = useMemo(() => groupWorkDaysByWeek(workDays), [workDays]);
 
@@ -146,8 +170,6 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
 
   const todayIso = toIsoDate(new Date());
 
-  const [recalcTriggered, setRecalcTriggered] = useState(false);
-
   useEffect(() => {
     if (weeks.length === 0 || Object.keys(collapsedWeeks).length > 0) return;
     const init: Record<string, boolean> = {};
@@ -177,22 +199,21 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
     (p) => typeof p.hoursWorked === "number" && p.hoursWorked > 0
   ).length;
 
-  // Recalcular dataFimEstimada quando as presenças carregarem e estiver inconsistente.
+  // Recalcular dataFimEstimada quando todas as presenças registadas mas ainda faltam horas.
   useEffect(() => {
-    if (recalcTriggered) return;
-    if (workDays.length > 0 && diasRegistados >= workDays.length && restante > 0) {
-      setRecalcTriggered(true);
-      const url = `/api/estagios/${encodeURIComponent(estagioId)}/recalcular-data-fim`;
-      fetch(url, { method: "POST" })
-        .then((r) => r.json().then((data) => {
-          console.log("[recalcular-data-fim] resposta:", data);
-        }))
-        .catch((err) => {
-          console.error("recalcular-data-fim falhou:", err);
-          setRecalcTriggered(false);
-        });
-    }
-  }, [diasRegistados, workDays.length, restante, estagioId, recalcTriggered]);
+    if (workDays.length <= 0 || diasRegistados < workDays.length || restante <= 0) return;
+    const controller = new AbortController();
+    const url = `/api/estagios/${encodeURIComponent(estagioId)}/recalcular-data-fim`;
+    fetch(url, { method: "POST", signal: controller.signal })
+      .then((r) => r.json().then((data) => {
+        console.log("[recalcular-data-fim] resposta:", data);
+      }))
+      .catch((err) => {
+        if ((err as DOMException)?.name === "AbortError") return;
+        console.error("recalcular-data-fim falhou:", err);
+      });
+    return () => controller.abort();
+  }, [diasRegistados, workDays.length, restante, estagioId]);
 
   function getDraft(day: WorkDay) {
     const persisted = presencas[day.iso];

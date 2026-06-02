@@ -144,7 +144,7 @@ export function recalcularDataFimEstimada(input: {
     return { dataFimEstimada: "", diasUteis: 0, horasPorDia: horasDiarias, totalHoras }; // concluído
   }
 
-  const diasNecessarios = Math.ceil(horasRestantes / horasDiarias);
+  const diasNecessarios = Math.ceil(horasRestantes / horasDiarias) + 1; // +1 día extra para garantir horas completas
 
   // Projetar a partir do dia seguinte a startFrom (ou hoje+1 se não fornecido)
   let cursor: Date;
