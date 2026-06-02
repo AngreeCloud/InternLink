@@ -42,7 +42,7 @@ import {
 } from "@/lib/estagios/termino-antecipado";
 import type { EstagioRole } from "@/lib/estagios/permissions";
 import { calcTooltipDayInfo } from "@/lib/estagios/calendar-tooltip";
-import { getPortugueseHolidays } from "@/lib/estagios/pt-holidays";
+import { getPortugueseHolidaysMap } from "@/lib/estagios/pt-holidays";
 import { ScheduleChangeRequestModal } from "./schedule-change-request-modal";
 import { ScheduleChangeRequestThread } from "./schedule-change-request-thread";
 import { TerminoAntecipadoConfirmationModal } from "./termino-antecipado-confirmation-modal";
@@ -96,12 +96,14 @@ export function CalendarioTab({
     return new Date(y, m - 1, d);
   };
 
-  const holidaySet = useMemo(() => {
-    if (!dataInicio || !dataFim) return new Set<string>();
+  const holidayMap = useMemo(() => {
+    if (!dataInicio || !dataFim) return new Map<string, string>();
     const startYear = Number(dataInicio.split("-")[0]);
     const endYear = Number(dataFim.split("-")[0]);
-    return getPortugueseHolidays(startYear, endYear);
+    return getPortugueseHolidaysMap(startYear, endYear);
   }, [dataInicio, dataFim]);
+
+  const holidaySet = useMemo(() => new Set(holidayMap.keys()), [holidayMap]);
 
   const holidayDates = useMemo(
     () => [...holidaySet].map((iso) => isoToDate(iso)),
@@ -353,6 +355,7 @@ export function CalendarioTab({
       horasDiarias,
     );
     const isHoliday = holidaySet.has(tooltipDay);
+    const holidayName = holidayMap.get(tooltipDay) ?? "";
     const pendingPrev = previewIfApproved(tooltipDay);
     const pct = totalHoras > 0 ? ((acumuladas / totalHoras) * 100).toFixed(1) : "0.0";
     return {
@@ -362,6 +365,7 @@ export function CalendarioTab({
       previstasDia,
       registadasDia: hasRegistered ? registadasDia : null,
       isHoliday,
+      holidayName,
       pendingPreview: pendingPrev,
       percentagem: pct,
     };
@@ -797,21 +801,24 @@ export function CalendarioTab({
                 className="fixed z-50 rounded-md border bg-popover px-3 py-2 text-xs shadow-md pointer-events-none"
                 style={{ left: tooltipPos.x + 12, top: tooltipPos.y - 10 }}
               >
-                {tooltipData.isHoliday && (
-                  <p className="text-purple-700 font-semibold">Feriado nacional</p>
-                )}
-                <p className="font-medium">{formatIsoPt(tooltipData.data)}</p>
-                <p>{tooltipData.isReal ? "Registadas acumuladas" : "Previstas acumuladas"}: {tooltipData.acumuladas}h</p>
-                {tooltipData.isReal ? (
-                  <p>Registadas no dia: {tooltipData.registadasDia}h</p>
+                {tooltipData.isHoliday ? (
+                  <p className="text-purple-700 font-semibold">{formatIsoPt(tooltipData.data)} · {tooltipData.holidayName}</p>
                 ) : (
-                  <p>Previstas do dia: {tooltipData.previstasDia}h
-                    {tooltipData.pendingPreview !== null && tooltipData.pendingPreview !== tooltipData.previstasDia && (
-                      <span className="text-muted-foreground"> (Se aprovado: {tooltipData.pendingPreview}h)</span>
+                  <>
+                    <p className="font-medium">{formatIsoPt(tooltipData.data)}</p>
+                    <p>{tooltipData.isReal ? "Registadas acumuladas" : "Previstas acumuladas"}: {tooltipData.acumuladas}h</p>
+                    {tooltipData.isReal ? (
+                      <p>Registadas no dia: {tooltipData.registadasDia}h</p>
+                    ) : (
+                      <p>Previstas do dia: {tooltipData.previstasDia}h
+                        {tooltipData.pendingPreview !== null && tooltipData.pendingPreview !== tooltipData.previstasDia && (
+                          <span className="text-muted-foreground"> (Se aprovado: {tooltipData.pendingPreview}h)</span>
+                        )}
+                      </p>
                     )}
-                  </p>
+                    <p>{tooltipData.isReal ? "Percentagem real" : "Percentagem prevista"}: {tooltipData.percentagem}%</p>
+                  </>
                 )}
-                <p>{tooltipData.isReal ? "Percentagem real" : "Percentagem prevista"}: {tooltipData.percentagem}%</p>
               </div>
             )}
           </CardContent>
