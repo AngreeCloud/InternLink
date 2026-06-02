@@ -247,16 +247,24 @@ export function CalendarioTab({
     [presencas]
   );
 
+  // Tutor não vê pedidos "Aguarda professor".
+  const visibleRequests = useMemo(() => {
+    if (currentUserRole === "tutor") {
+      return requests.filter((r) => r.status !== "pending_professor");
+    }
+    return requests;
+  }, [requests, currentUserRole]);
+
   const requestsByDate = useMemo(() => {
     const map = new Map<string, ScheduleChangeRequest>();
-    for (const r of requests) {
+    for (const r of visibleRequests) {
       const existing = map.get(r.targetDate);
       if (!existing || ["approved", "pending_tutor", "pending_professor"].includes(r.status)) {
         map.set(r.targetDate, r);
       }
     }
     return map;
-  }, [requests]);
+  }, [visibleRequests]);
 
   const requestDateSet = useMemo(() => new Set(requestsByDate.keys()), [requestsByDate]);
 
@@ -274,13 +282,13 @@ export function CalendarioTab({
 
   const pendingRequestsMap = useMemo(() => {
     const map = new Map<string, ScheduleChangeRequest>();
-    for (const r of requests) {
+    for (const r of visibleRequests) {
       if (r.status === "pending_professor" || r.status === "pending_tutor") {
         map.set(r.targetDate, r);
       }
     }
     return map;
-  }, [requests]);
+  }, [visibleRequests]);
 
   function previewIfApproved(iso: string): number | null {
     const req = pendingRequestsMap.get(iso);
@@ -920,24 +928,24 @@ export function CalendarioTab({
       ) : null}
 
       {/* Requests list */}
-      {requests.length > 0 && (
+      {visibleRequests.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">
               Pedidos de alteração{" "}
               <span className="font-normal text-muted-foreground">
-                ({requests.length})
+                ({visibleRequests.length})
               </span>
             </h3>
             <div className="flex gap-2 text-xs text-muted-foreground">
-              {requests.filter((r) => r.status === "pending_professor" || r.status === "pending_tutor").length > 0 && (
+              {visibleRequests.filter((r) => r.status === "pending_professor" || r.status === "pending_tutor").length > 0 && (
                 <Badge variant="secondary">
-                  {requests.filter((r) => r.status === "pending_professor" || r.status === "pending_tutor").length} pendente{requests.filter((r) => r.status === "pending_professor" || r.status === "pending_tutor").length !== 1 ? "s" : ""}
+                  {visibleRequests.filter((r) => r.status === "pending_professor" || r.status === "pending_tutor").length} pendente{visibleRequests.filter((r) => r.status === "pending_professor" || r.status === "pending_tutor").length !== 1 ? "s" : ""}
                 </Badge>
               )}
             </div>
           </div>
-          {requests.map((req) => (
+          {visibleRequests.map((req) => (
             <ScheduleChangeRequestThread
               key={req.id}
               request={req}

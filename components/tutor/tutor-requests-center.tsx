@@ -164,7 +164,7 @@ export function TutorRequestsCenter() {
   }, [estagiosById, requests]);
 
   const scheduleRequests = useMemo(
-    () => requests.filter((r) => SCHEDULE_TYPES.includes(r.type)),
+    () => requests.filter((r) => SCHEDULE_TYPES.includes(r.type) && r.status !== "pending_professor"),
     [requests]
   );
 
