@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
@@ -107,6 +107,19 @@ export function EstagioDetailView({
       unsub?.();
     };
   }, [estagioId]);
+
+  // Recalcular dataFimEstimada no arranque se houver horas realizadas.
+  const recalcCalled = useRef(false);
+  useEffect(() => {
+    if (!estagio || recalcCalled.current) return;
+    const total = Number(estagio.totalHoras ?? 0);
+    const done = Number(estagio.horasRealizadas ?? 0);
+    if (total > 0 && done > 0 && done < total) {
+      recalcCalled.current = true;
+      fetch(`/api/estagios/${estagio.id}/recalcular-data-fim`, { method: "POST" })
+        .catch(() => { recalcCalled.current = false; });
+    }
+  }, [estagio]);
 
   // Load participants via server API (bypasses rules for tutors from other schools).
   useEffect(() => {
