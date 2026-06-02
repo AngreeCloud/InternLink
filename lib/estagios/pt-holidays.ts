@@ -72,6 +72,32 @@ export function getPortugueseHolidays(yearStart: number, yearEnd: number): Set<s
   return set;
 }
 
+/**
+ * Devolve um Map de data ISO (YYYY-MM-DD) → nome do feriado para todos os
+ * feriados nacionais portugueses entre `yearStart` e `yearEnd` (inclusivo).
+ */
+export function getPortugueseHolidaysMap(yearStart: number, yearEnd: number): Map<string, string> {
+  const map = new Map<string, string>();
+  for (let year = yearStart; year <= yearEnd; year++) {
+    map.set(`${year}-01-01`, "Ano Novo");
+    map.set(`${year}-04-25`, "Dia da Liberdade");
+    map.set(`${year}-05-01`, "Dia do Trabalhador");
+    map.set(`${year}-06-10`, "Dia de Portugal");
+    map.set(`${year}-08-15`, "Assunção de Nossa Senhora");
+    map.set(`${year}-10-05`, "Implantação da República");
+    map.set(`${year}-11-01`, "Dia de Todos-os-Santos");
+    map.set(`${year}-12-01`, "Restauração da Independência");
+    map.set(`${year}-12-08`, "Imaculada Conceição");
+    map.set(`${year}-12-25`, "Natal");
+    const easter = getEasterSunday(year);
+    map.set(toIsoDate(addDays(easter, -47)), "Carnaval");
+    map.set(toIsoDate(addDays(easter, -2)), "Sexta-feira Santa");
+    map.set(toIsoDate(easter), "Domingo de Páscoa");
+    map.set(toIsoDate(addDays(easter, 60)), "Corpo de Deus");
+  }
+  return map;
+}
+
 export function isPortugueseHoliday(dateIso: string, holidays: Set<string>): boolean {
   return holidays.has(dateIso);
 }

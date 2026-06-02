@@ -95,7 +95,17 @@ export async function POST(
       });
     }
 
-    // Atualizar no Firestore
+    // Só atualizar Firestore se o valor mudou (evita cascatas de snapshot).
+    const currentDataFim = estagioData.dataFimEstimada as string | undefined;
+    if (newDataFim === currentDataFim) {
+      return NextResponse.json({
+        ok: true,
+        recalculado: false,
+        motivo: "Data fim já está correta.",
+        dataFimEstimada: newDataFim,
+      });
+    }
+
     await estagioRef.update({
       dataFimEstimada: newDataFim,
       horasRealizadas,

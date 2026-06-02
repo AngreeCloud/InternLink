@@ -8,7 +8,7 @@ import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScheduleChangeRequestsList, type EstagioMetaLite } from "@/components/estagios/schedule-change-requests-list";
-import type { ScheduleChangeRequest, ScheduleChangeRequestStatus, ScheduleChangeRequestType } from "@/lib/estagios/schedule-change-requests";
+import type { ScheduleChangeRequest, ScheduleChangeRequestType } from "@/lib/estagios/schedule-change-requests";
 
 const JUSTIFICATION_TYPES: ScheduleChangeRequestType[] = ["past_absence_justification"];
 const SCHEDULE_TYPES: ScheduleChangeRequestType[] = ["future_absence", "early_termination"];
@@ -68,13 +68,7 @@ export function ProfessorRequestsCenter() {
         requests: ScheduleChangeRequest[];
       };
       if (!json.ok) return;
-      const PENDING_SET = new Set<ScheduleChangeRequestStatus>(["pending_professor", "pending_tutor"]);
-      const out = json.requests.sort((a, b) => {
-        const aP = PENDING_SET.has(a.status) ? 0 : 1;
-        const bP = PENDING_SET.has(b.status) ? 0 : 1;
-        return aP - bP || toMillis(b.createdAt) - toMillis(a.createdAt);
-      });
-      setRequests(out);
+      setRequests(json.requests);
       setLoadingRequests(false);
     } catch (err) {
       console.error("[v0] schedule-change-requests fetch error", err);
@@ -146,12 +140,29 @@ export function ProfessorRequestsCenter() {
   }, [estagiosById, requests]);
 
   const justificationRequests = useMemo(
-    () => requests.filter((r) => JUSTIFICATION_TYPES.includes(r.type)),
+    () => requests
+      .filter((r) => JUSTIFICATION_TYPES.includes(r.type))
+      .sort((a, b) => toMillis(b.targetDate) - toMillis(a.targetDate)),
     [requests]
   );
 
   const scheduleRequests = useMemo(
-    () => requests.filter((r) => SCHEDULE_TYPES.includes(r.type)),
+    () => requests
+      .filter((r) => SCHEDULE_TYPES.includes(r.type))
+      .sort((a, b) => {
+        const d = new Date();
+        const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        const group = (r: ScheduleChangeRequest): number => {
+          if (r.status === "pending_professor") return 0;
+          if (r.status === "pending_tutor" && r.targetDate >= todayStr) return 1;
+          if (r.targetDate >= todayStr) return 2;
+          return 3;
+        };
+        const ga = group(a), gb = group(b);
+        if (ga !== gb) return ga - gb;
+        const diff = toMillis(a.targetDate) - toMillis(b.targetDate);
+        return ga === 3 ? -diff : diff;
+      }),
     [requests]
   );
 
