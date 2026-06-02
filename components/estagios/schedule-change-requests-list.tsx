@@ -45,6 +45,7 @@ type Props = {
   basePath: "professor" | "tutor";
   emptyTitle: string;
   emptyDescription?: string;
+  onRequestUpdated?: () => void;
 };
 
 function buildRequestHref(
@@ -406,6 +407,7 @@ export function ScheduleChangeRequestsList({
   basePath,
   emptyTitle,
   emptyDescription,
+  onRequestUpdated,
 }: Props) {
   const [refreshKey, setRefreshKey] = useState(0);
   const currentUserIsProfessor = currentUserRole === "professor" || currentUserRole === "diretor";
@@ -440,7 +442,7 @@ export function ScheduleChangeRequestsList({
             href={href}
             currentUserIsProfessor={currentUserIsProfessor}
             currentUserIsTutor={currentUserIsTutor}
-            onUpdated={() => setRefreshKey((k) => k + 1)}
+            onUpdated={() => { setRefreshKey((k) => k + 1); onRequestUpdated?.(); }}
           />
         );
       })}

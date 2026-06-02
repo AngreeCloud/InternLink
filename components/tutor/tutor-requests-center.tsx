@@ -207,6 +207,7 @@ export function TutorRequestsCenter() {
         basePath="tutor"
         emptyTitle="Sem solicitações de mudança"
         emptyDescription="Quando um aluno pedir uma falta futura, aparece aqui."
+        onRequestUpdated={() => fetchRequests(userId)}
       />
 
       {empresaId && (

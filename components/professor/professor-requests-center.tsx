@@ -203,6 +203,7 @@ export function ProfessorRequestsCenter() {
             basePath="professor"
             emptyTitle="Sem justificações pendentes"
             emptyDescription="Quando um aluno submeter uma justificação, ela aparece aqui."
+            onRequestUpdated={() => fetchRequests(userId)}
           />
         </TabsContent>
 
@@ -220,6 +221,7 @@ export function ProfessorRequestsCenter() {
             basePath="professor"
             emptyTitle="Sem solicitações de mudança"
             emptyDescription="Pedidos de faltas futuras ou término antecipado aparecem aqui."
+            onRequestUpdated={() => fetchRequests(userId)}
           />
         </TabsContent>
       </Tabs>
