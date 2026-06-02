@@ -67,13 +67,7 @@ export function TutorRequestsCenter() {
         requests: ScheduleChangeRequest[];
       };
       if (!json.ok) return;
-      const out = json.requests.sort((a, b) => {
-        const aPending = a.status === "pending_tutor" ? 0 : 1;
-        const bPending = b.status === "pending_tutor" ? 0 : 1;
-        if (aPending !== bPending) return aPending - bPending;
-        return toMillis(b.createdAt) - toMillis(a.createdAt);
-      });
-      setRequests(out);
+      setRequests(json.requests);
       setLoadingRequests(false);
     } catch (err) {
       console.error("[v0] schedule-change-requests tutor fetch error", err);
@@ -164,7 +158,21 @@ export function TutorRequestsCenter() {
   }, [estagiosById, requests]);
 
   const scheduleRequests = useMemo(
-    () => requests.filter((r) => SCHEDULE_TYPES.includes(r.type) && r.status !== "pending_professor"),
+    () => requests
+      .filter((r) => SCHEDULE_TYPES.includes(r.type) && r.status !== "pending_professor")
+      .sort((a, b) => {
+        const d = new Date();
+        const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        const group = (r: ScheduleChangeRequest): number => {
+          if (r.status === "pending_tutor" && r.targetDate >= todayStr) return 0;
+          if (r.targetDate >= todayStr) return 1;
+          return 2;
+        };
+        const ga = group(a), gb = group(b);
+        if (ga !== gb) return ga - gb;
+        const diff = toMillis(a.targetDate) - toMillis(b.targetDate);
+        return ga === 2 ? -diff : diff;
+      }),
     [requests]
   );
 
