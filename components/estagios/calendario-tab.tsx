@@ -42,6 +42,7 @@ import {
 } from "@/lib/estagios/termino-antecipado";
 import type { EstagioRole } from "@/lib/estagios/permissions";
 import { calcTooltipDayInfo } from "@/lib/estagios/calendar-tooltip";
+import { getPortugueseHolidays } from "@/lib/estagios/pt-holidays";
 import { ScheduleChangeRequestModal } from "./schedule-change-request-modal";
 import { ScheduleChangeRequestThread } from "./schedule-change-request-thread";
 import { TerminoAntecipadoConfirmationModal } from "./termino-antecipado-confirmation-modal";
@@ -89,6 +90,23 @@ export function CalendarioTab({
   );
 
   const weeks = useMemo(() => groupWorkDaysByWeek(workDays), [workDays]);
+
+  const isoToDate = (iso: string) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  };
+
+  const holidaySet = useMemo(() => {
+    if (!dataInicio || !dataFim) return new Set<string>();
+    const startYear = Number(dataInicio.split("-")[0]);
+    const endYear = Number(dataFim.split("-")[0]);
+    return getPortugueseHolidays(startYear, endYear);
+  }, [dataInicio, dataFim]);
+
+  const holidayDates = useMemo(
+    () => [...holidaySet].map((iso) => isoToDate(iso)),
+    [holidaySet]
+  );
 
   // Tooltip state
   const [tooltipDay, setTooltipDay] = useState<string | null>(null);
@@ -307,12 +325,12 @@ export function CalendarioTab({
       if (d.iso >= todayIso) continue;
       const p = presencas[d.iso];
       const hours = typeof p?.hoursWorked === "number" ? p.hoursWorked : 0;
-      if (hours < horasDiarias && !requestsByDate.has(d.iso)) {
+      if (horasDiarias - hours > 1 && !requestsByDate.has(d.iso) && !holidaySet.has(d.iso)) {
         set.add(d.iso);
       }
     }
     return set;
-  }, [workDays, todayIso, presencas, horasDiarias, requestsByDate]);
+  }, [workDays, todayIso, presencas, horasDiarias, requestsByDate, holidaySet]);
 
   // Remaining hours
   const totalRealizado = useMemo(() => {
@@ -334,6 +352,7 @@ export function CalendarioTab({
       requestsByDate,
       horasDiarias,
     );
+    const isHoliday = holidaySet.has(tooltipDay);
     const pendingPrev = previewIfApproved(tooltipDay);
     const pct = totalHoras > 0 ? ((acumuladas / totalHoras) * 100).toFixed(1) : "0.0";
     return {
@@ -342,10 +361,11 @@ export function CalendarioTab({
       acumuladas,
       previstasDia,
       registadasDia: hasRegistered ? registadasDia : null,
+      isHoliday,
       pendingPreview: pendingPrev,
       percentagem: pct,
     };
-  }, [tooltipDay, horasDiarias, totalHoras, workDays, presencas, presencaSet, requestsByDate]);
+  }, [tooltipDay, horasDiarias, totalHoras, workDays, presencas, presencaSet, requestsByDate, holidaySet]);
 
   // New eligibility logic for terminoAntecipado
   const eligibilityResult = useMemo(() => {
@@ -371,9 +391,10 @@ export function CalendarioTab({
 
   function hasMissingHours(iso: string): boolean {
     if (iso > todayIso) return false;
+    if (holidaySet.has(iso)) return false;
     const p = presencas[iso];
     const hours = typeof p?.hoursWorked === "number" ? p.hoursWorked : 0;
-    return hours < horasDiarias;
+    return horasDiarias - hours > 1;
   }
 
   const refreshRef = useRef(0);
@@ -443,17 +464,12 @@ export function CalendarioTab({
   }
 
   // Build modifiers for DayPicker
-  const isoToDate = (iso: string) => {
-    const [y, m, d] = iso.split("-").map(Number);
-    return new Date(y, m - 1, d);
-  };
-
   const workedDates = [...presencaSet].map((iso) => {
     if (requestDateSet.has(iso)) return null;
     return isoToDate(iso);
   }).filter(Boolean) as Date[];
   const scheduledDates = [...workDaySet]
-    .filter((iso) => !presencaSet.has(iso) && !missingHoursSet.has(iso) && !requestDateSet.has(iso))
+    .filter((iso) => !presencaSet.has(iso) && !missingHoursSet.has(iso) && !requestDateSet.has(iso) && !holidaySet.has(iso))
     .map((iso) => {
       return isoToDate(iso);
     });
@@ -556,6 +572,7 @@ export function CalendarioTab({
               <LegendItem color="bg-card ring-2 ring-amber-500" label="Pendente" />
               <LegendItem color="bg-card ring-2 ring-emerald-500" label="Aprovado/justificado" />
               <LegendItem color="bg-card ring-2 ring-red-500" label="Rejeitado" />
+              <LegendItem color="bg-purple-200 border-2 border-purple-400" label="Feriado nacional" />
             </div>
             {terminoAntecipado && (
               <div className="flex flex-wrap gap-3 border-t pt-2">
@@ -707,7 +724,7 @@ export function CalendarioTab({
           >
             <style>{`
               .rdp-day--worked .rdp-day_button { background-color: rgb(16 185 129); color: white; border-radius: 9999px; }
-              .rdp-day--scheduled .rdp-day_button { background-color: hsl(var(--primary) / 0.12); border: 1px solid hsl(var(--primary) / 0.5); border-radius: 9999px; }
+              .rdp-day--scheduled .rdp-day_button { background-color: rgb(219 234 254); border: 2px solid rgb(96 165 250); border-radius: 9999px; color: rgb(30 64 175); }
               .rdp-day--missing .rdp-day_button { background-color: rgb(254 243 199); border: 2px solid rgb(251 191 36); border-radius: 9999px; color: rgb(146 64 14); }
               .rdp-day--req-justification .rdp-day_button { background-color: rgb(224 242 254); color: rgb(30 64 175); border-radius: 9999px; }
               .rdp-day--req-future .rdp-day_button { background-color: rgb(255 237 213); color: rgb(154 52 18); border-radius: 9999px; }
@@ -719,6 +736,7 @@ export function CalendarioTab({
               .rdp-day--termino-approved .rdp-day_button { background-color: rgb(204 251 241); border: 2px solid rgb(20 184 166); border-radius: 9999px; color: rgb(15 118 110); }
               .rdp-day--termino-obrigatorio .rdp-day_button { background-color: rgb(255 237 213); border: 2px solid rgb(249 115 22); border-radius: 9999px; color: rgb(154 52 18); }
               .rdp-day--termino-invalidated .rdp-day_button { background-color: rgb(254 202 202); border: 2px solid rgb(239 68 68); border-radius: 9999px; color: rgb(153 27 27); }
+              .rdp-day--holiday .rdp-day_button { background-color: rgb(243 232 255); border: 2px solid rgb(192 132 252); border-radius: 9999px; color: rgb(107 33 168); }
               .rdp-day--can-click .rdp-day_button:hover { cursor: pointer; opacity: 0.8; }
             `}</style>
             <DayPicker
@@ -741,6 +759,7 @@ export function CalendarioTab({
                 terminoApproved: terminoApprovedDates,
                 terminoObrigatorio: terminoObrigatorioDates,
                 terminoInvalidated: terminoInvalidatedDates,
+                holiday: holidayDates,
               }}
               modifiersClassNames={{
                 worked: "rdp-day--worked",
@@ -756,11 +775,12 @@ export function CalendarioTab({
                 terminoApproved: "rdp-day--termino-approved",
                 terminoObrigatorio: "rdp-day--termino-obrigatorio",
                 terminoInvalidated: "rdp-day--termino-invalidated",
+                holiday: "rdp-day--holiday",
               }}
               onDayClick={isAluno ? handleDayClick : undefined}
               onDayMouseEnter={(date: Date, _modifiers: unknown, e: React.MouseEvent) => {
                 const iso = toIsoDate(date);
-                if (!workDaySet.has(iso)) return;
+                if (!workDaySet.has(iso) && !holidaySet.has(iso)) return;
                 if (hoveredIsoRef.current === iso) return;
                 hoveredIsoRef.current = iso;
                 if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
@@ -777,6 +797,9 @@ export function CalendarioTab({
                 className="fixed z-50 rounded-md border bg-popover px-3 py-2 text-xs shadow-md pointer-events-none"
                 style={{ left: tooltipPos.x + 12, top: tooltipPos.y - 10 }}
               >
+                {tooltipData.isHoliday && (
+                  <p className="text-purple-700 font-semibold">Feriado nacional</p>
+                )}
                 <p className="font-medium">{formatIsoPt(tooltipData.data)}</p>
                 <p>{tooltipData.isReal ? "Registadas acumuladas" : "Previstas acumuladas"}: {tooltipData.acumuladas}h</p>
                 {tooltipData.isReal ? (
@@ -890,6 +913,11 @@ export function CalendarioTab({
                       {hours > 0 && !req && (
                         <Badge variant="default" className="bg-emerald-500 hover:bg-emerald-500">
                           Trabalhado
+                        </Badge>
+                      )}
+                      {holidaySet.has(day.iso) && (
+                        <Badge variant="outline" className="border-purple-400 text-purple-700">
+                          Feriado
                         </Badge>
                       )}
                       {terminoAntecipado?.estado === "pendente" && terminoAntecipado.diaDeDispensa === day.iso && (
