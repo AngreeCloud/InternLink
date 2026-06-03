@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFirebaseAdminDb } from "@/lib/firebase-admin";
 import {
-  EstagioAccessError,
   requireSessionUid,
   toApiErrorResponse,
 } from "@/lib/estagios/estagio-access";
@@ -28,16 +27,30 @@ export async function GET(request: NextRequest) {
   try {
     const { uid } = await requireSessionUid();
     const role = request.nextUrl.searchParams.get("role") || "professor";
+    const estagioId = request.nextUrl.searchParams.get("estagioId");
     const db = getFirebaseAdminDb();
 
-    const filterField = role === "tutor" ? "tutorId" : "professorId";
+    let estagioIds: string[];
 
-    const estagiosSnap = await db
-      .collection("estagios")
-      .where(filterField, "==", uid)
-      .get();
+    if (estagioId) {
+      estagioIds = [estagioId];
+    } else {
+      let filterField: string;
+      if (role === "tutor") {
+        filterField = "tutorId";
+      } else if (role === "aluno") {
+        filterField = "alunoId";
+      } else {
+        filterField = "professorId";
+      }
 
-    const estagioIds = estagiosSnap.docs.map((d) => d.id);
+      const estagiosSnap = await db
+        .collection("estagios")
+        .where(filterField, "==", uid)
+        .get();
+      estagioIds = estagiosSnap.docs.map((d) => d.id);
+    }
+
     if (estagioIds.length === 0) {
       return NextResponse.json({ ok: true, requests: [] });
     }
@@ -59,6 +72,7 @@ export async function GET(request: NextRequest) {
             tutorId: (data.tutorId as string) ?? "",
             type: (data.type as string) ?? "",
             targetDate: (data.targetDate as string) ?? "",
+            absenceType: data.absenceType as string | undefined,
             hoursAffected: Number(data.hoursAffected) || 0,
             reason: (data.reason as string) ?? "",
             status: (data.status as string) ?? "",

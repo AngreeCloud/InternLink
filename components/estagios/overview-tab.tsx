@@ -12,8 +12,11 @@ import {
   GraduationCap,
   ShieldCheck,
   Clock,
+  Megaphone,
 } from "lucide-react";
 import type { EstagioRole } from "@/lib/estagios/permissions";
+import type { ScheduleChangeRequest } from "@/lib/estagios/schedule-change-requests";
+import { ComunicadoCard } from "./comunicado-card";
 
 type ParticipantInfo = { name: string; role: EstagioRole; email?: string };
 
@@ -99,8 +102,9 @@ export function OverviewTab({ estagio, participants }: Props) {
     { total: number; count: number } | null
   >(null);
   const [pendingAbsenceHours, setPendingAbsenceHours] = useState<number>(0);
+  const [comunicados, setComunicados] = useState<ScheduleChangeRequest[]>([]);
 
-  useEffect(() => {
+    useEffect(() => {
     if (!estagio.id) return;
     let unsubPresencas: (() => void) | undefined;
     let unsubRequests: (() => void) | undefined;
@@ -143,12 +147,13 @@ export function OverviewTab({ estagio, participants }: Props) {
           let totalHours = 0;
           snap.forEach((doc) => {
             const data = doc.data() as { absenceType?: string; hoursAffected?: number };
-            if (data.absenceType === "partial" && typeof data.hoursAffected === "number") {
+            if (typeof data.hoursAffected === "number" && data.hoursAffected > 0) {
               totalHours += data.hoursAffected;
             } else if (estagio.horasPorDia) {
               totalHours += estagio.horasPorDia;
             }
           });
+          setPendingAbsenceHours(totalHours);
           setPendingAbsenceHours(totalHours);
         },
         (err) => {
@@ -158,6 +163,7 @@ export function OverviewTab({ estagio, participants }: Props) {
           }
         }
       );
+
     })();
     return () => {
       cancelled = true;
@@ -165,6 +171,28 @@ export function OverviewTab({ estagio, participants }: Props) {
       unsubRequests?.();
     };
   }, [estagio.id, estagio.horasPorDia]);
+
+  useEffect(() => {
+    if (!estagio.id) return;
+    let cancelled = false;
+    const fetchComunicados = async () => {
+      try {
+        const res = await fetch(`/api/schedule-change-requests?estagioId=${estagio.id}`);
+        if (!res.ok) return;
+        const json = await res.json() as { ok: boolean; requests: ScheduleChangeRequest[] };
+        if (!json.ok || cancelled) return;
+        setComunicados(json.requests.filter((r) => r.type === "company_closure" && r.status === "approved"));
+      } catch (err) {
+        console.warn("[v0] comunicados fetch error", err);
+      }
+    };
+    fetchComunicados();
+    const interval = setInterval(fetchComunicados, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [estagio.id]);
 
   const dias = (estagio.diasSemana ?? [])
     .slice()
@@ -232,6 +260,18 @@ export function OverviewTab({ estagio, participants }: Props) {
             value={dias || "—"}
             className="sm:col-span-2"
           />
+
+          {comunicados.length > 0 && (
+            <div className="sm:col-span-2 space-y-2">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+                <Megaphone className="h-4 w-4" />
+                Comunicados da empresa
+              </div>
+              {comunicados.map((c) => (
+                <ComunicadoCard key={c.id} targetDate={c.targetDate} reason={c.reason} />
+              ))}
+            </div>
+          )}
 
           <div className="sm:col-span-2 space-y-2">
             <div className="flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground">

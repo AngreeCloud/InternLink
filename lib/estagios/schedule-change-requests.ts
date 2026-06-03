@@ -12,7 +12,8 @@ import { listWorkDays, type DiasSemanaMap } from "@/lib/estagios/workdays";
 export type ScheduleChangeRequestType =
   | "future_absence"
   | "past_absence_justification"
-  | "early_termination";
+  | "early_termination"
+  | "company_closure";
 
 export type ScheduleChangeRequestStatus =
   | "pending_professor"
@@ -228,6 +229,8 @@ export function labelForRequestType(type: ScheduleChangeRequestType): string {
       return "Justificação de falta";
     case "early_termination":
       return "Término antecipado";
+    case "company_closure":
+      return "Comunicado da empresa";
   }
 }
 
@@ -236,6 +239,7 @@ export function labelForRequestType(type: ScheduleChangeRequestType): string {
  * All request types now require at least professor approval.
  */
 export function requiresApproval(type: ScheduleChangeRequestType): boolean {
+  if (type === "company_closure") return false;
   return true;
 }
 
@@ -248,13 +252,16 @@ export function skipsTutorStep(type: ScheduleChangeRequestType): boolean {
 
 export function labelForStatus(status: ScheduleChangeRequestStatus, requestType?: ScheduleChangeRequestType): string {
   const isJustificacao = requestType === "past_absence_justification";
+  const isComunicado = requestType === "company_closure";
   switch (status) {
     case "pending_professor":
       return isJustificacao ? "Aguarda professor" : "Aguarda professor";
     case "pending_tutor":
       return "Aguarda tutor";
     case "approved":
-      return isJustificacao ? "Falta justificada" : "Aprovado";
+      if (isJustificacao) return "Falta justificada";
+      if (isComunicado) return "Publicado";
+      return "Aprovado";
     case "rejected":
       return isJustificacao ? "Falta não justificada" : "Rejeitado";
     case "cancelled":

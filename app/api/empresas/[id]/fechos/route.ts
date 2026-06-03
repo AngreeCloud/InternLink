@@ -116,9 +116,27 @@ export async function POST(
     }
 
     const estagiosSnap = await estagiosQuery.get();
+    let estagioDocs = estagiosSnap.docs;
+
+    // Safeguard: also catch estagios missing empresaId but managed by same tutors
+    if (scope !== "specific" && empresa.tutorIds?.length) {
+      const orphanSnap = await db.collection("estagios")
+        .where("estado", "==", "ativo")
+        .where("tutorId", "in", empresa.tutorIds)
+        .get();
+      const existingIds = new Set(estagioDocs.map(d => d.id));
+      for (const doc of orphanSnap.docs) {
+        if (existingIds.has(doc.id)) continue;
+        const data = doc.data() as { empresaId?: string };
+        if (!data.empresaId) {
+          estagioDocs.push(doc);
+        }
+      }
+    }
+
     const batch = db.batch();
 
-    estagiosSnap.docs.forEach(doc => {
+    estagioDocs.forEach(doc => {
       const estagio = doc.data();
       const reqRef = doc.ref.collection("schedule_change_requests").doc();
       
@@ -127,14 +145,12 @@ export async function POST(
         studentId: estagio.alunoId,
         professorId: estagio.professorId || "",
         tutorId: estagio.tutorId || "",
-        type: "future_absence",
+        type: "company_closure",
         targetDate,
         absenceType: "total",
-        hoursAffected: estagio.horasPorDia || 0,
+        hoursAffected: 0,
         reason: reason || "Dia de encerramento da empresa / Tolerância de ponto",
         status: "approved",
-        tutorDecision: "approved",
-        professorDecision: "approved", // auto approved
         comments: [{
           authorId: sessionUid,
           authorRole: "tutor",
@@ -161,7 +177,7 @@ export async function POST(
 
     await batch.commit();
 
-    return NextResponse.json({ ok: true, affectedCount: estagiosSnap.size });
+    return NextResponse.json({ ok: true, affectedCount: estagioDocs.length });
   } catch (error) {
     console.error("Fecho error", error);
     return NextResponse.json({ error: "Erro interno do servidor." }, { status: 500 });

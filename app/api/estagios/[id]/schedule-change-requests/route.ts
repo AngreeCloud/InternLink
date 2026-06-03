@@ -141,7 +141,7 @@ export async function POST(
       type: body.type,
       targetDate: body.targetDate,
       absenceType: body.absenceType,
-      hoursAffected: Number.isFinite(body.hoursAffected) ? body.hoursAffected : 0,
+      hoursAffected: Math.max(0, Number(body.hoursAffected)) || 0,
       reason: body.reason.trim(),
       status: initialStatus,
       comments: [],

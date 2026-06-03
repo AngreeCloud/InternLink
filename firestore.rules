@@ -240,7 +240,8 @@ service cloud.firestore {
       allow read: if isSignedIn() && (
         resource.data.professorId == request.auth.uid ||
         resource.data.tutorId == request.auth.uid ||
-        resource.data.userId == request.auth.uid
+        resource.data.userId == request.auth.uid ||
+        resource.data.studentId == request.auth.uid
       );
     }
 

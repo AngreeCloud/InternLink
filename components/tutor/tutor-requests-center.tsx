@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { CalendarX2 } from "lucide-react";
 import { ScheduleChangeRequestsList, type EstagioMetaLite } from "@/components/estagios/schedule-change-requests-list";
 import type { ScheduleChangeRequest, ScheduleChangeRequestType } from "@/lib/estagios/schedule-change-requests";
+import { ComunicadoCard } from "@/components/estagios/comunicado-card";
 import { TutorFechoEmpresaModal } from "./tutor-fecho-empresa-modal";
 
 const SCHEDULE_TYPES: ScheduleChangeRequestType[] = ["future_absence", "early_termination"];
@@ -157,6 +158,16 @@ export function TutorRequestsCenter() {
     };
   }, [estagiosById, requests]);
 
+  const comunicados = useMemo(() => {
+    const map = new Map<string, ScheduleChangeRequest>();
+    for (const r of requests) {
+      if (r.type !== "company_closure") continue;
+      const key = `${r.targetDate}|${r.reason}`;
+      if (!map.has(key)) map.set(key, r);
+    }
+    return Array.from(map.values());
+  }, [requests]);
+
   const scheduleRequests = useMemo(
     () => requests
       .filter((r) => SCHEDULE_TYPES.includes(r.type) && r.status !== "pending_professor")
@@ -199,6 +210,17 @@ export function TutorRequestsCenter() {
         </Button>
       </div>
 
+      {comunicados.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Comunicados da empresa
+          </h2>
+          {comunicados.map((c) => (
+            <ComunicadoCard key={c.id} targetDate={c.targetDate} reason={c.reason} />
+          ))}
+        </div>
+      )}
+
       <ScheduleChangeRequestsList
         requests={scheduleRequests}
         estagiosById={estagiosById}
@@ -207,6 +229,7 @@ export function TutorRequestsCenter() {
         basePath="tutor"
         emptyTitle="Sem solicitações de mudança"
         emptyDescription="Quando um aluno pedir uma falta futura, aparece aqui."
+        onRequestUpdated={() => fetchRequests(userId)}
       />
 
       {empresaId && (

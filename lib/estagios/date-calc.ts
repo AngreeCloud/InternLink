@@ -112,9 +112,8 @@ export function calcularDataFimEstimada(input: DateCalcInput): DateCalcResult {
 /**
  * Recalcula a data de fim estimada com base nas horas efetivamente realizadas.
  *
- * Ao contrário de `calcularDataFimEstimada` (que projeta a partir de dataInicio),
- * esta função projeta a partir do dia seguinte ao atual, garantindo que o estágio
- * tenha sempre dias futuros suficientes para acomodar as horas em falta.
+ * Projeta a partir de `startFrom`+1 dia (se fornecido) ou hoje+1 (fallback),
+ * garantindo que o estágio tenha sempre dias futuros suficientes.
  *
  * Se horasRestantes <= 0, retorna dataFimEstimada vazia (estágio concluído).
  */
@@ -123,8 +122,9 @@ export function recalcularDataFimEstimada(input: {
   horasRealizadas: number;
   horasDiarias: number;
   diasSemana: DiasSemana;
+  startFrom?: string; // ISO YYYY-MM-DD — project from day AFTER this
 }): DateCalcResult {
-  const { totalHoras, horasRealizadas, horasDiarias, diasSemana } = input;
+  const { totalHoras, horasRealizadas, horasDiarias, diasSemana, startFrom } = input;
 
   if (!Number.isFinite(totalHoras) || !Number.isFinite(horasRealizadas)) {
     return { dataFimEstimada: "", diasUteis: 0, horasPorDia: horasDiarias, totalHoras };
@@ -144,11 +144,17 @@ export function recalcularDataFimEstimada(input: {
     return { dataFimEstimada: "", diasUteis: 0, horasPorDia: horasDiarias, totalHoras }; // concluído
   }
 
-  const diasNecessarios = Math.ceil(horasRestantes / horasDiarias);
+  const diasNecessarios = Math.ceil(horasRestantes / horasDiarias) + 1; // +1 día extra para garantir horas completas
 
-  // Projetar a partir do dia seguinte ao atual
-  const hoje = new Date();
-  const cursor = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1);
+  // Projetar a partir do dia seguinte a startFrom (ou hoje+1 se não fornecido)
+  let cursor: Date;
+  if (startFrom) {
+    const [y, m, d] = startFrom.split("-").map(Number);
+    cursor = new Date(y, m - 1, d + 1);
+  } else {
+    const hoje = new Date();
+    cursor = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1);
+  }
   const holidays = getPortugueseHolidays(cursor.getFullYear(), cursor.getFullYear() + 10);
   let diasUteisRestantes = diasNecessarios;
   let ultimoDiaUtil = toIsoDate(cursor);
@@ -177,6 +183,180 @@ export function recalcularDataFimEstimada(input: {
     diasUteis: diasNecessarios,
     horasPorDia: horasDiarias,
     totalHoras,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Replay de aprovações (cálculo de excesso de pushes / accumulated corrigido)
+// ---------------------------------------------------------------------------
+
+export type ReplayRequest = {
+  hoursAffected: number;
+  absenceType?: string;
+};
+
+export type ReplayResult = {
+  excessPushes: number;
+  correctAcc: number;
+  oldPushes: number;
+  newPushes: number;
+  oldAcc: number;
+  newAcc: number;
+};
+
+/**
+ * Replay das aprovações de future_absence para calcular:
+ * - oldPushes / oldAcc: quantos pushes e accumulated o código antigo teria gerado
+ *   (cada pedido usa horasPorDia, ignorando hoursAffected)
+ * - newPushes / newAcc: quantos pushes e accumulated o código corrigido gera
+ *   (pedidos parciais usam hoursAffected real)
+ *
+ * excessPushes = oldPushes - newPushes  (dias a recuar na dataFimEstimada)
+ * correctAcc   = newAcc                (accumulated corrigido)
+ */
+export function calcularReplayAbsences(
+  preAcc: number,
+  requests: ReplayRequest[],
+  horasPorDia: number,
+): ReplayResult {
+  let oldAcc = preAcc;
+  let newAcc = preAcc;
+  let oldPushes = 0;
+  let newPushes = 0;
+
+  for (const req of requests) {
+    // Old code path: sempre usava horasPorDia (hoursAffected era 0 ou ignorado)
+    oldAcc += horasPorDia;
+    while (oldAcc >= horasPorDia) {
+      oldAcc -= horasPorDia;
+      oldPushes++;
+    }
+
+    // New code path: usa hoursAffected se for partial && > 0, senão horasPorDia
+    const addedHours =
+      req.absenceType === "partial" && req.hoursAffected > 0
+        ? req.hoursAffected
+        : horasPorDia;
+    newAcc += addedHours;
+    while (newAcc >= horasPorDia) {
+      newAcc -= horasPorDia;
+      newPushes++;
+    }
+  }
+
+  return {
+    excessPushes: oldPushes - newPushes,
+    correctAcc: newAcc,
+    oldPushes,
+    newPushes,
+    oldAcc,
+    newAcc,
+  };
+}
+
+/**
+ * Versão por fórmula fechada do replay — deve dar o mesmo resultado que
+ * calcularReplayAbsences. Útil para verificação cruzada em testes.
+ */
+export function calcularReplayFormula(
+  preAcc: number,
+  requests: ReplayRequest[],
+  horasPorDia: number,
+): Pick<ReplayResult, "excessPushes" | "correctAcc"> {
+  let oldTotal = 0;
+  let newTotal = 0;
+
+  for (const req of requests) {
+    oldTotal += horasPorDia;
+    const addedHours =
+      req.absenceType === "partial" && req.hoursAffected > 0
+        ? req.hoursAffected
+        : horasPorDia;
+    newTotal += addedHours;
+  }
+
+  const oldPushes = Math.floor((preAcc + oldTotal) / horasPorDia);
+  const newPushes = Math.floor((preAcc + newTotal) / horasPorDia);
+
+  return {
+    excessPushes: Math.max(0, oldPushes - newPushes),
+    correctAcc: (preAcc + newTotal) % horasPorDia,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Cálculo de data fim com ausências (walk real dia-a-dia)
+// ---------------------------------------------------------------------------
+
+export type AusenciaRequest = {
+  targetDate: string;
+  absenceType?: string;
+  hoursAffected: number;
+};
+
+export type DataFimComAusenciasResult = {
+  dataFim: string;
+  diasUteis: number;
+  horasAcumInicio: number;
+  horasAcumFim: number;
+};
+
+/**
+ * Projeta a data de fim considerando ausências aprovadas.
+ *
+ * Caminha dia-a-dia a partir de `startFrom+1`, acumulando horas reais:
+ *   - partial absence: usa `hoursAffected`
+ *   - total absence / company_closure: usa 0h
+ *   - sem ausência: usa `horasDiarias`
+ *
+ * Para quando accumulated >= totalHoras.
+ */
+export function calcularDataFimComAusencias(input: {
+  totalHoras: number;
+  horasRealizadas: number;
+  horasDiarias: number;
+  diasSemana: DiasSemana;
+  startFrom: string;
+  requests: AusenciaRequest[];
+}): DataFimComAusenciasResult {
+  const { totalHoras, horasRealizadas, horasDiarias, diasSemana, startFrom, requests } = input;
+
+  const absMap = new Map<string, number>();
+  for (const r of requests) {
+    const isPartial = r.absenceType === "partial" && r.hoursAffected > 0;
+    absMap.set(r.targetDate, isPartial ? r.hoursAffected : 0);
+  }
+
+  const [y, m, d] = startFrom.split("-").map(Number);
+  const cursor = new Date(y, m - 1, d + 1);
+  const holidays = getPortugueseHolidays(cursor.getFullYear(), cursor.getFullYear() + 10);
+
+  let acc = horasRealizadas;
+  let days = 0;
+  let lastDate = "";
+  let accInicio = 0;
+
+  while (acc < totalHoras) {
+    const iso = toIsoDate(cursor);
+    const key = WEEKDAY_KEYS[cursor.getDay()] as keyof DiasSemana;
+
+    if (diasSemana[key] && !holidays.has(iso)) {
+      const h = absMap.has(iso) ? (absMap.get(iso) as number) : horasDiarias;
+      accInicio = acc;
+      acc += h;
+      days++;
+      lastDate = iso;
+      if (acc >= totalHoras) break;
+    }
+
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return {
+    dataFim: lastDate,
+    diasUteis: days,
+    horasAcumInicio: accInicio,
+    horasAcumFim: acc,
   };
 }
 

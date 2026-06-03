@@ -7,7 +7,11 @@ import {
 } from "@/lib/estagios/estagio-access";
 import {
   recalcularDataFimEstimada,
+  calcularDataFimComAusencias,
+  calcularReplayAbsences,
   type DiasSemana,
+  type AusenciaRequest,
+  type ReplayRequest,
 } from "@/lib/estagios/date-calc";
 
 export const runtime = "nodejs";
@@ -62,18 +66,57 @@ export async function POST(
       dom: rawDias.dom ?? false,
     };
 
-    // Recalcular
+    // Buscar schedule_change_requests aprovados
+    const scrSnap = await estagioRef.collection("schedule_change_requests").get();
+    const ausenciaRequests: AusenciaRequest[] = [];
+    const replayRequests: ReplayRequest[] = [];
+    scrSnap.forEach((d) => {
+      const data = d.data() as Record<string, unknown>;
+      if (data.status === "approved") {
+        const req: AusenciaRequest = {
+          targetDate: (data.targetDate as string) || d.id,
+          absenceType: data.absenceType as string | undefined,
+          hoursAffected: Number(data.hoursAffected ?? 0),
+        };
+        ausenciaRequests.push(req);
+        replayRequests.push({
+          absenceType: req.absenceType,
+          hoursAffected: req.hoursAffected,
+        });
+      }
+    });
+
+    // Recalcular data fim considerando ausências
+    const currentDataFim = estagioData.dataFimEstimada as string | undefined;
+    const storedAcc = Number(estagioData.horasAusenciaAcumuladas ?? 0);
     const result = recalcularDataFimEstimada({
       totalHoras,
       horasRealizadas,
       horasDiarias,
       diasSemana,
+      startFrom: ultimaPresenca,
     });
 
-    let newDataFim = result.dataFimEstimada;
+    // Data com ausências (walk real)
+    const ausenciasResult = calcularDataFimComAusencias({
+      totalHoras,
+      horasRealizadas,
+      horasDiarias,
+      diasSemana,
+      startFrom: ultimaPresenca,
+      requests: ausenciaRequests,
+    });
+
+    let newDataFim = ausenciasResult.dataFim || result.dataFimEstimada;
     if (!newDataFim && horasRealizadas >= totalHoras) {
       newDataFim = ultimaPresenca;
     }
+
+    // horasAusenciaAcumuladas corrigido via replay
+    const replayResult = storedAcc > 0
+      ? calcularReplayAbsences(storedAcc, replayRequests, horasDiarias)
+      : null;
+    const correctAcc = replayResult?.correctAcc ?? 0;
 
     console.log("[recalcular-data-fim]", {
       estagioId: id,
@@ -81,12 +124,13 @@ export async function POST(
       horasRealizadas,
       horasDiarias,
       rawDiasKeys: Object.keys(rawDias).filter((k) => rawDias[k]),
-      result,
+      rawResult: result,
+      ausenciasResult,
       newDataFim,
+      correctAcc,
     });
 
     if (!newDataFim) {
-      // Falha ao obter uma nova dataFim
       return NextResponse.json({
         ok: true,
         recalculado: false,
@@ -95,28 +139,33 @@ export async function POST(
       });
     }
 
-    // Só atualizar Firestore se o valor mudou (evita cascatas de snapshot).
-    const currentDataFim = estagioData.dataFimEstimada as string | undefined;
-    if (newDataFim === currentDataFim) {
+    // Só atualizar se algo mudou
+    if (newDataFim === currentDataFim && correctAcc === storedAcc) {
       return NextResponse.json({
         ok: true,
         recalculado: false,
-        motivo: "Data fim já está correta.",
+        motivo: "Data fim e accumulated já estão corretos.",
         dataFimEstimada: newDataFim,
       });
     }
 
-    await estagioRef.update({
+    const updateData: Record<string, unknown> = {
       dataFimEstimada: newDataFim,
       horasRealizadas,
       updatedAt: FieldValue.serverTimestamp(),
-    });
+    };
+    if (replayResult && correctAcc !== storedAcc) {
+      updateData.horasAusenciaAcumuladas = correctAcc;
+    }
+
+    await estagioRef.update(updateData);
 
     return NextResponse.json({
       ok: true,
       recalculado: true,
       dataFimEstimada: newDataFim,
-      diasUteis: result.diasUteis || Math.ceil(horasRealizadas / horasDiarias),
+      horasAusenciaAcumuladas: correctAcc,
+      diasUteis: ausenciasResult.diasUteis || result.diasUteis || Math.ceil(horasRealizadas / horasDiarias),
       horasRestantes: Math.max(0, totalHoras - horasRealizadas),
     });
   } catch (error) {
