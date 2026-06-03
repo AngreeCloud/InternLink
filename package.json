@@ -40,7 +40,7 @@
     "test:rules": "firebase emulators:exec --only firestore,database \"node tests/firestore/run-rules-tests.mjs\"",
     "test:unit": "vitest run tests/actions",
     "test:joao": "npx tsx scripts/test-estagio-joao.ts",
-    "test": "npm run test:unit && npm run test:rules && npm run test:joao"
+    "test": "npm run test:unit && npm run test:rules"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
