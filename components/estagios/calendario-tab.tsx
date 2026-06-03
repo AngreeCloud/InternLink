@@ -49,6 +49,7 @@ import { calcTooltipDayInfo } from "@/lib/estagios/calendar-tooltip";
 import { getPortugueseHolidaysMap } from "@/lib/estagios/pt-holidays";
 import { ScheduleChangeRequestModal } from "./schedule-change-request-modal";
 import { ScheduleChangeRequestThread } from "./schedule-change-request-thread";
+import { ComunicadoCard } from "./comunicado-card";
 import { TerminoAntecipadoConfirmationModal } from "./termino-antecipado-confirmation-modal";
 
 type Props = {
@@ -301,6 +302,16 @@ export function CalendarioTab({
     }
     return requests;
   }, [requests, currentUserRole]);
+
+  const comunicados = useMemo(
+    () => visibleRequests.filter((r) => r.type === "company_closure"),
+    [visibleRequests]
+  );
+
+  const regularRequests = useMemo(
+    () => visibleRequests.filter((r) => r.type !== "company_closure"),
+    [visibleRequests]
+  );
 
   const requestsByDate = useMemo(() => {
     const map = new Map<string, ScheduleChangeRequest>();
@@ -989,25 +1000,37 @@ export function CalendarioTab({
         </div>
       ) : null}
 
+      {/* Comunicados */}
+      {comunicados.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Comunicados
+          </h3>
+          {comunicados.map((c) => (
+            <ComunicadoCard key={c.id} targetDate={c.targetDate} reason={c.reason} />
+          ))}
+        </div>
+      )}
+
       {/* Requests list */}
-      {visibleRequests.length > 0 && (
+      {regularRequests.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">
               Pedidos de alteração{" "}
               <span className="font-normal text-muted-foreground">
-                ({visibleRequests.length})
+                ({regularRequests.length})
               </span>
             </h3>
             <div className="flex gap-2 text-xs text-muted-foreground">
-              {visibleRequests.filter((r) => r.status === "pending_professor" || r.status === "pending_tutor").length > 0 && (
+              {regularRequests.filter((r) => r.status === "pending_professor" || r.status === "pending_tutor").length > 0 && (
                 <Badge variant="secondary">
-                  {visibleRequests.filter((r) => r.status === "pending_professor" || r.status === "pending_tutor").length} pendente{visibleRequests.filter((r) => r.status === "pending_professor" || r.status === "pending_tutor").length !== 1 ? "s" : ""}
+                  {regularRequests.filter((r) => r.status === "pending_professor" || r.status === "pending_tutor").length} pendente{regularRequests.filter((r) => r.status === "pending_professor" || r.status === "pending_tutor").length !== 1 ? "s" : ""}
                 </Badge>
               )}
             </div>
           </div>
-          {visibleRequests.map((req) => (
+          {regularRequests.map((req) => (
             <ScheduleChangeRequestThread
               key={req.id}
               request={req}
@@ -1021,7 +1044,7 @@ export function CalendarioTab({
         </div>
       )}
 
-      {requests.length === 0 && !loading && isAluno && (
+      {regularRequests.length === 0 && comunicados.length === 0 && !loading && isAluno && (
         <div className="rounded-md border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
           Nenhum pedido submetido. Clica num dia com horas em falta (passado) ou
           num dia futuro para justificar ou alterar o horário.

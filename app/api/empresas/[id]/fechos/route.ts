@@ -127,14 +127,12 @@ export async function POST(
         studentId: estagio.alunoId,
         professorId: estagio.professorId || "",
         tutorId: estagio.tutorId || "",
-        type: "future_absence",
+        type: "company_closure",
         targetDate,
         absenceType: "total",
-        hoursAffected: estagio.horasPorDia || 0,
+        hoursAffected: 0,
         reason: reason || "Dia de encerramento da empresa / Tolerância de ponto",
         status: "approved",
-        tutorDecision: "approved",
-        professorDecision: "approved", // auto approved
         comments: [{
           authorId: sessionUid,
           authorRole: "tutor",
