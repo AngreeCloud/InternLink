@@ -147,12 +147,13 @@ export function OverviewTab({ estagio, participants }: Props) {
           let totalHours = 0;
           snap.forEach((doc) => {
             const data = doc.data() as { absenceType?: string; hoursAffected?: number };
-            if (data.absenceType === "partial" && typeof data.hoursAffected === "number") {
+            if (typeof data.hoursAffected === "number" && data.hoursAffected > 0) {
               totalHours += data.hoursAffected;
             } else if (estagio.horasPorDia) {
               totalHours += estagio.horasPorDia;
             }
           });
+          setPendingAbsenceHours(totalHours);
           setPendingAbsenceHours(totalHours);
         },
         (err) => {

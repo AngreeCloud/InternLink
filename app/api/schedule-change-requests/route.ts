@@ -72,6 +72,7 @@ export async function GET(request: NextRequest) {
             tutorId: (data.tutorId as string) ?? "",
             type: (data.type as string) ?? "",
             targetDate: (data.targetDate as string) ?? "",
+            absenceType: data.absenceType as string | undefined,
             hoursAffected: Number(data.hoursAffected) || 0,
             reason: (data.reason as string) ?? "",
             status: (data.status as string) ?? "",

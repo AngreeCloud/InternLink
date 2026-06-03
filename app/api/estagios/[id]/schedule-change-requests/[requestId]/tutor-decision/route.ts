@@ -107,7 +107,7 @@ export async function PATCH(
         const diasSemana = normalizeDiasSemana(estagioData.diasSemana);
         const horasPorDia = (estagioData.horasPorDia as number) || 0;
         
-        let addedHours = req.absenceType === "partial" && typeof req.hoursAffected === "number"
+        let addedHours = typeof req.hoursAffected === "number" && req.hoursAffected > 0
           ? req.hoursAffected
           : horasPorDia;
 
