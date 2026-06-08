@@ -304,7 +304,7 @@ export function CalendarioTab({
   }, [requests, currentUserRole]);
 
   const comunicados = useMemo(
-    () => visibleRequests.filter((r) => r.type === "company_closure"),
+    () => visibleRequests.filter((r) => r.type === "company_closure" && r.status === "approved"),
     [visibleRequests]
   );
 

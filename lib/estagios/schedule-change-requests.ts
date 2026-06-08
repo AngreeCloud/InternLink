@@ -21,7 +21,8 @@ export type ScheduleChangeRequestStatus =
   | "approved"
   | "rejected"
   | "cancelled"
-  | "acknowledged";
+  | "acknowledged"
+  | "expired";
 
 export type RequestComment = {
   authorId: string;
@@ -268,6 +269,8 @@ export function labelForStatus(status: ScheduleChangeRequestStatus, requestType?
       return "Cancelado";
     case "acknowledged":
       return "Tomado conhecimento";
+    case "expired":
+      return "Expirado";
   }
 }
 

@@ -81,6 +81,7 @@ export async function GET() {
         localidade: data.localidade as string | undefined,
         distrito: data.distrito as string | undefined,
         logoUrl: data.logoUrl as string | undefined,
+        nif: data.nif as string | undefined,
         ativa: data.ativa as boolean,
         tutorIds: (data.tutorIds as string[]) ?? [],
         empresaGrants: (data.empresaGrants as Record<string, "read" | "write"> | undefined) ?? null,

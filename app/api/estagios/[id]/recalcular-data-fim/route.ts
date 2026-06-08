@@ -66,13 +66,22 @@ export async function POST(
       dom: rawDias.dom ?? false,
     };
 
-    // Buscar schedule_change_requests aprovados
+    // Safeguard: não projetar horas em dias úteis passados não preenchidos
+    const hoje = new Date();
+    const ontem = new Date(hoje);
+    ontem.setDate(ontem.getDate() - 1);
+    const ontemStr = `${ontem.getFullYear()}-${String(ontem.getMonth() + 1).padStart(2, "0")}-${String(ontem.getDate()).padStart(2, "0")}`;
+    const startFromProjecao = ultimaPresenca < ontemStr ? ontemStr : ultimaPresenca;
+
+    // Buscar schedule_change_requests aprovados (incluindo company_closure expirados)
     const scrSnap = await estagioRef.collection("schedule_change_requests").get();
     const ausenciaRequests: AusenciaRequest[] = [];
     const replayRequests: ReplayRequest[] = [];
     scrSnap.forEach((d) => {
       const data = d.data() as Record<string, unknown>;
-      if (data.status === "approved") {
+      const isApproved = data.status === "approved";
+      const isExpiredClosure = data.type === "company_closure" && data.status === "expired";
+      if (isApproved || isExpiredClosure) {
         const req: AusenciaRequest = {
           targetDate: (data.targetDate as string) || d.id,
           absenceType: data.absenceType as string | undefined,
@@ -86,6 +95,27 @@ export async function POST(
       }
     });
 
+    // Expirar comunicados da empresa cuja data já passou
+    const hojeStr = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
+    const expiredBatch = db.batch();
+    let hasExpired = false;
+    scrSnap.forEach((d) => {
+      const data = d.data() as Record<string, unknown>;
+      if (data.type === "company_closure" && data.status === "approved") {
+        const targetDate = (data.targetDate as string) || d.id;
+        if (targetDate < hojeStr) {
+          expiredBatch.update(d.ref, {
+            status: "expired",
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          hasExpired = true;
+        }
+      }
+    });
+    if (hasExpired) {
+      await expiredBatch.commit();
+    }
+
     // Recalcular data fim considerando ausências
     const currentDataFim = estagioData.dataFimEstimada as string | undefined;
     const storedAcc = Number(estagioData.horasAusenciaAcumuladas ?? 0);
@@ -94,7 +124,7 @@ export async function POST(
       horasRealizadas,
       horasDiarias,
       diasSemana,
-      startFrom: ultimaPresenca,
+      startFrom: startFromProjecao,
     });
 
     // Data com ausências (walk real)
@@ -103,7 +133,7 @@ export async function POST(
       horasRealizadas,
       horasDiarias,
       diasSemana,
-      startFrom: ultimaPresenca,
+      startFrom: startFromProjecao,
       requests: ausenciaRequests,
     });
 

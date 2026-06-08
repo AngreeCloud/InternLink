@@ -161,7 +161,7 @@ export function TutorRequestsCenter() {
   const comunicados = useMemo(() => {
     const map = new Map<string, ScheduleChangeRequest>();
     for (const r of requests) {
-      if (r.type !== "company_closure") continue;
+      if (r.type !== "company_closure" || r.status === "expired") continue;
       const key = `${r.targetDate}|${r.reason}`;
       if (!map.has(key)) map.set(key, r);
     }
