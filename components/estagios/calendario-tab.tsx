@@ -317,7 +317,7 @@ export function CalendarioTab({
     const map = new Map<string, ScheduleChangeRequest>();
     for (const r of visibleRequests) {
       const existing = map.get(r.targetDate);
-      if (!existing || ["approved", "pending_tutor", "pending_professor"].includes(r.status)) {
+      if (!existing || ["approved", "pending_tutor", "pending_professor", "expired"].includes(r.status)) {
         map.set(r.targetDate, r);
       }
     }
@@ -454,7 +454,8 @@ export function CalendarioTab({
       req &&
       (req.status === "pending_professor" ||
         req.status === "pending_tutor" ||
-        req.status === "approved")
+        req.status === "approved" ||
+        req.status === "expired")
     ) {
       return;
     }
@@ -540,7 +541,7 @@ export function CalendarioTab({
       return isoToDate(iso);
     });
   const approvedReqDates = [...requestsByDate.entries()]
-    .filter(([, r]) => r.status === "approved" || r.status === "acknowledged")
+    .filter(([, r]) => r.status === "approved" || r.status === "acknowledged" || r.status === "expired")
     .map(([iso]) => {
       return isoToDate(iso);
     });

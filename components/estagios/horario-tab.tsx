@@ -99,7 +99,7 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
           const dates = new Set<string>();
           snap.forEach((d) => {
             const req = d.data() as ScheduleChangeRequest;
-            if ((req.type === "future_absence" || req.type === "company_closure") && req.status === "approved") {
+            if ((req.type === "future_absence" || req.type === "company_closure") && (req.status === "approved" || req.status === "expired")) {
               if (req.targetDate) dates.add(req.targetDate);
             }
           });
