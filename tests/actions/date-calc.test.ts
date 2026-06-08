@@ -312,6 +312,35 @@ describe("recalcularDataFimEstimada — full pipeline", () => {
         realFim: 403,
       },
     },
+
+    // ════════════════════════════════════════════════════════════════════
+    // CASO PÓS-PATCH: 260h realizadas, 4 ausências (sem closure Jun 5,
+    // que está antes do startFromProjecao). startFrom=Jun 8 para
+    // simular o safeguard que cap ultimaPresenca a ontem.
+    //   Walk: Jun 9 a Jul 7 = 20 dias, acum 392→400 (exactas).
+    // ════════════════════════════════════════════════════════════════════
+    {
+      name: "PÓS-PATCH: 260h, 4 ausências, startFrom=Jun 8 → Jul 7 com 400h exactas",
+      totalHoras: 400, horasRealizadas: 260, horasDiarias: 8, diasSemana: segSex, startFrom: "2026-06-08",
+      requests: [
+        { targetDate: "2026-06-16", isPartial: true, hoursAffected: 4 },
+        { targetDate: "2026-06-23", isPartial: true, hoursAffected: 4 },
+        { targetDate: "2026-06-24", isPartial: false, hoursAffected: 0 },
+        { targetDate: "2026-06-30", isPartial: true, hoursAffected: 4 },
+      ],
+      preAcc: 7,
+      guardCurrentDate: null,
+      want: {
+        rawDate: "2026-07-06",
+        diasUteis: 19,
+        excessPushes: 1,
+        correctAcc: 3,
+        realDate: "2026-07-07",
+        realDays: 20,
+        realInicio: 392,
+        realFim: 400,
+      },
+    },
   ];
 
   for (const c of cases) {

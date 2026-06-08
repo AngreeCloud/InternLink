@@ -9,6 +9,7 @@ import Link from "next/link";
 type EmpresaItem = {
   id: string;
   nome: string;
+  nif?: string;
   localidade?: string;
   distrito?: string;
   setor?: string;
@@ -51,6 +52,7 @@ export function EmpresasPage({ basePath }: { basePath: string }) {
     if (!q) return true;
     return (
       e.nome.toLowerCase().includes(q) ||
+      (e.nif || "").toLowerCase().includes(q) ||
       (e.localidade || "").toLowerCase().includes(q) ||
       (e.setor || "").toLowerCase().includes(q)
     );

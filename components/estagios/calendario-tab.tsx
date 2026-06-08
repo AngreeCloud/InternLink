@@ -304,7 +304,7 @@ export function CalendarioTab({
   }, [requests, currentUserRole]);
 
   const comunicados = useMemo(
-    () => visibleRequests.filter((r) => r.type === "company_closure"),
+    () => visibleRequests.filter((r) => r.type === "company_closure" && r.status === "approved"),
     [visibleRequests]
   );
 
@@ -317,7 +317,7 @@ export function CalendarioTab({
     const map = new Map<string, ScheduleChangeRequest>();
     for (const r of visibleRequests) {
       const existing = map.get(r.targetDate);
-      if (!existing || ["approved", "pending_tutor", "pending_professor"].includes(r.status)) {
+      if (!existing || ["approved", "pending_tutor", "pending_professor", "expired"].includes(r.status)) {
         map.set(r.targetDate, r);
       }
     }
@@ -329,7 +329,7 @@ export function CalendarioTab({
   function effectiveHoursForDay(iso: string): number {
     const req = requestsByDate.get(iso);
     if (!req) return horasDiarias;
-    const activeStatuses = ["pending_professor", "pending_tutor", "approved", "acknowledged"];
+    const activeStatuses = ["pending_professor", "pending_tutor", "approved", "acknowledged", "expired"];
     if (!activeStatuses.includes(req.status)) return horasDiarias;
     if (req.absenceType === "total") return 0;
     if (req.absenceType === "partial" && typeof req.hoursAffected === "number") {
@@ -454,7 +454,8 @@ export function CalendarioTab({
       req &&
       (req.status === "pending_professor" ||
         req.status === "pending_tutor" ||
-        req.status === "approved")
+        req.status === "approved" ||
+        req.status === "expired")
     ) {
       return;
     }
@@ -540,7 +541,7 @@ export function CalendarioTab({
       return isoToDate(iso);
     });
   const approvedReqDates = [...requestsByDate.entries()]
-    .filter(([, r]) => r.status === "approved" || r.status === "acknowledged")
+    .filter(([, r]) => r.status === "approved" || r.status === "acknowledged" || r.status === "expired")
     .map(([iso]) => {
       return isoToDate(iso);
     });
@@ -908,7 +909,7 @@ export function CalendarioTab({
                 <Card
                   key={day.iso}
                   className={`transition-colors ${hasNoHours ? "border-amber-400 bg-amber-50/50 dark:border-amber-600 dark:bg-amber-950/30" : ""} ${req ? "border-l-4" : ""} ${
-                    req?.status === "approved" || req?.status === "acknowledged"
+                    req?.status === "approved" || req?.status === "acknowledged" || req?.status === "expired"
                       ? "border-l-emerald-500"
                       : req?.status === "rejected"
                         ? "border-l-red-400"
