@@ -86,6 +86,7 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
     originalEnd && originalEnd > dataFim ? originalEnd : dataFim;
 
   const [fechoExcludedDates, setFechoExcludedDates] = useState<Set<string>>(new Set());
+  const [partialAbsenceDates, setPartialAbsenceDates] = useState<Map<string, number>>(new Map());
 
   useEffect(() => {
     let unsub: (() => void) | undefined;
@@ -96,14 +97,25 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
       unsub = onSnapshot(
         collection(db, "estagios", estagioId, "schedule_change_requests"),
         (snap) => {
-          const dates = new Set<string>();
+          const fullExclusion = new Set<string>();
+          const partial = new Map<string, number>();
           snap.forEach((d) => {
             const req = d.data() as ScheduleChangeRequest;
-            if ((req.type === "future_absence" || req.type === "company_closure") && (req.status === "approved" || req.status === "expired")) {
-              if (req.targetDate) dates.add(req.targetDate);
+            if (req.status !== "approved" && req.status !== "expired") return;
+            if (!req.targetDate) return;
+            if (req.type === "company_closure") {
+              fullExclusion.add(req.targetDate);
+            } else if (req.type === "future_absence") {
+              if (req.absenceType === "partial") {
+                partial.set(req.targetDate, req.hoursAffected);
+              } else {
+                fullExclusion.add(req.targetDate);
+              }
             }
           });
-          setFechoExcludedDates(dates);
+          for (const date of fullExclusion) partial.delete(date);
+          setFechoExcludedDates(fullExclusion);
+          setPartialAbsenceDates(partial);
         },
         (err) => {
           if ((err as { code?: string }).code !== "permission-denied") {
@@ -116,7 +128,7 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
       cancelled = true;
       unsub?.();
     };
-  }, [estagioId]);
+  }, [estagioId, setPartialAbsenceDates]);
 
   const workDays = useMemo(
     () => listWorkDays(dataInicio, effectiveDataFim, dias, fechoExcludedDates),
@@ -483,6 +495,8 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
                     const draft = getDraft(day);
                     const persisted = presencas[day.iso];
                     const isFuture = day.iso > todayIso;
+                    const affectedHours = partialAbsenceDates.get(day.iso);
+                    const expected = affectedHours != null ? Math.max(0, horasDiarias - affectedHours) : horasDiarias;
                     const error = errors[day.iso];
                     const isSaving = saving === day.iso;
                     const isSavedFlash = savedFlash === day.iso;
@@ -497,7 +511,7 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
                     return (
                       <div
                         key={day.iso}
-                        className="grid grid-cols-1 gap-2 rounded-md border bg-card px-3 py-3 sm:grid-cols-[180px_1fr_1fr_auto] sm:items-center"
+                        className={`grid grid-cols-1 gap-2 rounded-md border bg-card px-3 py-3 sm:grid-cols-[180px_1fr_1fr_auto] sm:items-center${partialAbsenceDates.has(day.iso) ? " border-l-amber-500" : ""}`}
                       >
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -507,9 +521,12 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
                             </p>
                             {isFuture ? (
                               <p className="text-[11px] text-muted-foreground">Dia futuro</p>
-                            ) : horasDiarias > 0 ? (
+                            ) : expected > 0 ? (
                               <p className="text-[11px] text-muted-foreground">
-                                Previstas: {horasDiarias}h
+                                Previstas: {expected}h
+                                {partialAbsenceDates.has(day.iso) && (
+                                  <span className="ml-1 text-amber-600">(ausência parcial)</span>
+                                )}
                               </p>
                             ) : null}
                           </div>
