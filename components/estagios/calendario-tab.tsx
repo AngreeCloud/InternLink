@@ -329,7 +329,7 @@ export function CalendarioTab({
   function effectiveHoursForDay(iso: string): number {
     const req = requestsByDate.get(iso);
     if (!req) return horasDiarias;
-    const activeStatuses = ["pending_professor", "pending_tutor", "approved", "acknowledged"];
+    const activeStatuses = ["pending_professor", "pending_tutor", "approved", "acknowledged", "expired"];
     if (!activeStatuses.includes(req.status)) return horasDiarias;
     if (req.absenceType === "total") return 0;
     if (req.absenceType === "partial" && typeof req.hoursAffected === "number") {
@@ -908,7 +908,7 @@ export function CalendarioTab({
                 <Card
                   key={day.iso}
                   className={`transition-colors ${hasNoHours ? "border-amber-400 bg-amber-50/50 dark:border-amber-600 dark:bg-amber-950/30" : ""} ${req ? "border-l-4" : ""} ${
-                    req?.status === "approved" || req?.status === "acknowledged"
+                    req?.status === "approved" || req?.status === "acknowledged" || req?.status === "expired"
                       ? "border-l-emerald-500"
                       : req?.status === "rejected"
                         ? "border-l-red-400"

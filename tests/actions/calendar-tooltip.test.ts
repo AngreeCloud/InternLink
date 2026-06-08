@@ -173,6 +173,15 @@ describe("absences via requestsByDate", () => {
     });
     expect(r.acumuladas).toBe(15);
   });
+
+  it("expired total absence treated as 0h", () => {
+    const r = fixt("2026-05-14", {
+      workDays: [{ iso: "2026-05-12" }, { iso: "2026-05-13" }, { iso: "2026-05-14" }],
+      requestsByDate: reqs([["2026-05-13", { status: "expired", absenceType: "total", hoursAffected: 0 }]]),
+      horasDiarias: 7.5,
+    });
+    expect(r.acumuladas).toBe(15);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -204,6 +213,13 @@ describe("previstasDia", () => {
       requestsByDate: reqs([["2026-05-13", { status: "rejected", absenceType: "total" }]]),
     });
     expect(r.previstasDia).toBe(7.5);
+  });
+
+  it("returns 0 for expired total absence", () => {
+    const r = fixt("2026-05-13", {
+      requestsByDate: reqs([["2026-05-13", { status: "expired", absenceType: "total", hoursAffected: 0 }]]),
+    });
+    expect(r.previstasDia).toBe(0);
   });
 });
 

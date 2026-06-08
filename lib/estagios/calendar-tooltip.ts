@@ -11,7 +11,7 @@ type RequestInfo = {
   hoursAffected?: number;
 };
 
-const ACTIVE_STATUSES = ["pending_professor", "pending_tutor", "approved", "acknowledged"];
+const ACTIVE_STATUSES = ["pending_professor", "pending_tutor", "approved", "acknowledged", "expired"];
 
 function dayEffectiveHours(
   iso: string,
