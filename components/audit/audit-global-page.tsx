@@ -75,6 +75,7 @@ export function AuditGlobalPage() {
   const [hasMore, setHasMore] = useState(false);
   const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
   const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot | null)[]>([]);
+  const [nameMap, setNameMap] = useState<Record<string, string>>({});
   const PAGE_SIZE = 20;
 
   const fetchLogs = useCallback(async (dir: "next" | "prev" | "reset" = "reset") => {
@@ -121,6 +122,22 @@ export function AuditGlobalPage() {
           metadata: data.metadata as Record<string, unknown> | undefined,
         };
       });
+
+      const uniqueUids = [...new Set(parsed.map((l) => l.changedBy).filter(Boolean))];
+      if (uniqueUids.length > 0) {
+        try {
+          const res = await fetch(`/api/audit/resolve-users?uids=${uniqueUids.join(",")}`);
+          if (res.ok) {
+            const map = await res.json() as Record<string, string>;
+            setNameMap(map);
+            parsed.forEach((l) => { l.changedByName = map[l.changedBy] || l.changedBy; });
+          }
+        } catch {
+          // fallback — mostra UID
+        }
+      } else {
+        setNameMap({});
+      }
 
       setLogs(parsed);
       setHasMore(newHasMore);
@@ -262,6 +279,9 @@ export function AuditGlobalPage() {
                         : "—"}
                     </span>
                   </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    por {log.changedByName || log.changedBy}
+                  </p>
                 </div>
               ))}
             </div>

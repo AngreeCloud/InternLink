@@ -20,7 +20,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { collection, doc, getDocs, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 import { useSchoolAdmin } from "@/components/school-admin/school-admin-context";
 import { AlertTriangle, Trash2 } from "lucide-react";
@@ -402,37 +402,16 @@ export function ActiveProfessorsSection() {
     setActionSuccess("");
 
     try {
-      const db = await getDbRuntime();
-
-      // Remover de todos os cursos
-      const affectedCourses = courses.filter((c) =>
-        (c.teacherIds || []).includes(systemRemovalProfessor.id)
-      );
-
-      for (const courseData of affectedCourses) {
-        const updatedTeacherIds = (courseData.teacherIds || []).filter((id) => id !== systemRemovalProfessor.id);
-        const updatedSupportingIds = (courseData.supportingTeacherIds || []).filter(
-          (id) => id !== systemRemovalProfessor.id
-        );
-        const updatedDirectorId =
-          courseData.courseDirectorId === systemRemovalProfessor.id ? null : courseData.courseDirectorId;
-
-        await updateDoc(doc(db, "courses", courseData.id), {
-          teacherIds: updatedTeacherIds,
-          courseDirectorId: updatedDirectorId,
-          supportingTeacherIds: updatedSupportingIds,
-          updatedAt: serverTimestamp(),
-        });
-      }
-
-      // Atualizar utilizador para removido
-      await updateDoc(doc(db, "users", systemRemovalProfessor.id), {
-        estado: "removido",
-        schoolId: null,
-        courseId: null,
-        reviewedAt: serverTimestamp(),
-        reviewedBy: userId,
+      const res = await fetch("/api/school-admin/remove-professor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ professorId: systemRemovalProfessor.id }),
       });
+
+      if (!res.ok) {
+        const errData = await res.json() as { error?: string };
+        throw new Error(errData.error || "Erro ao remover professor");
+      }
 
       setActionSuccess(`${systemRemovalProfessor.name} removido do sistema da escola.`);
       setSystemRemovalProfessor(null);

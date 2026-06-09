@@ -71,6 +71,21 @@ export function AuditBlock({
             metadata: data.metadata as Record<string, unknown> | undefined,
           };
         });
+
+        const uniqueUids = [...new Set(logs.map((l) => l.changedBy).filter(Boolean))];
+        if (uniqueUids.length > 0) {
+          try {
+            const res = await fetch(`/api/audit/resolve-users?uids=${uniqueUids.join(",")}`);
+            if (res.ok) {
+              const map = await res.json() as Record<string, string>;
+              logs.forEach((l) => { l.changedByName = map[l.changedBy] || l.changedBy; });
+            }
+          } catch {
+            // fallback — mostra UID
+          }
+        }
+
+        if (!active) return;
         setRecentLogs(logs);
       } catch {
         if (!active) return;
@@ -134,7 +149,7 @@ export function AuditBlock({
                     : "—"}{" "}
                   <span className="text-foreground font-medium">{log.action}</span>
                 </span>
-                <span>por {log.changedBy}</span>
+                <span>por {log.changedByName || log.changedBy}</span>
               </div>
             ))}
           </div>
