@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { assertEstagioAccess, toApiErrorResponse, EstagioAccessError } from "@/lib/estagios/estagio-access";
 import { getNextStatus, type ScheduleChangeRequest } from "@/lib/estagios/schedule-change-requests";
+import { writeAuditLog } from "@/lib/audit/write";
 
 export const runtime = "nodejs";
 
@@ -41,6 +42,8 @@ export async function POST(
       status: transition.nextStatus,
       updatedAt: FieldValue.serverTimestamp(),
     });
+
+    writeAuditLog({ schoolId: session.estagio.schoolId as string, entityType: "schedule_change_request", entityId: requestId, entityLabel: `${req.type} ${req.targetDate}`, action: "cancel", changedBy: session.uid, summary: "Pedido cancelado pelo aluno.", metadata: { type: req.type, targetDate: req.targetDate, estagioId: id } });
 
     return NextResponse.json({ ok: true, nextStatus: transition.nextStatus });
   } catch (error) {
