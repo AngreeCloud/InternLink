@@ -8,6 +8,8 @@ import {
   DEFAULT_DIAS_SEMANA,
   type DiasSemana,
 } from "@/lib/estagios/date-calc";
+import { writeAuditLog } from "@/lib/audit/write";
+import { buildSummary } from "@/lib/audit/summaries";
 
 export const runtime = "nodejs";
 
@@ -43,9 +45,14 @@ export async function DELETE(
 ) {
   try {
     const { id } = await context.params;
-    await assertEstagioAccess(id, "director");
+    const session = await assertEstagioAccess(id, "director");
     const db = getFirebaseAdminDb();
+    const estagioTitulo = (session.estagio.titulo as string) || id;
+    const schoolId = session.estagio.schoolId as string;
     await db.collection("estagios").doc(id).delete();
+
+    writeAuditLog({ schoolId, entityType: "estagio", entityId: id, entityLabel: estagioTitulo, action: "delete", changedBy: session.uid, summary: buildSummary("estagio", "delete", estagioTitulo) });
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     const { body, status } = toApiErrorResponse(error);
@@ -176,6 +183,13 @@ export async function PATCH(
     }
 
     await db.collection("estagios").doc(id).update(updates);
+
+    const schoolId = session.estagio.schoolId as string;
+    const estTitulo = (session.estagio.titulo as string) || id;
+    const isStatusChange = body.estadoEstagio !== undefined;
+    const action = isStatusChange ? "status_change" : "update";
+
+    writeAuditLog({ schoolId, entityType: "estagio", entityId: id, entityLabel: estTitulo, action, changedBy: session.uid, summary: buildSummary("estagio", action, estTitulo), metadata: isStatusChange ? { from: session.estagio.estadoEstagio as string, to: body.estadoEstagio } : undefined });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

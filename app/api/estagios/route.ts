@@ -6,6 +6,8 @@ import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { calcularDataFimEstimada, DEFAULT_DIAS_SEMANA, type DiasSemana } from "@/lib/estagios/date-calc";
 import { ESTAGIO_TEMPLATES } from "@/lib/estagios/templates";
 import { EstagioAccessError, toApiErrorResponse } from "@/lib/estagios/estagio-access";
+import { writeAuditLog } from "@/lib/audit/write";
+import { buildSummary } from "@/lib/audit/summaries";
 
 export const runtime = "nodejs";
 
@@ -254,6 +256,8 @@ export async function POST(request: Request) {
       });
     }
     await batch.commit();
+
+    writeAuditLog({ schoolId: userData.schoolId, entityType: "estagio", entityId: estagioRef.id, entityLabel: titulo, action: "create", changedBy: uid, summary: buildSummary("estagio", "create", titulo), metadata: { alunoId, alunoNome: alunoData.nome } });
 
     return NextResponse.json({
       ok: true,
