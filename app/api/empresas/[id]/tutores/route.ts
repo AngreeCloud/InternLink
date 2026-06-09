@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { hasEmpresaAccess } from "@/lib/empresas/empresa-access";
+import { writeAuditLog } from "@/lib/audit/write";
+import { buildSummary } from "@/lib/audit/summaries";
 
 export const runtime = "nodejs";
 
@@ -175,6 +177,10 @@ export async function POST(
     });
 
     const tutorData = tutorSnap.data();
+    const tutorNome = (tutorData?.nome as string) || tutorId;
+    const empresaNome = (empresaData?.nome as string) || id;
+
+    writeAuditLog({ schoolId, entityType: "tutor", entityId: tutorId, entityLabel: tutorNome, action: "associate", changedBy: uid, summary: `Tutor ${tutorNome} associado a ${empresaNome}.`, metadata: { empresaId: id, empresaNome } });
 
     return NextResponse.json({
       ok: true,

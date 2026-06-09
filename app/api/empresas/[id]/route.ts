@@ -6,6 +6,8 @@ import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { buildEmpresaSnapshot } from "@/lib/types/empresa";
 import { hasEmpresaAccess } from "@/lib/empresas/empresa-access";
 import { validateNIF as validateNif } from "@/lib/validators/nif";
+import { writeAuditLog } from "@/lib/audit/write";
+import { buildSummary } from "@/lib/audit/summaries";
 
 export const runtime = "nodejs";
 
@@ -244,6 +246,15 @@ export async function PATCH(
 
     const updatedSnap = await db.collection("empresas").doc(id).get();
     const updatedData = updatedSnap.data();
+    const empresaNome = (currentData?.nome as string) || id;
+
+    if (body.ativa === false) {
+      writeAuditLog({ schoolId, entityType: "empresa", entityId: id, entityLabel: empresaNome, action: "archive", changedBy: uid, summary: buildSummary("empresa", "archive", empresaNome) });
+    } else if (body.ativa === true && currentData?.ativa === false) {
+      writeAuditLog({ schoolId, entityType: "empresa", entityId: id, entityLabel: empresaNome, action: "restore", changedBy: uid, summary: buildSummary("empresa", "restore", empresaNome) });
+    } else {
+      writeAuditLog({ schoolId, entityType: "empresa", entityId: id, entityLabel: empresaNome, action: "update", changedBy: uid, summary: buildSummary("empresa", "update", empresaNome) });
+    }
 
     return NextResponse.json({
       ok: true,
