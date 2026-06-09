@@ -370,6 +370,14 @@ service cloud.firestore {
 
         allow delete: if isSchoolAdminFor(schoolId);
       }
+
+      match /auditLogs/{logId} {
+        allow read: if isSchoolAdminFor(schoolId);
+        allow create: if isSchoolAdminFor(schoolId)
+          || isProfessorFor(schoolId);
+        allow delete: if isSchoolAdminFor(schoolId)
+          && request.auth.uid == resource.data.changedBy;
+      }
     }
 
     // GLOBAL COURSES COLLECTION

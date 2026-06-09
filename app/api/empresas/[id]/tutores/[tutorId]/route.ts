@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { hasEmpresaAccess } from "@/lib/empresas/empresa-access";
+import { writeAuditLog } from "@/lib/audit/write";
 
 export const runtime = "nodejs";
 
@@ -99,6 +100,9 @@ export async function PATCH(
       { merge: true }
     );
 
+    const empresaNome = (empresaData?.nome as string) || id;
+    writeAuditLog({ schoolId, entityType: "tutor", entityId: tutorId, action: "update", changedBy: uid, summary: `Dados do tutor atualizados em ${empresaNome}.`, metadata: { empresaId: id, empresaNome } });
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro inesperado";
@@ -148,6 +152,9 @@ export async function DELETE(
       updatedAt: FieldValue.serverTimestamp(),
       updatedBy: uid,
     });
+
+    const empresaNome = (empresaData?.nome as string) || id;
+    writeAuditLog({ schoolId, entityType: "tutor", entityId: tutorId, action: "disassociate", changedBy: uid, summary: `Tutor desassociado de ${empresaNome}.`, metadata: { empresaId: id, empresaNome } });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

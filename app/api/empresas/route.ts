@@ -6,6 +6,8 @@ import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { buildEmpresaSnapshot } from "@/lib/types/empresa";
 import { filterEmpresasByAccess } from "@/lib/empresas/empresa-access";
 import { validateNIF as validateNif } from "@/lib/validators/nif";
+import { writeAuditLog } from "@/lib/audit/write";
+import { buildSummary } from "@/lib/audit/summaries";
 
 export const runtime = "nodejs";
 
@@ -221,6 +223,16 @@ export async function POST(request: Request) {
     );
 
     await empresaRef.set(clean);
+
+    writeAuditLog({
+      schoolId,
+      entityType: "empresa",
+      entityId: empresaRef.id,
+      entityLabel: nome,
+      action: "create",
+      changedBy: uid,
+      summary: buildSummary("empresa", "create", nome),
+    });
 
     return NextResponse.json({
       ok: true,

@@ -13,6 +13,7 @@ import {
   shouldNotifyProfessorOnCreate,
   shouldNotifyTutorOnCreate,
 } from "@/lib/notifications/create-notification";
+import { writeAuditLog } from "@/lib/audit/write";
 
 export const runtime = "nodejs";
 
@@ -150,6 +151,8 @@ export async function POST(
     };
 
     await newRef.set(payload);
+
+    writeAuditLog({ schoolId: session.estagio.schoolId as string, entityType: "schedule_change_request", entityId: newRef.id, entityLabel: `${body.type} ${body.targetDate}`, action: "create", changedBy: session.uid, summary: `Pedido de alteração criado: ${body.type} em ${body.targetDate}.`, metadata: { type: body.type, targetDate: body.targetDate, estagioId: id } });
 
     const studentLabel = session.displayName || "O aluno";
     const notifsCol = db.collection("estagios").doc(id).collection("notifications");

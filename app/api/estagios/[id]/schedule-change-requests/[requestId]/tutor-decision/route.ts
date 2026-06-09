@@ -14,6 +14,7 @@ import {
   shouldNotifyProfessorOnTutorDecision,
   shouldNotifyStudent,
 } from "@/lib/notifications/create-notification";
+import { writeAuditLog } from "@/lib/audit/write";
 
 export const runtime = "nodejs";
 
@@ -173,6 +174,10 @@ export async function PATCH(
     }
 
     await batch.commit();
+
+    if (body.action === "approve" || body.action === "reject") {
+      writeAuditLog({ schoolId: session.estagio.schoolId as string, entityType: "schedule_change_request", entityId: requestId, entityLabel: `${req.type} ${req.targetDate}`, action: body.action === "approve" ? "approve" : "reject", changedBy: session.uid, summary: `Pedido ${body.action} pelo tutor.`, metadata: { type: req.type, targetDate: req.targetDate, estagioId: id, nextStatus: transition.nextStatus } });
+    }
 
     return NextResponse.json({ ok: true, nextStatus: transition.nextStatus });
   } catch (error) {

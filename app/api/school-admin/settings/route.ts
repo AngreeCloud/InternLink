@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { requireSessionUid, EstagioAccessError, toApiErrorResponse } from "@/lib/estagios/estagio-access";
+import { writeAuditLog } from "@/lib/audit/write";
 
 export const runtime = "nodejs";
 
@@ -33,6 +34,8 @@ export async function PATCH(request: Request) {
     }
 
     await db.collection("schools").doc(schoolId).update(updates);
+
+    writeAuditLog({ schoolId, entityType: "school", entityId: schoolId, entityLabel: schoolId, action: "update_settings", changedBy: uid, summary: "Definições da escola atualizadas.", metadata: { updates: Object.keys(updates).filter(k => k !== "updatedAt") } });
 
     return NextResponse.json({ ok: true, eePageAccess: updates.eePageAccess });
   } catch (error) {
