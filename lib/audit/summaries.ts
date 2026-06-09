@@ -3,7 +3,8 @@ import type { AuditAction, AuditEntityType } from "./types";
 export function buildSummary(
   entityType: AuditEntityType,
   action: AuditAction,
-  entityLabel?: string
+  entityLabel?: string,
+  metadata?: Record<string, unknown>
 ): string {
   const label = entityLabel || entityType;
   const summaries: Record<string, string> = {
@@ -26,7 +27,14 @@ export function buildSummary(
     "user:permission_change": `Permissões de utilizador alteradas: ${label}.`,
     "school:update_settings": `Definições da escola atualizadas.`,
     "course:update": `${label} atualizado.`,
-    "course:permission_change": `Cargo em ${label} alterado.`,
+    "course:permission_change": (() => {
+      const fromName = metadata?.fromName as string | undefined;
+      const toName = metadata?.toName as string | undefined;
+      if (fromName && toName) return `Cargo de diretor de curso transferido de "${fromName}" para "${toName}" em ${label}.`;
+      if (toName) return `Cargo de diretor de curso atribuído a "${toName}" em ${label}.`;
+      if (fromName) return `Cargo de diretor de curso removido de "${fromName}" em ${label}.`;
+      return `Cargo em ${label} alterado.`;
+    })(),
     "course:associate": `Professor adicionado a ${label}.`,
     "course:disassociate": `Professor removido de ${label}.`,
   };

@@ -5,6 +5,7 @@ import { getFirebaseAdminAuth, getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { writeAuditLog } from "@/lib/audit/write";
 import { buildSummary } from "@/lib/audit/summaries";
+import { resolveUserNames } from "@/lib/audit/resolve-users";
 
 export const runtime = "nodejs";
 
@@ -99,7 +100,19 @@ export async function PATCH(
       JSON.stringify(body.teacherIds) !== JSON.stringify(currentData?.teacherIds);
 
     if (directorChanged) {
-      writeAuditLog({ schoolId, entityType: "course", entityId: id, entityLabel: courseNome, action: "permission_change", changedBy: uid, summary: buildSummary("course", "permission_change", courseNome), metadata: { field: "courseDirectorId", from: currentData?.courseDirectorId as string | null | undefined, to: body.courseDirectorId } });
+      const oldDirUid = currentData?.courseDirectorId as string | undefined | null;
+      const newDirUid = body.courseDirectorId as string | undefined | null;
+      const uidsToResolve = [oldDirUid, newDirUid].filter((u): u is string => !!u);
+      const nameMap = uidsToResolve.length > 0 ? await resolveUserNames(uidsToResolve) : new Map();
+      const fromName = oldDirUid ? nameMap.get(oldDirUid) : undefined;
+      const toName = newDirUid ? nameMap.get(newDirUid) : undefined;
+
+      writeAuditLog({
+        schoolId, entityType: "course", entityId: id, entityLabel: courseNome,
+        action: "permission_change", changedBy: uid,
+        summary: buildSummary("course", "permission_change", courseNome, { fromName, toName }),
+        metadata: { field: "courseDirectorId", from: oldDirUid, to: newDirUid, fromName, toName },
+      });
     } else {
       const action =
         teacherIdsChanged && (currentData?.teacherIds as string[] | undefined)?.length !== undefined && (body.teacherIds?.length ?? 0) < (currentData?.teacherIds as string[])!.length

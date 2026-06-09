@@ -61,6 +61,26 @@ describe("buildSummary", () => {
     const result = buildSummary("estagio", "create");
     expect(result).toBe("Estágio criado: estagio.");
   });
+
+  it("builds course permission_change summary with fromName and toName", () => {
+    const result = buildSummary("course", "permission_change", "Informática - Sistemas", { fromName: "Maria Silva", toName: "João Santos" });
+    expect(result).toBe('Cargo de diretor de curso transferido de "Maria Silva" para "João Santos" em Informática - Sistemas.');
+  });
+
+  it("builds course permission_change summary with only toName", () => {
+    const result = buildSummary("course", "permission_change", "Informática - Sistemas", { toName: "João Santos" });
+    expect(result).toBe('Cargo de diretor de curso atribuído a "João Santos" em Informática - Sistemas.');
+  });
+
+  it("builds course permission_change summary with only fromName", () => {
+    const result = buildSummary("course", "permission_change", "Informática - Sistemas", { fromName: "Maria Silva" });
+    expect(result).toBe('Cargo de diretor de curso removido de "Maria Silva" em Informática - Sistemas.');
+  });
+
+  it("builds course permission_change fallback when no names", () => {
+    const result = buildSummary("course", "permission_change", "Informática - Sistemas");
+    expect(result).toBe("Cargo em Informática - Sistemas alterado.");
+  });
 });
 
 describe("buildEntityLabel", () => {
