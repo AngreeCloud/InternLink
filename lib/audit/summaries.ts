@@ -25,6 +25,10 @@ export function buildSummary(
     "schedule_change_request:cancel": `Pedido de alteração cancelado: ${label}.`,
     "user:permission_change": `Permissões de utilizador alteradas: ${label}.`,
     "school:update_settings": `Definições da escola atualizadas.`,
+    "course:update": `${label} atualizado.`,
+    "course:permission_change": `Cargo em ${label} alterado.`,
+    "course:associate": `Professor adicionado a ${label}.`,
+    "course:disassociate": `Professor removido de ${label}.`,
   };
 
   const key = `${entityType}:${action}`;
@@ -42,6 +46,8 @@ export function buildEntityLabel(entityType: AuditEntityType, data: Record<strin
     case "user":
       return (data.nome as string) || (data.displayName as string) || (data.email as string) || "";
     case "school":
+      return (data.name as string) || "";
+    case "course":
       return (data.name as string) || "";
     case "schedule_change_request":
       return `${(data.type as string) || ""} - ${(data.targetDate as string) || ""}`;

@@ -18,6 +18,7 @@ const ENTITY_TYPES: { value: string; label: string }[] = [
   { value: "tutor", label: "Tutor" },
   { value: "schedule_change_request", label: "Pedido de alteração" },
   { value: "user", label: "Utilizador" },
+  { value: "course", label: "Curso" },
   { value: "school", label: "Escola" },
 ];
 
@@ -34,6 +35,7 @@ const ACTIONS: { value: string; label: string }[] = [
   { value: "cancel", label: "Cancelamento" },
   { value: "associate", label: "Associação" },
   { value: "disassociate", label: "Desassociação" },
+  { value: "permission_change", label: "Alteração de cargo" },
   { value: "update_settings", label: "Configurações" },
 ];
 
@@ -46,6 +48,7 @@ function badgeVariant(action: string): "default" | "secondary" | "outline" | "de
     case "delete": return "destructive";
     case "restore":
     case "approve": return "default";
+    case "permission_change": return "secondary";
     case "reject":
     case "cancel": return "destructive";
     case "status_change": return "secondary";

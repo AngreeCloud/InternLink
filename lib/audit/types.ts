@@ -19,7 +19,8 @@ export type AuditEntityType =
   | "tutor"
   | "schedule_change_request"
   | "user"
-  | "school";
+  | "school"
+  | "course";
 
 export interface AuditLogEntry {
   schoolId: string;

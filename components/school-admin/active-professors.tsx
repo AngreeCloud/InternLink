@@ -233,8 +233,6 @@ export function ActiveProfessorsSection() {
     setActionSuccess("");
 
     try {
-      const db = await getDbRuntime();
-      const courseRef = doc(db, "courses", selectedCourse);
       const courseData = selectedCourseData!;
 
       const updatedTeacherIds = Array.isArray(courseData.teacherIds) ? [...courseData.teacherIds] : [];
@@ -264,12 +262,20 @@ export function ActiveProfessorsSection() {
         }
       }
 
-      await updateDoc(courseRef, {
-        teacherIds: updatedTeacherIds,
-        courseDirectorId: updatedDirectorId,
-        supportingTeacherIds: updatedSupportingIds,
-        updatedAt: serverTimestamp(),
+      const res = await fetch(`/api/courses/${selectedCourse}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacherIds: updatedTeacherIds,
+          courseDirectorId: updatedDirectorId,
+          supportingTeacherIds: updatedSupportingIds,
+        }),
       });
+
+      if (!res.ok) {
+        const errData = await res.json() as { error?: string };
+        throw new Error(errData.error || "Erro ao atribuir professor");
+      }
 
       setActionSuccess(`${selectedProfessor.name} adicionado a "${courseData.name}".`);
       setShowAssignDialog(false);
@@ -296,8 +302,6 @@ export function ActiveProfessorsSection() {
     setActionSuccess("");
 
     try {
-      const db = await getDbRuntime();
-
       let updatedSupportingIds = Array.isArray(courseData.supportingTeacherIds)
         ? [...courseData.supportingTeacherIds]
         : [];
@@ -323,11 +327,19 @@ export function ActiveProfessorsSection() {
         }
       }
 
-      await updateDoc(doc(db, "courses", editingCourseId), {
-        courseDirectorId: updatedDirectorId,
-        supportingTeacherIds: updatedSupportingIds,
-        updatedAt: serverTimestamp(),
+      const res = await fetch(`/api/courses/${editingCourseId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courseDirectorId: updatedDirectorId,
+          supportingTeacherIds: updatedSupportingIds,
+        }),
       });
+
+      if (!res.ok) {
+        const errData = await res.json() as { error?: string };
+        throw new Error(errData.error || "Erro ao atualizar cargo");
+      }
 
       setActionSuccess("Cargo atualizado com sucesso.");
       setShowEditCourseRole(false);
@@ -350,8 +362,6 @@ export function ActiveProfessorsSection() {
     setActionSuccess("");
 
     try {
-      const db = await getDbRuntime();
-
       const updatedTeacherIds = (courseData.teacherIds || []).filter((id) => id !== removingProfessor.id);
       const updatedSupportingIds = (courseData.supportingTeacherIds || []).filter(
         (id) => id !== removingProfessor.id
@@ -359,12 +369,20 @@ export function ActiveProfessorsSection() {
       const updatedDirectorId =
         courseData.courseDirectorId === removingProfessor.id ? null : courseData.courseDirectorId;
 
-      await updateDoc(doc(db, "courses", removingCourseId), {
-        teacherIds: updatedTeacherIds,
-        courseDirectorId: updatedDirectorId,
-        supportingTeacherIds: updatedSupportingIds,
-        updatedAt: serverTimestamp(),
+      const res = await fetch(`/api/courses/${removingCourseId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacherIds: updatedTeacherIds,
+          courseDirectorId: updatedDirectorId,
+          supportingTeacherIds: updatedSupportingIds,
+        }),
       });
+
+      if (!res.ok) {
+        const errData = await res.json() as { error?: string };
+        throw new Error(errData.error || "Erro ao remover professor");
+      }
 
       setActionSuccess(`${removingProfessor.name} removido de "${courseData.name}".`);
       setShowRemoveFromCourse(false);
