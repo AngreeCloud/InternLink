@@ -56,3 +56,5 @@ data/
 
 /functions/node_modules
 /functions/lib
+package-lock.json
+pnpm-lock.yaml
