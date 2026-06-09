@@ -1,4 +1,5 @@
 import * as functions from "firebase-functions/v2/scheduler";
+import { logger } from "firebase-functions";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { initializeApp, getApps } from "firebase-admin/app";
 
@@ -51,12 +52,12 @@ export const cleanupOldAuditLogs = functions.onSchedule(
       totalDeleted += processed;
       schoolsProcessed++;
 
-      functions.logger.info(
+      logger.info(
         `[cleanupOldAuditLogs] Removed ${processed} old audit logs from school ${schoolId}`
       );
     }
 
-    functions.logger.info(
+    logger.info(
       `[cleanupOldAuditLogs] Complete: ${totalDeleted} logs deleted across ${schoolsProcessed} schools`
     );
   }

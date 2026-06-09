@@ -53,3 +53,6 @@ data/
 
 # CodeGraph 
 /.codegraph/
+
+/functions/node_modules
+/functions/lib
