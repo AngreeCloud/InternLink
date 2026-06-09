@@ -83,12 +83,7 @@ export async function GET(request: Request) {
       });
 
     if (role !== "admin_escolar") {
-      const schoolSnap = await db.collection("schools").doc(schoolId).get();
-      const globalProfAccess = (schoolSnap.data()?.empresasPageAccess as
-        | { professores?: string }
-        | undefined)?.professores as "none" | "read" | "write" | undefined;
-
-      results = filterEmpresasByAccess(results, uid, role, globalProfAccess);
+      results = filterEmpresasByAccess(results, uid, role);
     }
 
     const output = results.slice(0, 8).map(({ empresaGrants: _eg, ...rest }) => rest);

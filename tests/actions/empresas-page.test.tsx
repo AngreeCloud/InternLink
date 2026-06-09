@@ -18,6 +18,8 @@ vi.mock("lucide-react", () => ({
   Plus: () => <svg data-testid="plus-icon" />,
   Search: () => <svg data-testid="search-icon" />,
   X: () => <svg data-testid="x-icon" />,
+  Users: () => <svg data-testid="users-icon" />,
+  GraduationCap: () => <svg data-testid="graduation-cap-icon" />,
 }));
 
 vi.mock("next/link", () => ({
@@ -37,9 +39,9 @@ function findText(root: TestRenderer.ReactTestInstance, text: string) {
 }
 
 const mockEmpresas = [
-  { id: "1", nome: "Empresa A", setor: "TI", localidade: "Porto", distrito: "Porto", ativa: true },
-  { id: "2", nome: "Empresa B", setor: "Saúde", localidade: "Lisboa", distrito: "Lisboa", ativa: false },
-  { id: "3", nome: "Empresa C", localidade: "Braga", distrito: "Braga", ativa: true },
+  { id: "1", nome: "Empresa A", setor: "TI", localidade: "Porto", distrito: "Porto", ativa: true, estagioCount: 3, tutorCount: 2 },
+  { id: "2", nome: "Empresa B", setor: "Saúde", localidade: "Lisboa", distrito: "Lisboa", ativa: false, estagioCount: 1, tutorCount: 0 },
+  { id: "3", nome: "Empresa C", localidade: "Braga", distrito: "Braga", ativa: true, estagioCount: 0, tutorCount: 1 },
 ];
 
 describe("EmpresasPage", () => {
@@ -146,7 +148,7 @@ describe("EmpresasPage", () => {
       await new Promise((r) => setTimeout(r, 0));
     });
 
-    expect(findText(renderer!.root, "Arquivada").length).toBe(1);
+    expect(findText(renderer!.root, "Arquivada").length).toBe(2);
   });
 
   it("links to correct basePath", async () => {

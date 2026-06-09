@@ -23,6 +23,8 @@ vi.mock("lucide-react", () => ({
   XIcon: () => <svg data-testid="x-icon" />,
   MessageSquare: () => <svg data-testid="message-icon" />,
   Pencil: () => <svg data-testid="pencil-icon" />,
+  Upload: () => <svg data-testid="upload-icon" />,
+  User: () => <svg data-testid="user-icon" />,
 }));
 
 vi.mock("next/link", () => ({
@@ -48,7 +50,7 @@ function findText(root: TestRenderer.ReactTestInstance, text: string) {
 const mockEmpresa = {
   id: "1",
   nome: "Empresa Teste",
-  nif: "501234567",
+  nif: "123456789",
   setor: "TI",
   website: "https://empresa.pt",
   descricao: "Descrição da empresa",
@@ -61,6 +63,7 @@ const mockEmpresa = {
   emailGeral: "geral@empresa.pt",
   telefone: "252000000",
   ativa: true,
+  canWrite: false,
 };
 
 describe("EmpresasDetail", () => {
@@ -99,7 +102,7 @@ describe("EmpresasDetail", () => {
     expect(findText(renderer!.root, "Empresa Teste").length).toBe(1);
     expect(findText(renderer!.root, "geral@empresa.pt").length).toBe(1);
     expect(findText(renderer!.root, "252000000").length).toBe(1);
-    expect(findText(renderer!.root, "501234567").length).toBe(1);
+    expect(findText(renderer!.root, "123456789").length).toBe(1);
     expect(findText(renderer!.root, "https://empresa.pt").length).toBe(1);
     expect(findText(renderer!.root, "Descrição da empresa").length).toBe(1);
   });

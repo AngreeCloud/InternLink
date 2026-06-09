@@ -5,6 +5,7 @@ import { getFirebaseAdminAuth, getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { buildEmpresaSnapshot } from "@/lib/types/empresa";
 import { filterEmpresasByAccess } from "@/lib/empresas/empresa-access";
+import { validateNIF as validateNif } from "@/lib/validators/nif";
 
 export const runtime = "nodejs";
 
@@ -89,13 +90,29 @@ export async function GET() {
     });
 
     if (role !== "admin_escolar") {
-      const schoolSnap = await db.collection("schools").doc(schoolId).get();
-      const globalProfAccess = (schoolSnap.data()?.empresasPageAccess as
-        | { professores?: string }
-        | undefined)?.professores as "none" | "read" | "write" | undefined;
-
-      empresas = filterEmpresasByAccess(empresas, uid, role, globalProfAccess);
+      empresas = filterEmpresasByAccess(empresas, uid, role);
     }
+
+    // Count estagios per empresa
+    const estagiosSnap = await db
+      .collection("estagios")
+      .where("schoolId", "==", schoolId)
+      .select("empresaId")
+      .get();
+
+    const estagioCountMap = new Map<string, number>();
+    estagiosSnap.forEach((doc) => {
+      const empresaId = doc.data().empresaId as string | undefined;
+      if (empresaId) {
+        estagioCountMap.set(empresaId, (estagioCountMap.get(empresaId) ?? 0) + 1);
+      }
+    });
+
+    empresas = empresas.map((e) => ({
+      ...e,
+      estagioCount: estagioCountMap.get(e.id) ?? 0,
+      tutorCount: e.tutorIds.length,
+    }));
 
     return NextResponse.json({ empresas });
   } catch (error) {
@@ -112,6 +129,9 @@ export async function POST(request: Request) {
     }
 
     const { uid, schoolId, db } = auth;
+
+    const optional = <T>(val: T | undefined | null): T | undefined =>
+      val == null || (typeof val === "string" && val.trim() === "") ? undefined : val;
 
     const body = (await request.json()) as CreateEmpresaBody;
     const nome = (body.nome ?? "").trim();
@@ -136,6 +156,13 @@ export async function POST(request: Request) {
     }
 
     const nifRaw = optional(body.nif);
+    if (nifRaw) {
+      const nifCheck = validateNif(nifRaw);
+      if (!nifCheck.valid) {
+        return NextResponse.json({ error: nifCheck.message ?? "NIF inválido" }, { status: 400 });
+      }
+    }
+
     const nifNormalizado = nifRaw
       ? nifRaw.replace(/\s+/g, "").replace(/[^0-9]/g, "")
       : undefined;
@@ -158,9 +185,6 @@ export async function POST(request: Request) {
 
     const now = FieldValue.serverTimestamp();
     const empresaRef = db.collection("empresas").doc();
-
-    const optional = <T>(val: T | undefined | null): T | undefined =>
-      val == null || (typeof val === "string" && val.trim() === "") ? undefined : val;
 
     const empresaData: Record<string, unknown> = {
       schoolId,
@@ -187,6 +211,10 @@ export async function POST(request: Request) {
       createdBy: uid,
       updatedBy: uid,
     };
+
+    if (role === "professor") {
+      empresaData.empresaGrants = { [uid]: "write" };
+    }
 
     const clean = Object.fromEntries(
       Object.entries(empresaData).filter(([, v]) => v !== undefined)

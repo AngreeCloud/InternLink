@@ -35,7 +35,7 @@ function findText(root: TestRenderer.ReactTestInstance, text: string) {
 
 const fakeEmpresa = {
   nome: "Empresa Teste",
-  nif: "501234567",
+  nif: "123456789",
   setor: "Tecnologia",
   website: "https://teste.pt",
   descricao: "Uma empresa de teste",

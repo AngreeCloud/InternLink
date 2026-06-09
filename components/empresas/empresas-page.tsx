@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Building2, MapPin, Plus, Search, X } from "lucide-react";
+import { Building2, MapPin, Plus, Search, X, Users, GraduationCap } from "lucide-react";
 import Link from "next/link";
 
 type EmpresaItem = {
@@ -15,12 +15,14 @@ type EmpresaItem = {
   setor?: string;
   logoUrl?: string;
   ativa: boolean;
-  tutorCount?: number;
+  tutorCount: number;
+  estagioCount: number;
 };
 
 export function EmpresasPage({ basePath }: { basePath: string }) {
   const [empresas, setEmpresas] = useState<EmpresaItem[]>([]);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "archived">("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +50,8 @@ export function EmpresasPage({ basePath }: { basePath: string }) {
   }, [fetchEmpresas]);
 
   const filtered = empresas.filter((e) => {
+    if (statusFilter === "active" && !e.ativa) return false;
+    if (statusFilter === "archived" && e.ativa) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return (
@@ -92,6 +96,23 @@ export function EmpresasPage({ basePath }: { basePath: string }) {
         )}
       </div>
 
+      <div className="flex gap-2">
+        {(["all", "active", "archived"] as const).map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setStatusFilter(s)}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              statusFilter === s
+                ? "bg-foreground text-background"
+                : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {s === "all" ? "Todas" : s === "active" ? "Ativas" : "Arquivadas"}
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <p className="text-sm text-muted-foreground">A carregar empresas...</p>
       ) : error ? (
@@ -109,7 +130,15 @@ export function EmpresasPage({ basePath }: { basePath: string }) {
               className="flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-accent/50"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-md bg-muted">
-                <Building2 className="h-6 w-6 text-muted-foreground" />
+                {empresa.logoUrl ? (
+                  <img
+                    src={empresa.logoUrl}
+                    alt={empresa.nome}
+                    className="h-10 w-10 rounded object-cover"
+                  />
+                ) : (
+                  <Building2 className="h-6 w-6 text-muted-foreground" />
+                )}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{empresa.nome}</p>
@@ -118,6 +147,16 @@ export function EmpresasPage({ basePath }: { basePath: string }) {
                   {empresa.localidade ? ` · ${empresa.localidade}` : ""}
                   {empresa.distrito ? `, ${empresa.distrito}` : ""}
                 </p>
+                <div className="mt-1 flex gap-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <GraduationCap className="h-3 w-3" />
+                    {empresa.estagioCount} estágio{empresa.estagioCount !== 1 ? "s" : ""}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Users className="h-3 w-3" />
+                    {empresa.tutorCount} tutor{empresa.tutorCount !== 1 ? "es" : ""}
+                  </span>
+                </div>
               </div>
               {empresa.localidade && (
                 <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
