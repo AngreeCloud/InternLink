@@ -13,10 +13,11 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Archive, ArrowLeft, Building2, Loader2, Trash2, UserPlus, Search, X, MessageSquare, GraduationCap, Calendar, Clock, Pencil, ExternalLink, Save, Phone, Briefcase, StickyNote } from "lucide-react";
+import { Archive, ArrowLeft, Building2, Loader2, Trash2, UserPlus, Search, X, MessageSquare, GraduationCap, Calendar, Clock, Pencil, ExternalLink, Save, Phone, Briefcase, StickyNote, User, Upload } from "lucide-react";
 import Link from "next/link";
 import { EmpresasEditForm } from "./empresas-edit-form";
 import { EmpresaPermissions } from "./empresa-permissions";
+import { EmpresaPhotos } from "./empresa-photos";
 
 type EmpresaFull = {
   id: string;
@@ -36,6 +37,15 @@ type EmpresaFull = {
   logoUrl?: string;
   ativa: boolean;
   empresaGrants?: Record<string, "read" | "write"> | null;
+  createdAt?: { toMillis: () => number } | number | null;
+  updatedAt?: { toMillis: () => number } | number | null;
+  createdBy?: string;
+  createdByName?: string;
+  updatedBy?: string;
+  updatedByName?: string;
+  archivedAt?: { toMillis: () => number } | number | null;
+  archivedBy?: string;
+  archivedByName?: string;
 };
 
 type TutorItem = {
@@ -70,6 +80,13 @@ type EstagioItem = {
   courseNome?: string;
   createdAt?: number | null;
 };
+
+function tsOrNull(v: { toMillis?: () => number } | number | null | undefined): string | null {
+  if (!v) return null;
+  if (typeof v === "number") return new Date(v).toLocaleDateString("pt-PT");
+  if (typeof v.toMillis === "function") return new Date(v.toMillis()).toLocaleDateString("pt-PT");
+  return null;
+}
 
 function InfoTab({ empresa }: { empresa: EmpresaFull }) {
   return (
@@ -128,6 +145,42 @@ function InfoTab({ empresa }: { empresa: EmpresaFull }) {
           <p className="text-sm">{empresa.descricao}</p>
         </div>
       )}
+
+      <div className="rounded-lg border border-border bg-card p-6 space-y-2">
+        <h2 className="text-lg font-semibold">Auditoria</h2>
+        <div className="grid gap-2 text-sm">
+          {empresa.createdAt && (
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">Criado em:</span> {tsOrNull(empresa.createdAt)}
+            </p>
+          )}
+          {empresa.createdByName && (
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">Criado por:</span> {empresa.createdByName}
+            </p>
+          )}
+          {empresa.updatedAt && (
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">Atualizado em:</span> {tsOrNull(empresa.updatedAt)}
+            </p>
+          )}
+          {empresa.updatedByName && (
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">Atualizado por:</span> {empresa.updatedByName}
+            </p>
+          )}
+          {empresa.archivedAt && (
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">Arquivada em:</span> {tsOrNull(empresa.archivedAt)}
+            </p>
+          )}
+          {empresa.archivedByName && (
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">Arquivada por:</span> {empresa.archivedByName}
+            </p>
+          )}
+        </div>
+      </div>
 
       {!empresa.ativa && (
         <p className="text-sm text-muted-foreground italic">Esta empresa está arquivada. Os estágios associados continuam ativos.</p>
@@ -599,11 +652,12 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [canWrite, setCanWrite] = useState(false);
-  const [tab, setTab] = useState<"info" | "tutores" | "estagios" | "acessos">("info");
+  const [tab, setTab] = useState<"info" | "tutores" | "estagios" | "fotos" | "acessos">("info");
   const [editing, setEditing] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const fetchEmpresa = useCallback(async () => {
     setLoading(true);
@@ -651,6 +705,35 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
       setActionError(err instanceof Error ? err.message : "Erro inesperado");
     } finally {
       setArchiving(false);
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !empresa) return;
+    setUploadingLogo(true);
+    setActionError(null);
+    try {
+      const { getStorageRuntime } = await import("@/lib/firebase-runtime");
+      const { ref, uploadBytes, getDownloadURL } = await import("firebase/storage");
+      const storage = await getStorageRuntime();
+      const storageRef = ref(storage, `empresa-logos/${empresaId}/logo`);
+      await uploadBytes(storageRef, file);
+      const logoUrl = await getDownloadURL(storageRef);
+      const res = await fetch(`/api/empresas/${empresaId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logoUrl }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Erro ao guardar logo");
+      }
+      await fetchEmpresa();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Erro ao fazer upload do logo");
+    } finally {
+      setUploadingLogo(false);
     }
   };
 
@@ -702,6 +785,7 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
     { key: "info" as const, label: "Informações" },
     { key: "tutores" as const, label: "Tutores" },
     { key: "estagios" as const, label: "Estágios" },
+    { key: "fotos" as const, label: "Fotos" },
     ...(isAdmin ? [{ key: "acessos" as const, label: "Acessos" }] : []),
   ];
 
@@ -715,8 +799,28 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
           </Link>
         </Button>
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-md bg-muted">
-            <Building2 className="h-6 w-6 text-muted-foreground" />
+          <div className="relative flex h-14 w-14 items-center justify-center rounded-md bg-muted overflow-hidden group">
+            {empresa.logoUrl ? (
+              <img src={empresa.logoUrl} alt={empresa.nome} className="h-full w-full object-cover" />
+            ) : (
+              <Building2 className="h-7 w-7 text-muted-foreground" />
+            )}
+            {canWrite && (
+              <label className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
+                {uploadingLogo ? (
+                  <Loader2 className="h-5 w-5 animate-spin text-white" />
+                ) : (
+                  <Upload className="h-5 w-5 text-white" />
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleLogoUpload}
+                  disabled={uploadingLogo}
+                />
+              </label>
+            )}
           </div>
           <div>
             <h1 className="text-3xl font-bold text-foreground">{empresa.nome}</h1>
@@ -805,6 +909,7 @@ export function EmpresasDetail({ empresaId, basePath }: Props) {
       ))}
       {tab === "tutores" && <TutoresTab empresaId={empresaId} basePath={basePath} />}
       {tab === "estagios" && <EstagiosTab empresaId={empresaId} basePath={basePath} />}
+      {tab === "fotos" && <EmpresaPhotos empresaId={empresaId} />}
       {tab === "acessos" && isAdmin && (
         <EmpresaPermissions
           empresaId={empresaId}

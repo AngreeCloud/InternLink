@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { validateNIF } from "@/lib/validators/nif";
 
 type Props = {
   basePath: string;
@@ -34,6 +35,14 @@ export function EmpresasCreateForm({ basePath }: Props) {
     if (!nome.trim()) {
       setError("O nome da empresa é obrigatório.");
       return;
+    }
+
+    if (nif.trim()) {
+      const nifCheck = validateNIF(nif);
+      if (!nifCheck.valid) {
+        setError(nifCheck.message ?? "NIF inválido");
+        return;
+      }
     }
 
     setSubmitting(true);
