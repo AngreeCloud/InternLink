@@ -64,6 +64,14 @@
 | `PATCH .../tutor-decision` | approve, reject |
 | `POST .../cancel` | cancel |
 
+### Integração Cursos
+
+| Rota | Ações auditadas |
+|---|---|
+| `PATCH /api/courses/[id]` | update, associate, disassociate, permission_change (courseDirectorId) |
+
+`active-professors.tsx` refatorado para usar a API route em vez de `updateDoc` direto nos três fluxos: atribuir professor, editar cargo, remover de curso. `handleRemoveFromSystem` mantém escrita direta (múltiplos documentos).
+
 ### Integração Escola (Fase G)
 
 | Rota | Ações auditadas |
@@ -77,7 +85,7 @@
 | Ficheiro | Descrição |
 |---|---|
 | `components/audit/audit-block.tsx` | Bloco de auditoria reutilizável por entidade. Mostra metadados (criado/atualizado/arquivado por) + histórico recente. |
-| `components/audit/audit-global-page.tsx` | Página global de atividade com filtros (entidade, ação, pesquisa textual), paginação, cards por evento. |
+| `components/audit/audit-global-page.tsx` | Página global de atividade com filtros (entidade, ação, pesquisa textual), paginação, cards por evento. Inclui `course` e `permission_change` nos filtros. |
 | `app/school-admin/historico/page.tsx` | Substituído `ApprovalHistorySection` por `AuditGlobalPage` |
 
 ### Cloud Function Retenção (Fase J)
@@ -103,6 +111,7 @@
 - [x] Estágios: create, update, status_change, delete
 - [x] Schedule change requests: create, approve (professor+tutor), reject, cancel
 - [x] School settings: update_settings (eePageAccess)
+- [x] Courses: update, associate, disassociate, permission_change (courseDirectorId) via API route `PATCH /api/courses/[id]`
 - [x] Página global de atividade com filtros e paginação
 - [x] Bloco de auditoria reutilizável por entidade
 - [x] Cloud Function retenção 365 dias
@@ -114,6 +123,7 @@
 |---|---|---|
 | School info form (`school-info-form.tsx`) | Escreve diretamente via Firestore SDK client-side. Adicionar audit logging exigiria mover para API route ou criar endpoint específico. | Baixo — school info muda raramente |
 | Users — alterações de role/permissão/estado | Não existe API route centralizada para mudanças de permissão em users. As alterações são dispersas (várias routes/funções). | Médio — users é entidade crítica mas require refactor maior |
+| `handleRemoveFromSystem` em `active-professors.tsx` | Atualiza múltiplos courses + user doc em loop. Mantém escrita Firestore direta. | Baixo — fluxo pouco frequente |
 | AuditBlock não integrado nas páginas de detalhe existentes | `EmpresaDetail` já tem secção "Auditoria" própria. `AuditBlock` está disponível para uso futuro. | Nenhum |
 | Resolução UID→nome na página global | A página global mostra `changedBy` como UID. Para resolver nome, precisa de chamada server-side. Criar endpoint `/api/audit/resolve-names` seria o passo seguinte. | Baixo — UID é legível, nome é cosmetic |
 
