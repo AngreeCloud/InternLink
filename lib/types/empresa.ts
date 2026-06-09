@@ -15,6 +15,7 @@ export interface Empresa {
   nome: string;
   nomeNormalizado: string;
   nif?: string;
+  nifNormalizado?: string;
   setor?: string;
   website?: string;
   descricao?: string;

@@ -61,16 +61,10 @@ export async function PATCH(
     }
 
     if (role !== "admin_escolar") {
-      const schoolSnap = await db.collection("schools").doc(schoolId).get();
-      const empresasPageAccess = (schoolSnap.data()?.empresasPageAccess as
-        | { professores?: string }
-        | undefined)?.professores as "none" | "read" | "write" | undefined;
-
       if (!hasEmpresaAccess({
         uid, role,
         empresaGrants: empresaData?.empresaGrants,
         requiredLevel: "write",
-        globalProfAccess: empresasPageAccess,
       })) {
         return NextResponse.json({ error: "Sem permissão de escrita nesta empresa" }, { status: 403 });
       }
@@ -135,16 +129,10 @@ export async function DELETE(
     }
 
     if (role !== "admin_escolar") {
-      const schoolSnap = await db.collection("schools").doc(schoolId).get();
-      const empresasPageAccess = (schoolSnap.data()?.empresasPageAccess as
-        | { professores?: string }
-        | undefined)?.professores as "none" | "read" | "write" | undefined;
-
       if (!hasEmpresaAccess({
         uid, role,
         empresaGrants: empresaData?.empresaGrants,
         requiredLevel: "write",
-        globalProfAccess: empresasPageAccess,
       })) {
         return NextResponse.json({ error: "Sem permissão de escrita nesta empresa" }, { status: 403 });
       }

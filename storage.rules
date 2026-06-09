@@ -49,6 +49,30 @@ service firebase.storage {
       allow delete: if isChatParticipant(conversationId);
     }
 
+    // Logotipos de empresas. Upload por admin_escolar ou professor ativo.
+    function isSchoolStaffActive() {
+      return isSignedIn()
+        && currentUserData().role in ["admin_escolar", "professor"]
+        && currentUserData().estado == "ativo";
+    }
+
+    match /empresa-logos/{empresaId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow create, update: if isSchoolStaffActive()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if false;
+    }
+
+    // Fotos da galeria da empresa. Upload por admin_escolar ou professor ativo.
+    match /empresa-photos/{empresaId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow create, update: if isSchoolStaffActive()
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isSchoolStaffActive();
+    }
+
     // Assinatura pessoal do utilizador (settings privadas).
     match /signatures/{userId}/{allPaths=**} {
       allow read: if isOwner(userId);

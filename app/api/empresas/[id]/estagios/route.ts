@@ -70,16 +70,10 @@ export async function GET(
     }
 
     if (role !== "admin_escolar") {
-      const schoolSnap = await db.collection("schools").doc(schoolId).get();
-      const empresasPageAccess = (schoolSnap.data()?.empresasPageAccess as
-        | { professores?: string }
-        | undefined)?.professores as "none" | "read" | "write" | undefined;
-
       if (!hasEmpresaAccess({
         uid, role,
         empresaGrants: empresaData?.empresaGrants,
         requiredLevel: "read",
-        globalProfAccess: empresasPageAccess,
       })) {
         return NextResponse.json({ error: "Sem permissão para aceder a esta empresa" }, { status: 403 });
       }
