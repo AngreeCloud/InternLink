@@ -628,7 +628,8 @@ service cloud.firestore {
         && resource.data.participants[request.auth.uid] == true;
 
       allow create: if isSignedIn()
-        && request.resource.data.participants[request.auth.uid] == true;
+        && request.resource.data.participants[request.auth.uid] == true
+        && request.resource.data.type in ["direct", "group"];
 
       // Participants map is immutable after creation to prevent privilege escalation.
       allow update: if isSignedIn()

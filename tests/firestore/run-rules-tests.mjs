@@ -28,6 +28,7 @@ const testProcess = spawn(
     "--test",
     "tests/firestore/school-isolation.rules.test.mjs",
     "tests/realtime/chat-creation.rules.test.mjs",
+    "tests/realtime/user-tutors.rules.test.mjs",
   ],
   {
     stdio: "inherit",

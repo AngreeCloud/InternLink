@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { onValue, ref, set } from "firebase/database";
+import { get, onValue, ref, set } from "firebase/database";
 import {
   CHAT_ATTACHMENTS_MAX_FILES,
   CHAT_ATTACHMENT_MAX_BYTES,
@@ -18,6 +18,7 @@ import {
   getCurrentChatProfile,
   getRealtimeDb,
   isSameDay,
+  isValidEmail,
   loadOlderMessages,
   markConversationSeen,
   reportUserBySpam,
@@ -26,6 +27,7 @@ import {
   sendMessage,
   subscribeConversationMessages,
   subscribeUserConversations,
+  unblockUser,
 } from "@/lib/chat/realtime-chat";
 import { resolveConversationPreview } from "@/lib/chat/chat-preview";
 import type {
@@ -170,7 +172,9 @@ export function InternalChatHub() {
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isDmDialogOpen, setIsDmDialogOpen] = useState(false);
+  const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false);
+  const [isHelpDialogOpen, setIsHelpDialogOpen] = useState(false);
   const [memberQuery, setMemberQuery] = useState("");
   const [memberResults, setMemberResults] = useState<ChatUserProfile[]>([]);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
@@ -269,6 +273,9 @@ export function InternalChatHub() {
   const directPeerIsExternal = Boolean(profile && directPeer && profile.orgId !== directPeer.orgId);
   const canShowReportSpam = Boolean(directPeer && directPeerIsExternal && directPeer.role !== "tutor");
 
+  const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set());
+  const [deletedAccounts, setDeletedAccounts] = useState<Set<string>>(new Set());
+
   const mergedMessages = useMemo<ChatMessageView[]>(() => {
     const sent = messages.map((message) => ({ ...message, deliveryState: "sent" as const }));
     const pending = pendingMessages.map((pendingMessage) => ({
@@ -326,16 +333,29 @@ export function InternalChatHub() {
 
     if (idSet.size === 0) {
       setParticipantProfiles({});
+      setDeletedAccounts(new Set());
       return;
     }
 
-    const loaded = await getChatProfilesByIds(Array.from(idSet));
+    const allIds = Array.from(idSet);
+    const loaded = await getChatProfilesByIds(allIds);
+    const loadedIds = new Set(loaded.map((p) => p.uid));
+    const missingIds = allIds.filter((id) => !loadedIds.has(id));
+
     setParticipantProfiles(
       loaded.reduce<Record<string, ChatUserProfile>>((acc, item) => {
         acc[item.uid] = item;
         return acc;
       }, {})
     );
+
+    if (missingIds.length > 0) {
+      setDeletedAccounts((prev) => {
+        const next = new Set(prev);
+        missingIds.forEach((id) => next.add(id));
+        return next;
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -363,6 +383,19 @@ export function InternalChatHub() {
             }
 
             setProfile(currentProfile);
+
+            // Load blocked users list
+            void (async () => {
+              try {
+                const rtdb = await getRealtimeDb();
+                const blocksSnap = await get(ref(rtdb, `userBlocks/${currentProfile.uid}`));
+                if (blocksSnap.exists()) {
+                  setBlockedUsers(new Set(Object.keys(blocksSnap.val())));
+                }
+              } catch {
+                // Block list loading is auxiliary.
+              }
+            })();
 
             // Do not block chat boot if org index update fails.
             void ensureOrgMemberIndex(currentProfile).catch((err) => {
@@ -489,7 +522,7 @@ export function InternalChatHub() {
   }, [mergedMessages.length, selectedConversationId]);
 
   useEffect(() => {
-    if (!isCreateDialogOpen || !profile) return;
+    if ((!isDmDialogOpen && !isGroupDialogOpen) || !profile) return;
 
     let canceled = false;
     const delay = memberQuery.trim() ? 180 : 0;
@@ -523,7 +556,7 @@ export function InternalChatHub() {
       canceled = true;
       window.clearTimeout(timeout);
     };
-  }, [memberQuery, isCreateDialogOpen, profile, suggestedMembersFromConversations]);
+  }, [memberQuery, isDmDialogOpen, isGroupDialogOpen, profile, suggestedMembersFromConversations]);
 
   const setTypingState = useCallback(
     async (nextValue: boolean) => {
@@ -553,10 +586,10 @@ export function InternalChatHub() {
   );
 
   const resolveExternalUser = useCallback(async (email: string): Promise<ChatUserProfile | null> => {
-    const fsDb = await getDbRuntime();
     const normalized = email.trim().toLowerCase();
-    if (!normalized) return null;
+    if (!normalized || !isValidEmail(normalized)) return null;
 
+    const fsDb = await getDbRuntime();
     const [byEmail] = await Promise.all([
       getDocs(query(collection(fsDb, "users"), where("email", "==", normalized), limit(1))),
     ]);
@@ -569,9 +602,12 @@ export function InternalChatHub() {
       email?: string;
       photoURL?: string;
       role?: string;
+      estado?: string;
       schoolId?: string;
       escolaId?: string;
     };
+
+    if ((data.estado || "").toLowerCase() === "removido") return null;
 
     return {
       uid: docSnap.id,
@@ -591,9 +627,16 @@ export function InternalChatHub() {
       setError("");
 
       const participantIds = [...selectedMemberIds];
-      const external = await resolveExternalUser(externalEmail);
-      if (external && !participantIds.includes(external.uid)) {
-        participantIds.push(external.uid);
+      if (externalEmail.trim()) {
+        if (!isValidEmail(externalEmail)) {
+          throw new Error("Formato de email inválido. Use formato: nome@dominio.pt");
+        }
+        const external = await resolveExternalUser(externalEmail);
+        if (external && !participantIds.includes(external.uid)) {
+          participantIds.push(external.uid);
+        } else if (!external) {
+          throw new Error("Participante externo não encontrado ou conta removida.");
+        }
       }
 
       if (participantIds.length === 0) {
@@ -602,7 +645,8 @@ export function InternalChatHub() {
 
       const conversation = await createConversationFromUsers(profile, participantIds);
       setSelectedConversationId(conversation.id);
-      setIsCreateDialogOpen(false);
+      setIsDmDialogOpen(false);
+      setIsGroupDialogOpen(false);
       setSelectedMemberIds([]);
       setExternalEmail("");
       setMemberQuery("");
@@ -753,9 +797,26 @@ export function InternalChatHub() {
 
     try {
       await blockExternalUser({ blocker: profile, target: directPeer });
+      setBlockedUsers((prev) => new Set(prev).add(directPeer.uid));
       setError("");
     } catch (err) {
       setError((err as Error).message || "Falha ao bloquear utilizador.");
+    }
+  }, [profile, directPeer]);
+
+  const handleUnblockDirectPeer = useCallback(async () => {
+    if (!profile || !directPeer) return;
+
+    try {
+      await unblockUser(profile.uid, directPeer.uid);
+      setBlockedUsers((prev) => {
+        const next = new Set(prev);
+        next.delete(directPeer.uid);
+        return next;
+      });
+      setError("");
+    } catch (err) {
+      setError((err as Error).message || "Falha ao desbloquear utilizador.");
     }
   }, [profile, directPeer]);
 
@@ -828,18 +889,53 @@ export function InternalChatHub() {
               <p className="text-sm font-semibold">Conversas</p>
             </div>
 
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" variant="outline" className="gap-1.5">
-                  <Plus className="h-4 w-4" />
-                  Nova
-                </Button>
-              </DialogTrigger>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => {
+                  setMemberQuery("");
+                  setSelectedMemberIds([]);
+                  setExternalEmail("");
+                  setError("");
+                  setIsDmDialogOpen(true);
+                }}
+              >
+                <Plus className="h-4 w-4" />
+                Iniciar
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="gap-1.5"
+                onClick={() => {
+                  setMemberQuery("");
+                  setSelectedMemberIds([]);
+                  setExternalEmail("");
+                  setError("");
+                  setIsGroupDialogOpen(true);
+                }}
+              >
+                Grupo
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="gap-1.5"
+                onClick={() => setIsHelpDialogOpen(true)}
+              >
+                ?
+              </Button>
+            </div>
+
+            {/* DM Dialog */}
+            <Dialog open={isDmDialogOpen} onOpenChange={setIsDmDialogOpen}>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Nova conversa</DialogTitle>
+                  <DialogTitle>Iniciar conversa</DialogTitle>
                   <DialogDescription>
-                    1 pessoa cria DM. 2+ pessoas cria grupo. Pesquisa interna só mostra membros da organização.
+                    Conversa direta com membro interno ou participante externo.
                   </DialogDescription>
                 </DialogHeader>
 
@@ -847,6 +943,108 @@ export function InternalChatHub() {
                   <div className="space-y-3">
                     <div className="space-y-2">
                       <label className="text-xs font-medium">Pesquisar membro interno</label>
+                      <div className="relative">
+                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          className="pl-8"
+                          placeholder="Nome ou email"
+                          value={memberQuery}
+                          onChange={(event) => {
+                            setMemberQuery(event.target.value);
+                            setSelectedMemberIds([]);
+                          }}
+                        />
+                      </div>
+                      <div className="max-h-40 overflow-y-auto rounded-md border border-border">
+                        {memberResults.map((member) => {
+                          const selected = selectedMemberIds.includes(member.uid);
+                          return (
+                            <button
+                              key={member.uid}
+                              type="button"
+                              className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted"
+                              onClick={() => setSelectedMemberIds([member.uid])}
+                            >
+                              <div className="flex min-w-0 items-center gap-2">
+                                <Avatar className="h-7 w-7">
+                                  <AvatarImage src={member.photoURL || undefined} alt={member.name} />
+                                  <AvatarFallback className="text-[10px]">{initials(member.name)}</AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="truncate">{member.name}</span>
+                                    {shouldShowRole(member.role) ? (
+                                      <Badge variant="secondary" className="h-5 px-2 text-[10px]">
+                                        {getRoleLabel(member.role)}
+                                      </Badge>
+                                    ) : null}
+                                  </div>
+                                  <p className="truncate text-xs text-muted-foreground">{member.email}</p>
+                                </div>
+                              </div>
+                              {selected ? <Check className="h-4 w-4 shrink-0" /> : null}
+                            </button>
+                          );
+                        })}
+                        {memberResults.length === 0 && (
+                          <p className="px-3 py-2 text-xs text-muted-foreground">
+                            {memberQuery.trim()
+                              ? "Sem resultados internos."
+                              : "Sem sugestões. Escreva para pesquisar membros internos."}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium">Participante externo por email</label>
+                      <Input
+                        placeholder="email@externo.com"
+                        value={externalEmail}
+                        onChange={(event) => setExternalEmail(event.target.value)}
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Use email completo. Não há sugestões para externos.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium">Conversa por email</label>
+                    <Input
+                      placeholder="email@dominio.com"
+                      value={externalEmail}
+                      onChange={(event) => setExternalEmail(event.target.value)}
+                    />
+                  </div>
+                )}
+
+                <DialogFooter>
+                  {error ? <p className="mr-auto text-xs text-red-500">{error}</p> : null}
+                  <Button variant="outline" onClick={() => setIsDmDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button disabled={creatingConversation} onClick={handleCreateConversation}>
+                    {creatingConversation ? "A criar..." : "Iniciar conversa"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Group Dialog */}
+            <Dialog open={isGroupDialogOpen} onOpenChange={setIsGroupDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Criar grupo</DialogTitle>
+                  <DialogDescription>
+                    Selecionar vários participantes internos e externos.
+                  </DialogDescription>
+                </DialogHeader>
+
+                {profile.orgId ? (
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium">Pesquisar membros internos</label>
                       <div className="relative">
                         <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input
@@ -887,7 +1085,7 @@ export function InternalChatHub() {
                                   <p className="truncate text-xs text-muted-foreground">{member.email}</p>
                                 </div>
                               </div>
-                              {selected ? <Check className="h-4 w-4" /> : null}
+                              {selected ? <Check className="h-4 w-4 shrink-0" /> : null}
                             </button>
                           );
                         })}
@@ -902,17 +1100,61 @@ export function InternalChatHub() {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-xs font-medium">Participante externo por email (opcional)</label>
-                      <Input
-                        placeholder="email@externo.com"
-                        value={externalEmail}
-                        onChange={(event) => setExternalEmail(event.target.value)}
-                      />
+                      <label className="text-xs font-medium">Participante externo por email completo</label>
+                      <div className="flex gap-2">
+                        <Input
+                          className="flex-1"
+                          placeholder="email@externo.com"
+                          value={externalEmail}
+                          onChange={(event) => setExternalEmail(event.target.value)}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={!externalEmail.trim()}
+                          onClick={async () => {
+                            const external = await resolveExternalUser(externalEmail);
+                            if (external && !selectedMemberIds.includes(external.uid)) {
+                              setSelectedMemberIds((prev) => [...prev, external.uid]);
+                              setExternalEmail("");
+                            } else if (!external) {
+                              setError("Participante externo não encontrado.");
+                            }
+                          }}
+                        >
+                          Adicionar
+                        </Button>
+                      </div>
                     </div>
+
+                    {selectedMemberIds.length > 0 && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium">Selecionados</label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {selectedMemberIds.map((uid) => {
+                            const m = memberResults.find((r) => r.uid === uid);
+                            return (
+                              <Badge key={uid} variant="secondary" className="gap-1">
+                                {m?.name || uid}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setSelectedMemberIds((prev) => prev.filter((id) => id !== uid))
+                                  }
+                                  aria-label={`Remover ${m?.name || uid}`}
+                                >
+                                  ×
+                                </button>
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <label className="text-xs font-medium">DM por email</label>
+                    <label className="text-xs font-medium">Participantes por email</label>
                     <Input
                       placeholder="email@dominio.com"
                       value={externalEmail}
@@ -923,11 +1165,11 @@ export function InternalChatHub() {
 
                 <DialogFooter>
                   {error ? <p className="mr-auto text-xs text-red-500">{error}</p> : null}
-                  <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                  <Button variant="outline" onClick={() => setIsGroupDialogOpen(false)}>
                     Cancelar
                   </Button>
                   <Button disabled={creatingConversation} onClick={handleCreateConversation}>
-                    {creatingConversation ? "A criar..." : "Criar conversa"}
+                    {creatingConversation ? "A criar..." : "Criar grupo"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -1002,7 +1244,20 @@ export function InternalChatHub() {
             <>
               <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{conversationTitle}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-semibold">{conversationTitle}</p>
+                    {isDirect && directPeer ? (
+                      deletedAccounts.has(directPeer.uid) ? (
+                        <Badge variant="destructive" className="h-5 px-2 text-[10px] shrink-0">
+                          Eliminada
+                        </Badge>
+                      ) : shouldShowRole(directPeer.role) ? (
+                        <Badge variant="secondary" className="h-5 px-2 text-[10px] shrink-0">
+                          {getRoleLabel(directPeer.role)}
+                        </Badge>
+                      ) : null
+                    ) : null}
+                  </div>
                   <p className="truncate text-xs text-muted-foreground">
                     {selectedConversation.conversation.type === "group"
                       ? `${otherParticipants.length + 1} participantes`
@@ -1016,11 +1271,18 @@ export function InternalChatHub() {
                       Reportar spam
                     </Button>
                   ) : null}
-                  {isDirect && directPeerIsExternal ? (
-                    <Button variant="outline" size="sm" className="gap-1.5" onClick={handleBlockDirectPeer}>
-                      <UserMinus className="h-4 w-4" />
-                      Bloquear
-                    </Button>
+                  {isDirect && directPeerIsExternal && directPeer ? (
+                    blockedUsers.has(directPeer.uid) ? (
+                      <Button variant="outline" size="sm" className="gap-1.5" onClick={handleUnblockDirectPeer}>
+                        <UserMinus className="h-4 w-4" />
+                        Desbloquear
+                      </Button>
+                    ) : (
+                      <Button variant="outline" size="sm" className="gap-1.5" onClick={handleBlockDirectPeer}>
+                        <UserMinus className="h-4 w-4" />
+                        Bloquear
+                      </Button>
+                    )
                   ) : null}
                 </div>
               </header>
@@ -1324,6 +1586,64 @@ export function InternalChatHub() {
           )}
         </section>
       </div>
+
+      {/* Help Dialog */}
+      <Dialog open={isHelpDialogOpen} onOpenChange={setIsHelpDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ajuda do Chat</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <div>
+              <p className="font-semibold">Conversas internas</p>
+              <p className="text-muted-foreground">
+                Membros elegíveis da mesma escola ou contexto permitido aparecem na pesquisa interna.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold">Participante externo</p>
+              <p className="text-muted-foreground">
+                Use o campo "Participante externo por email" com o email completo. Não há sugestões
+                por username. O email tem de ser de uma conta registada no sistema.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold">Iniciar conversa</p>
+              <p className="text-muted-foreground">
+                Cria uma conversa direta (1:1). Pesquisa interna em destaque. Também pode adicionar
+                um participante externo por email.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold">Criar grupo</p>
+              <p className="text-muted-foreground">
+                Seleciona vários participantes internos (multi-seleção) e/ou adiciona externos por
+                email. Cria uma conversa de grupo.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold">Quem pode falar com quem</p>
+              <p className="text-muted-foreground">
+                Professores: todos os membros da escola. Alunos: outros alunos, professores e
+                administradores da escola. Tutores: apenas participantes dos estágios onde estão
+                inseridos. Administradores escolares: todos os membros da escola.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold">Limitações</p>
+              <p className="text-muted-foreground">
+                Contas removidas/apagadas não aparecem na pesquisa, mas conversas existentes mantêm-se.
+                Anexos só permitidos entre membros da mesma organização.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsHelpDialogOpen(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

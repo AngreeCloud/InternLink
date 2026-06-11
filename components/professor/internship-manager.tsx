@@ -17,6 +17,7 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
+import { ensureUserTutorsIndex, ensureAutoConversationForTutorAssignment } from "@/lib/chat/realtime-chat";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -496,6 +497,15 @@ export function InternshipManager() {
         return;
       }
 
+      if (selectedTutorById?.id && alunoId) {
+        const auth = await getAuthRuntime();
+        const professorId = auth.currentUser?.uid;
+        if (professorId) {
+          void ensureUserTutorsIndex(alunoId, selectedTutorById.id);
+          void ensureAutoConversationForTutorAssignment(alunoId, professorId, selectedTutorById.id);
+        }
+      }
+
       resetCreateForm();
       setDialogOpen(false);
       await loadData();
@@ -627,6 +637,19 @@ export function InternshipManager() {
         tutorId: selectedTutorById?.id || "",
         updatedAt: serverTimestamp(),
       });
+
+      if (selectedTutorById?.id && editingEstagio.alunoId) {
+        const auth = await getAuthRuntime();
+        const professorId = auth.currentUser?.uid;
+        if (professorId) {
+          void ensureUserTutorsIndex(editingEstagio.alunoId, selectedTutorById.id);
+          void ensureAutoConversationForTutorAssignment(
+            editingEstagio.alunoId,
+            professorId,
+            selectedTutorById.id
+          );
+        }
+      }
 
       setEditTutorDialogOpen(false);
       setEditingEstagio(null);

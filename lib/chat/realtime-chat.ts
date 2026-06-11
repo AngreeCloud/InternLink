@@ -48,6 +48,12 @@ export const CHAT_ATTACHMENTS_MAX_FILES = 3;
 export const CHAT_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024;
 export const CHAT_DELETED_MESSAGE_PREVIEW = "Mensagem eliminada";
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function isValidEmail(value: string): boolean {
+  return EMAIL_RE.test(value.trim());
+}
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type OrgMemberIndexEntry = {
@@ -246,6 +252,41 @@ export async function ensureOrgMemberIndexByUserId(userId: string): Promise<void
   });
 }
 
+async function getEligibleStageParticipantIds(
+  userId: string,
+  userRole: ChatRole
+): Promise<Set<string>> {
+  const ids = new Set<string>();
+  try {
+    const fsDb = await getDbRuntime();
+    const q =
+      userRole === "tutor"
+        ? fsQuery(collection(fsDb, "estagios"), where("tutorId", "==", userId))
+        : userRole === "student"
+        ? fsQuery(collection(fsDb, "estagios"), where("alunoId", "==", userId))
+        : userRole === "teacher"
+        ? fsQuery(collection(fsDb, "estagios"), where("professorId", "==", userId))
+        : null;
+
+    if (q) {
+      const snap = await getDocs(q);
+      for (const docSnap of snap.docs) {
+        const d = docSnap.data() as {
+          alunoId?: string;
+          professorId?: string;
+          tutorId?: string;
+        };
+        if (d.alunoId) ids.add(d.alunoId);
+        if (d.professorId) ids.add(d.professorId);
+        if (d.tutorId) ids.add(d.tutorId);
+      }
+    }
+  } catch {
+    // Graceful fallback.
+  }
+  return ids;
+}
+
 export async function searchInternalMembers(
   orgId: string | null,
   queryText: string,
@@ -254,6 +295,7 @@ export async function searchInternalMembers(
 ): Promise<Array<ChatUserProfile>> {
   const term = queryText.trim().toLowerCase();
   const merged = new Map<string, ChatUserProfile>();
+  const role = currentUserRole || "student";
 
   if (orgId) {
     try {
@@ -266,6 +308,10 @@ export async function searchInternalMembers(
       const mergedDocs = new Map<string, (typeof usersBySchoolId.docs)[number]>();
       for (const docSnap of usersBySchoolId.docs) mergedDocs.set(docSnap.id, docSnap);
       for (const docSnap of usersByEscolaId.docs) mergedDocs.set(docSnap.id, docSnap);
+
+      // Pre-compute eligible stage participants for tutors
+      const stageParticipants =
+        role === "tutor" ? await getEligibleStageParticipantIds(currentUserId, role) : null;
 
       for (const docSnap of Array.from(mergedDocs.values())) {
         const data = docSnap.data() as {
@@ -282,17 +328,33 @@ export async function searchInternalMembers(
         if (docSnap.id === currentUserId) continue;
 
         const rawEstado = (data.estado || "").toLowerCase();
-        if (rawEstado && rawEstado !== "ativo") continue;
+        if (!rawEstado || rawEstado !== "ativo") continue;
 
         const profileOrgId = getOrgIdFromUserData(data);
         if (profileOrgId !== orgId) continue;
+
+        const profileRole = toChatRole(data.role);
+
+        // Role-based eligibility filtering
+        if (role === "tutor") {
+          // Tutor sees only stage participants
+          if (!stageParticipants || !stageParticipants.has(docSnap.id)) continue;
+        } else if (role === "student") {
+          // Student sees: other students, teachers, admins + their own tutors
+          if (
+            profileRole !== "student" &&
+            profileRole !== "teacher" &&
+            profileRole !== "admin"
+          ) continue;
+        }
+        // teacher + admin: sees all org members
 
         const profile: ChatUserProfile = {
           uid: docSnap.id,
           name: data.nome || data.name || "Utilizador",
           email: data.email || "",
           photoURL: data.photoURL || "",
-          role: toChatRole(data.role),
+          role: profileRole,
           orgId: profileOrgId,
         };
 
@@ -302,82 +364,51 @@ export async function searchInternalMembers(
       // Ignore Firestore search errors; fallback paths may still return useful candidates.
     }
 
-    try {
-      const rtdb = await getRealtimeDb();
-      const membersSnap = await get(ref(rtdb, `orgMembers/${orgId}`));
-      if (membersSnap.exists()) {
-        const members = membersSnap.val() as Record<string, OrgMemberIndexEntry>;
-        for (const [uid, member] of Object.entries(members)) {
-          if (uid === currentUserId) continue;
-          if (merged.has(uid)) continue;
+    // Enrich with orgMember index for tutors not found via Firestore
+    if (role === "teacher" || role === "admin" || role === "student") {
+      try {
+        const rtdb = await getRealtimeDb();
+        const membersSnap = await get(ref(rtdb, `orgMembers/${orgId}`));
+        if (membersSnap.exists()) {
+          const members = membersSnap.val() as Record<string, OrgMemberIndexEntry>;
+          for (const [uid, member] of Object.entries(members)) {
+            if (uid === currentUserId) continue;
+            if (merged.has(uid)) continue;
 
-          merged.set(uid, {
-            uid,
-            name: member.name || "Utilizador",
-            email: member.email || "",
-            photoURL: "",
-            role: member.role || "student",
-            orgId,
-          });
+            const memberRole = member.role || "student";
+            if (role === "student" && memberRole !== "student" && memberRole !== "teacher" && memberRole !== "admin") continue;
+
+            merged.set(uid, {
+              uid,
+              name: member.name || "Utilizador",
+              email: member.email || "",
+              photoURL: "",
+              role: memberRole as ChatRole,
+              orgId,
+            });
+          }
         }
+      } catch {
+        // Keep best-effort results from previous sources.
       }
-    } catch {
-      // Keep best-effort results from previous sources.
     }
   }
 
-  if (currentUserRole === "student" || currentUserRole === "teacher") {
+  // For teachers and students, also fetch their associated tutors
+  if (role === "student" || role === "teacher") {
     try {
-      const fsDb = await getDbRuntime();
-      const byAluno = currentUserRole === "student"
-        ? await getDocs(
-            fsQuery(
-              collection(fsDb, "estagios"),
-              where("alunoId", "==", currentUserId)
-            )
-          )
-        : null;
-      const byProfessor = currentUserRole === "teacher"
-        ? await getDocs(
-            fsQuery(
-              collection(fsDb, "estagios"),
-              where("professorId", "==", currentUserId)
-            )
-          )
-        : null;
+      const allEligible = await getEligibleStageParticipantIds(currentUserId, role);
+      const tutorIds = Array.from(allEligible).filter(
+        (id) => id !== currentUserId && !merged.has(id)
+      );
 
-      const tutorIds = new Set<string>();
-      const estagiosDocs = [
-        ...(byAluno?.docs || []),
-        ...(byProfessor?.docs || []),
-      ];
-
-      for (const docSnap of estagiosDocs) {
-        const data = docSnap.data() as { tutorId?: string };
-        if (data.tutorId) tutorIds.add(data.tutorId);
-      }
-
-      if (currentUserRole === "student") {
-        try {
-          const rtdb = await getRealtimeDb();
-          const tutorsSnap = await get(ref(rtdb, `userTutors/${currentUserId}`));
-          if (tutorsSnap.exists()) {
-            Object.keys(tutorsSnap.val() as Record<string, true>).forEach((id) => tutorIds.add(id));
-          }
-        } catch {
-          // Ignore optional relation source.
-        }
-      }
-
-      if (tutorIds.size > 0) {
-        const tutorProfiles = await getChatProfilesByIds(Array.from(tutorIds));
+      if (tutorIds.length > 0) {
+        const tutorProfiles = await getChatProfilesByIds(tutorIds);
         for (const profile of tutorProfiles) {
-          if (profile.uid === currentUserId) continue;
           if (profile.role !== "tutor") continue;
           merged.set(profile.uid, profile);
         }
       }
-
     } catch {
       // Optional tutor enrichment should not block standard member search.
     }
@@ -493,6 +524,99 @@ async function findExistingDirectConversation(userA: string, userB: string): Pro
   }
 
   return null;
+}
+
+export async function ensureUserTutorsIndex(studentId: string, tutorId: string): Promise<void> {
+  try {
+    const rtdb = await getRealtimeDb();
+    await set(ref(rtdb, `userTutors/${studentId}/${tutorId}`), true);
+  } catch {
+    // Index sync is auxiliary; should not block tutor assignment.
+  }
+}
+
+export async function removeUserTutorsIndex(studentId: string, tutorId: string): Promise<void> {
+  try {
+    const rtdb = await getRealtimeDb();
+    await set(ref(rtdb, `userTutors/${studentId}/${tutorId}`), null);
+  } catch {
+    // Index cleanup is auxiliary.
+  }
+}
+
+export async function ensureAutoConversationForTutorAssignment(
+  studentId: string,
+  professorId: string,
+  tutorId: string
+): Promise<void> {
+  try {
+    const profiles = await getChatProfilesByIds([studentId, professorId, tutorId]);
+    const tutorProfile = profiles.find((p) => p.uid === tutorId);
+    const studentProfile = profiles.find((p) => p.uid === studentId);
+    if (!tutorProfile || !studentProfile) return;
+
+    const rtdb = await getRealtimeDb();
+
+    // Check existing direct conversation between student and tutor
+    const existingStudentTutor = await findExistingDirectConversation(studentId, tutorId);
+    if (existingStudentTutor) return;
+
+    // Check existing direct between professor and tutor
+    const existingProfTutor = await findExistingDirectConversation(professorId, tutorId);
+    if (existingProfTutor) return;
+
+    const conversationId = push(ref(rtdb, "conversations")).key;
+    if (!conversationId) return;
+
+    const ts = Date.now();
+    const participantsMap: Record<string, true> = {
+      [studentId]: true,
+      [professorId]: true,
+      [tutorId]: true,
+    };
+
+    const participantOrgIds = Array.from(
+      new Set(profiles.map((p) => p.orgId).filter(Boolean))
+    );
+    const orgId = participantOrgIds.length === 1 ? participantOrgIds[0] : null;
+
+    const conversation: ChatConversation = {
+      id: conversationId,
+      type: "group",
+      orgId,
+      participants: participantsMap,
+      lastMessage: {
+        text: null,
+        senderId: professorId,
+        createdAt: ts,
+        hasAttachments: false,
+      },
+      createdAt: ts,
+      updatedAt: ts,
+    };
+
+    const { id: _id, ...payload } = conversation;
+    const updates: Record<string, unknown> = {
+      [`conversations/${conversationId}`]: payload,
+    };
+    for (const uid of [studentId, professorId, tutorId]) {
+      updates[`userConversations/${uid}/${conversationId}`] = {
+        lastMessageText: null,
+        lastMessageAt: ts,
+        unreadCount: 0,
+        isMuted: false,
+      } satisfies UserConversationMeta;
+    }
+
+    await update(ref(rtdb), updates);
+    try {
+      await syncChatAccessDoc(conversation);
+    } catch {
+      // chatAccess sync is auxiliary.
+    }
+  } catch {
+    // Auto-conversation creation should not block tutor assignment.
+  }
 }
 
 export async function getChatProfilesByIds(userIds: string[]): Promise<ChatUserProfile[]> {
