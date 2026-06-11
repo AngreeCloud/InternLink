@@ -286,19 +286,24 @@ export function InternalChatHub() {
 
   const mergedMessages = useMemo<ChatMessageView[]>(() => {
     const sent = messages.map((message) => ({ ...message, deliveryState: "sent" as const }));
-    const pending = pendingMessages.map((pendingMessage) => ({
-      id: pendingMessage.tempId,
-      senderId: profile?.uid || "",
-      text: pendingMessage.text,
-      attachments: {},
-      createdAt: pendingMessage.createdAt,
-      editedAt: null,
-      deleted: false,
-      deletedAt: null,
-      seenBy: profile ? { [profile.uid]: pendingMessage.createdAt } : {},
-      deliveryState: pendingMessage.deliveryState,
-      tempId: pendingMessage.tempId,
-    }));
+    const inSent = new Set(sent.map((m) => `${m.senderId}:${m.text}:${m.createdAt}`));
+    const pending = pendingMessages
+      .filter(
+        (p) => !inSent.has(`${profile?.uid || ""}:${p.text}:${p.createdAt}`)
+      )
+      .map((pendingMessage) => ({
+        id: pendingMessage.tempId,
+        senderId: profile?.uid || "",
+        text: pendingMessage.text,
+        attachments: {},
+        createdAt: pendingMessage.createdAt,
+        editedAt: null,
+        deleted: false,
+        deletedAt: null,
+        seenBy: profile ? { [profile.uid]: pendingMessage.createdAt } : {},
+        deliveryState: pendingMessage.deliveryState,
+        tempId: pendingMessage.tempId,
+      }));
 
     return [...sent, ...pending].sort((a, b) => a.createdAt - b.createdAt);
   }, [messages, pendingMessages, profile]);
@@ -808,6 +813,7 @@ export function InternalChatHub() {
         sender: profile,
         text,
         attachments: filesToSend,
+        createdAt: now,
       });
 
       setPendingMessages((prev) => prev.filter((item) => item.tempId !== tempId));

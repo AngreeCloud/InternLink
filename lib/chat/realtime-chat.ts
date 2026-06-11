@@ -1015,6 +1015,7 @@ export async function sendMessage(params: {
   sender: ChatUserProfile;
   text: string;
   attachments: File[];
+  createdAt?: number;
 }): Promise<ChatMessage> {
   const { conversationId, sender, text, attachments } = params;
   const messageText = sanitizeText(text || "");
@@ -1072,7 +1073,7 @@ export async function sendMessage(params: {
   const storage = await getStorageRuntime();
   const uploadedAttachments = await uploadAttachments(storage, conversationId, messageId, attachments);
 
-  const createdAt = nowTs();
+  const createdAt = params.createdAt ?? nowTs();
 
   const message: ChatMessage = {
     id: messageId,
