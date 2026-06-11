@@ -1794,6 +1794,9 @@ export function InternalChatHub() {
         }}
       >
         <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="sr-only">Pesquisar utilizador</DialogTitle>
+          </DialogHeader>
           <div className="space-y-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
