@@ -22,6 +22,7 @@ import {
   loadOlderMessages,
   markConversationSeen,
   reportUserBySpam,
+  removeUserConversation,
   restoreDeletedMessage,
   searchInternalMembers,
   sendMessage,
@@ -282,6 +283,7 @@ export function InternalChatHub() {
   const canShowReportSpam = Boolean(directPeer && directPeerIsExternal && directPeer.role !== "tutor");
 
   const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set());
+  const [blockedByPeers, setBlockedByPeers] = useState<Set<string>>(new Set());
   const [deletedAccounts, setDeletedAccounts] = useState<Set<string>>(new Set());
 
   const mergedMessages = useMemo<ChatMessageView[]>(() => {
@@ -466,6 +468,39 @@ export function InternalChatHub() {
       unsubscribeTypingRef.current?.();
     };
   }, [loadParticipantProfiles, requestedConversationId]);
+
+  // Load blockedByPeers state for the selected DM
+  useEffect(() => {
+    if (!profile || !directPeer) {
+      setBlockedByPeers(new Set());
+      return;
+    }
+
+    let canceled = false;
+    (async () => {
+      try {
+        const rtdb = await getRealtimeDb();
+        const snap = await get(ref(rtdb, `userBlocks/${directPeer.uid}/${profile.uid}`));
+        if (!canceled) {
+          setBlockedByPeers((prev) => {
+            const next = new Set(prev);
+            if (snap.exists() && snap.val() === true) {
+              next.add(directPeer.uid);
+            } else {
+              next.delete(directPeer.uid);
+            }
+            return next;
+          });
+        }
+      } catch {
+        // Best-effort.
+      }
+    })();
+
+    return () => {
+      canceled = true;
+    };
+  }, [profile, directPeer?.uid]);
 
   useEffect(() => {
     if (!selectedConversation || !profile) {
@@ -926,6 +961,20 @@ export function InternalChatHub() {
     }
   }, [profile, directPeer]);
 
+  const handleRemoveConversation = useCallback(
+    async (conversationId: string) => {
+      if (!profile) return;
+      try {
+        await removeUserConversation(profile.uid, conversationId);
+        setConversations((prev) => prev.filter((item) => item.conversation.id !== conversationId));
+        setSelectedConversationId((prev) => (prev === conversationId ? "" : prev));
+      } catch {
+        // Best-effort.
+      }
+    },
+    [profile]
+  );
+
   const handleReportDirectPeer = useCallback(async () => {
     if (!profile || !directPeer || !selectedConversation) return;
 
@@ -1309,45 +1358,67 @@ export function InternalChatHub() {
                 const selected = selectedConversationId === conv.id;
 
                 return (
-                  <button
-                    type="button"
-                    key={conv.id}
-                    onClick={() => setSelectedConversationId(conv.id)}
-                    className={[
-                      "w-full rounded-lg border px-3 py-2 text-left transition-colors",
-                      selected ? "border-primary/50 bg-primary/10" : "border-transparent hover:bg-muted",
-                    ].join(" ")}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={avatarSrc || undefined} alt={avatarName} />
-                        <AvatarFallback className="text-xs">{initials(avatarName)}</AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <p className="truncate text-sm font-medium">{title}</p>
-                            {conv.type === "direct" && peers[0] && shouldShowRole(peers[0].role) ? (
-                              <Badge variant="secondary" className="h-5 px-2 text-[10px] shrink-0">
-                                {getRoleLabel(peers[0].role)}
-                              </Badge>
-                            ) : null}
+                  <div key={conv.id} className="group relative">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedConversationId(conv.id)}
+                      className={[
+                        "w-full rounded-lg border px-3 py-2 text-left transition-colors",
+                        selected ? "border-primary/50 bg-primary/10" : "border-transparent hover:bg-muted",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={avatarSrc || undefined} alt={avatarName} />
+                          <AvatarFallback className="text-xs">{initials(avatarName)}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <p className="truncate text-sm font-medium">{title}</p>
+                              {conv.type === "direct" && peers[0] && shouldShowRole(peers[0].role) ? (
+                                <Badge variant="secondary" className="h-5 px-2 text-[10px] shrink-0">
+                                  {getRoleLabel(peers[0].role)}
+                                </Badge>
+                              ) : null}
+                            </div>
+                            <span className="shrink-0 text-[11px] text-muted-foreground">
+                              {formatChatRelativeTime(item.meta.lastMessageAt)}
+                            </span>
                           </div>
-                          <span className="shrink-0 text-[11px] text-muted-foreground">
-                            {formatChatRelativeTime(item.meta.lastMessageAt)}
-                          </span>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {resolveConversationPreview(item.meta, conv.lastMessage)}
+                          </p>
                         </div>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {resolveConversationPreview(item.meta, conv.lastMessage)}
-                        </p>
+                        {(unreadByConversation[conv.id] || 0) > 0 ? (
+                          <Badge className="h-5 min-w-5 justify-center px-1 text-[10px]">
+                            {unreadByConversation[conv.id] >= 10 ? "9+" : unreadByConversation[conv.id]}
+                          </Badge>
+                        ) : null}
                       </div>
-                      {(unreadByConversation[conv.id] || 0) > 0 ? (
-                        <Badge className="h-5 min-w-5 justify-center px-1 text-[10px]">
-                          {unreadByConversation[conv.id] >= 10 ? "9+" : unreadByConversation[conv.id]}
-                        </Badge>
-                      ) : null}
-                    </div>
-                  </button>
+                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-1 top-1 h-6 w-6 opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          className="gap-2 text-destructive focus:text-destructive"
+                          onClick={() => handleRemoveConversation(conv.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Remover conversa
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 );
               })}
 
@@ -1397,7 +1468,7 @@ export function InternalChatHub() {
                       Reportar spam
                     </Button>
                   ) : null}
-                  {isDirect && directPeerIsExternal && directPeer ? (
+                  {isDirect && directPeer && !blockedByPeers.has(directPeer.uid) ? (
                     blockedUsers.has(directPeer.uid) ? (
                       <Button variant="outline" size="sm" className="gap-1.5" onClick={handleUnblockDirectPeer}>
                         <UserMinus className="h-4 w-4" />
@@ -1653,6 +1724,33 @@ export function InternalChatHub() {
               </ScrollArea>
 
               <footer className="border-t border-border px-4 py-3">
+                {(() => {
+                  const peerBlockedMe = isDirect && directPeer && blockedByPeers.has(directPeer.uid);
+                  const iBlockedPeer = isDirect && directPeer && blockedUsers.has(directPeer.uid);
+
+                  if (peerBlockedMe) {
+                    return (
+                      <div className="flex items-center justify-center gap-2 py-2">
+                        <UserMinus className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">Foste bloqueado por este utilizador.</span>
+                      </div>
+                    );
+                  }
+
+                  if (iBlockedPeer) {
+                    return (
+                      <div className="flex items-center justify-center gap-2 py-2">
+                        <span className="text-sm text-muted-foreground">Bloqueaste este utilizador.</span>
+                        <Button variant="outline" size="sm" onClick={handleUnblockDirectPeer}>
+                          <UserMinus className="h-4 w-4" />
+                          Desbloquear
+                        </Button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <>
                 {activeTypers.length > 0 ? (
                   <p className="mb-2 text-xs text-muted-foreground">
                     {activeTypers.join(", ")} a escrever...
@@ -1723,6 +1821,9 @@ export function InternalChatHub() {
                 </div>
 
                 {error ? <p className="mt-2 text-xs text-red-500">{error}</p> : null}
+                    </>
+                  );
+                })()}
               </footer>
             </>
           )}

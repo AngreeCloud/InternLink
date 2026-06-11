@@ -1050,6 +1050,9 @@ export async function sendMessage(params: {
     if (await isUserBlocked(recipient.uid, sender.uid)) {
       throw new Error("Este utilizador bloqueou o seu contacto.");
     }
+    if (await isUserBlocked(sender.uid, recipient.uid)) {
+      throw new Error("Bloqueaste este utilizador. Desbloqueie para enviar mensagens.");
+    }
   }
 
   if (attachments.length > 0) {
@@ -1258,10 +1261,6 @@ export async function blockExternalUser(params: {
 }): Promise<void> {
   const { blocker, target } = params;
 
-  if (blocker.orgId && blocker.orgId === target.orgId) {
-    throw new Error("Não pode bloquear membros internos da organização.");
-  }
-
   const fsDb = await getDbRuntime();
   const isTutorAssociated =
     (blocker.role === "student" && target.role === "tutor" && (await areTutorAndStudentAssociated(blocker.uid, target.uid, fsDb))) ||
@@ -1278,6 +1277,14 @@ export async function blockExternalUser(params: {
 export async function unblockUser(blockerId: string, blockedUserId: string): Promise<void> {
   const rtdb = await getRealtimeDb();
   await set(ref(rtdb, `userBlocks/${blockerId}/${blockedUserId}`), null);
+}
+
+export async function removeUserConversation(
+  userId: string,
+  conversationId: string
+): Promise<void> {
+  const rtdb = await getRealtimeDb();
+  await set(ref(rtdb, `userConversations/${userId}/${conversationId}`), null);
 }
 
 export async function reportUserBySpam(params: {
