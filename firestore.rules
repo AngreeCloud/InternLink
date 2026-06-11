@@ -86,6 +86,11 @@ service cloud.firestore {
         && currentUserData().role == "tutor";
     }
 
+    function isStudent() {
+      return currentUserExists()
+        && currentUserData().role == "aluno";
+    }
+
     function tutorEmailMatches(emailValue) {
       return isTutor()
         && emailValue is string
@@ -258,7 +263,8 @@ service cloud.firestore {
           ))
         || (isSchoolAdmin() && resource.data.schoolId == currentUserData().schoolId)
         || (isProfessor() && resource.data.schoolId == currentUserData().schoolId)
-        || (isTutor() && resource.data.role == "aluno");
+        || (isTutor() && resource.data.role == "aluno")
+        || (isStudent() && resource.data.role == "tutor");
 
       // Criação final de utilizadores vindos de pendingRegistrations (aluno/professor).
       allow create: if (

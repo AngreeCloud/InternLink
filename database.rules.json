@@ -145,7 +145,7 @@
             ".validate": "newData.isString()"
           },
           "role": {
-            ".validate": "newData.val() === 'student' || newData.val() === 'teacher' || newData.val() === 'tutor' || newData.val() === 'admin'"
+            ".validate": "newData.val() === 'student' || newData.val() === 'teacher' || newData.val() === 'tutor' || newData.val() === 'admin' || newData.val() === 'encarregado'"
           }
         }
       }

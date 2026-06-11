@@ -134,6 +134,8 @@ function getRoleLabel(role: ChatRole): string {
       return "Tutor";
     case "admin":
       return "";
+    case "encarregado":
+      return "Enc. Educação";
     default:
       return "Utilizador";
   }
@@ -521,6 +523,9 @@ export function InternalChatHub() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [mergedMessages.length, selectedConversationId]);
 
+  const suggestedRef = useRef(suggestedMembersFromConversations);
+  suggestedRef.current = suggestedMembersFromConversations;
+
   useEffect(() => {
     if ((!isDmDialogOpen && !isGroupDialogOpen) || !profile) return;
 
@@ -537,10 +542,21 @@ export function InternalChatHub() {
 
       if (canceled) return;
 
-      const recentSet = new Set(suggestedMembersFromConversations.map((item) => item.uid));
-      // Merge search results with recent suggestions; recent contacts first.
+      const suggested = suggestedRef.current;
+      const term = memberQuery.trim().toLowerCase();
+      const recentSet = new Set(suggested.map((item) => item.uid));
       const merged = new Map<string, ChatUserProfile>();
-      for (const item of suggestedMembersFromConversations) merged.set(item.uid, item);
+
+      // Only merge recent contacts that match the search term (when query is non-empty)
+      const suggestedFiltered = term
+        ? suggested.filter(
+            (m) =>
+              m.name.toLowerCase().includes(term) ||
+              m.email.toLowerCase().includes(term)
+          )
+        : suggested;
+
+      for (const item of suggestedFiltered) merged.set(item.uid, item);
       for (const item of results) merged.set(item.uid, item);
       const all = Array.from(merged.values());
 
@@ -556,7 +572,7 @@ export function InternalChatHub() {
       canceled = true;
       window.clearTimeout(timeout);
     };
-  }, [memberQuery, isDmDialogOpen, isGroupDialogOpen, profile, suggestedMembersFromConversations]);
+  }, [memberQuery, isDmDialogOpen, isGroupDialogOpen, profile]);
 
   const setTypingState = useCallback(
     async (nextValue: boolean) => {

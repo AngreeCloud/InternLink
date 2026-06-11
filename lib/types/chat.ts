@@ -1,6 +1,6 @@
 export type ChatConversationType = "direct" | "group";
 
-export type ChatRole = "student" | "teacher" | "tutor" | "admin";
+export type ChatRole = "student" | "teacher" | "tutor" | "admin" | "encarregado";
 
 export type ChatUserProfile = {
   uid: string;

@@ -149,7 +149,7 @@ function toChatRole(role: string | undefined): ChatRole {
     case "tutor":
       return "tutor";
     case "encarregado":
-      return "student"; // EE participates in chats with teacher/school scope
+      return "encarregado";
     default:
       return "student";
   }
@@ -281,6 +281,20 @@ async function getEligibleStageParticipantIds(
         if (d.tutorId) ids.add(d.tutorId);
       }
     }
+
+    // Also read RTDB userTutors index for students (tutor may be linked
+    // without tutorId set on the estagio doc)
+    if (userRole === "student") {
+      try {
+        const rtdb = await getRealtimeDb();
+        const tutorsSnap = await get(ref(rtdb, `userTutors/${userId}`));
+        if (tutorsSnap.exists()) {
+          Object.keys(tutorsSnap.val() as Record<string, true>).forEach((id) => ids.add(id));
+        }
+      } catch {
+        // Best-effort; the Firestore estagio query is the primary source.
+      }
+    }
   } catch {
     // Graceful fallback.
   }
@@ -296,6 +310,21 @@ export async function searchInternalMembers(
   const term = queryText.trim().toLowerCase();
   const merged = new Map<string, ChatUserProfile>();
   const role = currentUserRole || "student";
+
+  // Pre-load student's own encarregadoId to filter EEs
+  let myEncarregadoId: string | null = null;
+  if (role === "student") {
+    try {
+      const fsDb = await getDbRuntime();
+      const myDoc = await getDoc(doc(fsDb, "users", currentUserId));
+      if (myDoc.exists()) {
+        const myData = myDoc.data() as { encarregadoId?: string };
+        myEncarregadoId = myData.encarregadoId || null;
+      }
+    } catch {
+      // Graceful fallback.
+    }
+  }
 
   if (orgId) {
     try {
@@ -337,17 +366,17 @@ export async function searchInternalMembers(
 
         // Role-based eligibility filtering
         if (role === "tutor") {
-          // Tutor sees only stage participants
           if (!stageParticipants || !stageParticipants.has(docSnap.id)) continue;
         } else if (role === "student") {
-          // Student sees: other students, teachers, admins + their own tutors
-          if (
+          if (profileRole === "encarregado") {
+            // Student only sees their own EE
+            if (docSnap.id !== myEncarregadoId) continue;
+          } else if (
             profileRole !== "student" &&
             profileRole !== "teacher" &&
             profileRole !== "admin"
           ) continue;
         }
-        // teacher + admin: sees all org members
 
         const profile: ChatUserProfile = {
           uid: docSnap.id,
@@ -364,7 +393,7 @@ export async function searchInternalMembers(
       // Ignore Firestore search errors; fallback paths may still return useful candidates.
     }
 
-    // Enrich with orgMember index for tutors not found via Firestore
+    // Enrich with orgMember index — verify estado for RTDB entries
     if (role === "teacher" || role === "admin" || role === "student") {
       try {
         const rtdb = await getRealtimeDb();
@@ -376,7 +405,25 @@ export async function searchInternalMembers(
             if (merged.has(uid)) continue;
 
             const memberRole = member.role || "student";
-            if (role === "student" && memberRole !== "student" && memberRole !== "teacher" && memberRole !== "admin") continue;
+
+            // Role filter for student
+            if (role === "student") {
+              if (memberRole === "encarregado") {
+                if (uid !== myEncarregadoId) continue;
+              } else if (memberRole !== "student" && memberRole !== "teacher" && memberRole !== "admin") continue;
+            }
+
+            // Verify account is still active via Firestore (RTDB index has no estado)
+            try {
+              const fsDb = await getDbRuntime();
+              const userSnap = await getDoc(doc(fsDb, "users", uid));
+              if (!userSnap.exists()) continue;
+              const userData = userSnap.data() as { estado?: string };
+              const uEstado = (userData.estado || "").toLowerCase();
+              if (!uEstado || uEstado !== "ativo") continue;
+            } catch {
+              continue;
+            }
 
             merged.set(uid, {
               uid,
@@ -394,7 +441,7 @@ export async function searchInternalMembers(
     }
   }
 
-  // For teachers and students, also fetch their associated tutors
+  // For students and teachers, also fetch their associated tutors
   if (role === "student" || role === "teacher") {
     try {
       const allEligible = await getEligibleStageParticipantIds(currentUserId, role);
@@ -623,26 +670,30 @@ export async function getChatProfilesByIds(userIds: string[]): Promise<ChatUserP
   const fsDb = await getDbRuntime();
   const profiles = await Promise.all(
     userIds.map(async (uid) => {
-      const snap = await getDoc(doc(fsDb, "users", uid));
-      if (!snap.exists()) return null;
-      const data = snap.data() as {
-        nome?: string;
-        name?: string;
-        email?: string;
-        photoURL?: string;
-        role?: string;
-        schoolId?: string;
-        escolaId?: string;
-      };
+      try {
+        const snap = await getDoc(doc(fsDb, "users", uid));
+        if (!snap.exists()) return null;
+        const data = snap.data() as {
+          nome?: string;
+          name?: string;
+          email?: string;
+          photoURL?: string;
+          role?: string;
+          schoolId?: string;
+          escolaId?: string;
+        };
 
-      return {
-        uid,
-        name: data.nome || data.name || "Utilizador",
-        email: data.email || "",
-        photoURL: data.photoURL || "",
-        role: toChatRole(data.role),
-        orgId: getOrgIdFromUserData(data),
-      } satisfies ChatUserProfile;
+        return {
+          uid,
+          name: data.nome || data.name || "Utilizador",
+          email: data.email || "",
+          photoURL: data.photoURL || "",
+          role: toChatRole(data.role),
+          orgId: getOrgIdFromUserData(data),
+        } satisfies ChatUserProfile;
+      } catch {
+        return null;
+      }
     })
   );
 
