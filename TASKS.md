@@ -1,5 +1,7 @@
 # Chat System Audit & Tasks — Status: COMPLETED
 
+> Última atualização: UX/UI melhorias (v2)
+
 ## Audit Summary
 
 ### Architecture
@@ -75,6 +77,17 @@
   - [x] Search eligibility unit tests
   - [x] userTutors RTDB rules tests
   - [x] All existing tests still pass
+
+## UX/UI Improvements (v2)
+
+- [x] 1. Empty state for conversations without messages (icon + "Escreva sua primeira mensagem")
+- [x] 2. Role badge (Aluno/Professor/Tutor) in sidebar conversation list
+- [x] 3. Spotlight search button (lupa icon) before help button
+- [x] 4. Spotlight popup — central search dialog with keyboard navigation
+  - [x] Esc and X close the popup
+  - [x] Focus auto no input
+  - [x] Seta cima/baixo + Enter para navegar/abrir
+  - [x] Abre conversa existente ou cria nova diretamente
 
 ## Pending
 - `api/chat/system-message` route (server-side)

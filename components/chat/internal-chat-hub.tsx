@@ -181,6 +181,12 @@ export function InternalChatHub() {
   const [memberResults, setMemberResults] = useState<ChatUserProfile[]>([]);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [externalEmail, setExternalEmail] = useState("");
+  const [isSpotlightOpen, setIsSpotlightOpen] = useState(false);
+  const [spotlightQuery, setSpotlightQuery] = useState("");
+  const [spotlightResults, setSpotlightResults] = useState<ChatUserProfile[]>([]);
+  const [spotlightIndex, setSpotlightIndex] = useState(-1);
+  const spotlightInputRef = useRef<HTMLInputElement>(null);
+
   const [editingMessageId, setEditingMessageId] = useState("");
   const [editingText, setEditingText] = useState("");
   const [error, setError] = useState("");
@@ -574,6 +580,84 @@ export function InternalChatHub() {
     };
   }, [memberQuery, isDmDialogOpen, isGroupDialogOpen, profile]);
 
+  // Spotlight search effect
+  useEffect(() => {
+    if (!isSpotlightOpen || !profile) return;
+
+    let canceled = false;
+    const delay = spotlightQuery.trim() ? 180 : 0;
+
+    const timeout = window.setTimeout(async () => {
+      const results = await searchInternalMembers(
+        profile.orgId ?? null,
+        spotlightQuery,
+        profile.uid,
+        profile.role
+      );
+      if (!canceled) {
+        setSpotlightResults(results);
+        setSpotlightIndex(-1);
+      }
+    }, delay);
+
+    return () => {
+      canceled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [spotlightQuery, isSpotlightOpen, profile]);
+
+  useEffect(() => {
+    if (isSpotlightOpen && spotlightInputRef.current) {
+      const timer = setTimeout(() => spotlightInputRef.current?.focus(), 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isSpotlightOpen]);
+
+  const handleSpotlightKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setSpotlightIndex((prev) =>
+          prev < spotlightResults.length - 1 ? prev + 1 : prev
+        );
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setSpotlightIndex((prev) => (prev > 0 ? prev - 1 : 0));
+      } else if (event.key === "Enter" && spotlightIndex >= 0) {
+        event.preventDefault();
+        const member = spotlightResults[spotlightIndex];
+        if (member) handleSpotlightSelect(member);
+      }
+    },
+    [spotlightResults, spotlightIndex]
+  );
+
+  const handleSpotlightSelect = useCallback(
+    async (member: ChatUserProfile) => {
+      if (!profile) return;
+
+      const existing = conversations.find((item) => {
+        if (item.conversation.type !== "direct") return false;
+        const ids = Object.keys(item.conversation.participants);
+        return ids.length === 2 && ids.includes(member.uid) && ids.includes(profile.uid);
+      });
+
+      if (existing) {
+        setSelectedConversationId(existing.conversation.id);
+      } else {
+        try {
+          const conversation = await createConversationFromUsers(profile, [member.uid]);
+          setSelectedConversationId(conversation.id);
+        } catch (err) {
+          setError((err as Error).message || "Falha ao criar conversa.");
+        }
+      }
+
+      setIsSpotlightOpen(false);
+    },
+    [profile, conversations]
+  );
+
   const setTypingState = useCallback(
     async (nextValue: boolean) => {
       if (!profile || !selectedConversation) return;
@@ -939,6 +1023,19 @@ export function InternalChatHub() {
                 size="sm"
                 variant="ghost"
                 className="gap-1.5"
+                onClick={() => {
+                  setSpotlightQuery("");
+                  setSpotlightResults([]);
+                  setSpotlightIndex(-1);
+                  setIsSpotlightOpen(true);
+                }}
+              >
+                <Search className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="gap-1.5"
                 onClick={() => setIsHelpDialogOpen(true)}
               >
                 ?
@@ -1222,8 +1319,15 @@ export function InternalChatHub() {
                       </Avatar>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-sm font-medium">{title}</p>
-                          <span className="text-[11px] text-muted-foreground">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <p className="truncate text-sm font-medium">{title}</p>
+                            {conv.type === "direct" && peers[0] && shouldShowRole(peers[0].role) ? (
+                              <Badge variant="secondary" className="h-5 px-2 text-[10px] shrink-0">
+                                {getRoleLabel(peers[0].role)}
+                              </Badge>
+                            ) : null}
+                          </div>
+                          <span className="shrink-0 text-[11px] text-muted-foreground">
                             {formatChatRelativeTime(item.meta.lastMessageAt)}
                           </span>
                         </div>
@@ -1305,6 +1409,20 @@ export function InternalChatHub() {
 
               <ScrollArea className="flex-1">
                 <div className="mx-auto w-full max-w-4xl p-4">
+                  {mergedMessages.length === 0 ? (
+                    <div className="flex min-h-full flex-col items-center justify-center gap-3 py-20 text-center">
+                      <MessageSquare className="h-12 w-12 opacity-20" />
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">
+                          Escreva sua primeira mensagem
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground/60">
+                          Esta conversa já está pronta. Comece quando quiser.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
                   {hasMore ? (
                     <div className="mb-3 flex justify-center">
                       <Button variant="outline" size="sm" onClick={handleLoadMore}>Carregar mais</Button>
@@ -1523,6 +1641,8 @@ export function InternalChatHub() {
                   })}
 
                   <div ref={endRef} />
+                    </>
+                  )}
                 </div>
               </ScrollArea>
 
@@ -1658,6 +1778,79 @@ export function InternalChatHub() {
               Fechar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Spotlight Search Dialog */}
+      <Dialog
+        open={isSpotlightOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSpotlightQuery("");
+            setSpotlightResults([]);
+            setSpotlightIndex(-1);
+          }
+          setIsSpotlightOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                ref={spotlightInputRef}
+                className="h-11 pl-9 text-base"
+                placeholder="Procurar utilizador por nome ou email..."
+                value={spotlightQuery}
+                onChange={(event) => {
+                  setSpotlightQuery(event.target.value);
+                  setSpotlightIndex(-1);
+                }}
+                onKeyDown={handleSpotlightKeyDown}
+              />
+            </div>
+
+            <ScrollArea className="max-h-80">
+              {spotlightResults.map((member, index) => (
+                <button
+                  key={member.uid}
+                  type="button"
+                  className={[
+                    "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors",
+                    index === spotlightIndex ? "bg-muted" : "hover:bg-muted/50",
+                  ].join(" ")}
+                  onClick={() => handleSpotlightSelect(member)}
+                  onMouseEnter={() => setSpotlightIndex(index)}
+                >
+                  <Avatar className="h-9 w-9">
+                    <AvatarImage src={member.photoURL || undefined} alt={member.name} />
+                    <AvatarFallback className="text-xs">{initials(member.name)}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-medium">{member.name}</span>
+                      {shouldShowRole(member.role) ? (
+                        <Badge variant="secondary" className="h-5 shrink-0 px-2 text-[10px]">
+                          {getRoleLabel(member.role)}
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">{member.email}</p>
+                  </div>
+                </button>
+              ))}
+              {spotlightQuery.trim() && spotlightResults.length === 0 ? (
+                <p className="px-3 py-4 text-center text-xs text-muted-foreground">
+                  Nenhum utilizador encontrado.
+                </p>
+              ) : null}
+              {!spotlightQuery.trim() ? (
+                <p className="px-3 py-4 text-center text-xs text-muted-foreground">
+                  Escreva o nome ou email para pesquisar.
+                </p>
+              ) : null}
+            </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

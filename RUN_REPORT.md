@@ -1,5 +1,7 @@
 # RUN_REPORT — Chat System Improvements
 
+> Última atualização: UX/UI melhorias (v2) — 2026-06-11
+
 ## Summary
 
 Audited and improved the InternLink chat system across 11 areas. All changes follow existing patterns, use current architecture (RTDB + Firestore), and maintain UI consistency.
@@ -28,7 +30,48 @@ Audited and improved the InternLink chat system across 11 areas. All changes fol
 - Conversation list with unread badges
 - Attachments with permission checks
 
-## What Was Implemented
+## UX/UI Improvements (v2)
+
+### 11. Empty State — Conversa sem Mensagens (`internal-chat-hub.tsx`)
+- Quando a conversa está selecionada mas `mergedMessages.length === 0`, mostra:
+  - Ícone `MessageSquare` (opacidade 20%)
+  - Título: "Escreva sua primeira mensagem"
+  - Subtítulo: "Esta conversa já está pronta. Comece quando quiser."
+- Distingue-se do estado "nenhuma conversa selecionada" (header + input field mantêm-se visíveis)
+- Inline no ScrollArea do painel principal
+
+### 12. Role Badge na Sidebar (`internal-chat-hub.tsx`)
+- Badge da role (Aluno/Professor/Tutor) ao lado do nome na lista lateral de conversas diretas
+- Reusa `getRoleLabel()` / `shouldShowRole()` existentes
+- `shrink-0` no badge + `min-w-0` no wrapper para não quebrar layout
+- Consistente com badges já usadas no header e nos dialogs
+
+### 13. Botão de Pesquisa (Lupa) (`internal-chat-hub.tsx`)
+- Botão com ícone `Search` antes do botão "?" na toolbar da sidebar
+- Abre o popup spotlight ao clicar
+- Limpa estado anterior da pesquisa
+
+### 14. Spotlight Popup de Pesquisa (`internal-chat-hub.tsx`)
+- Diálogo central (shadcn Dialog) com overlay
+- Input de pesquisa com auto-focus ao abrir (setTimeout 50ms para animação)
+- Resultados: avatar + nome + role badge + email
+- Fecha com:
+  - Tecla `Esc` (nativo do Dialog)
+  - Botão `X` (nativo do DialogContent)
+  - Clique fora (nativo do Dialog)
+- Limpa estado de pesquisa ao fechar (onOpenChange)
+- Navegação por teclado:
+  - `ArrowDown` / `ArrowUp`: navega resultados
+  - `Enter`: abre a conversa selecionada
+  - `onMouseEnter` sincroniza índice visual
+- Pesquisa: debounce 180ms, reusa `searchInternalMembers()`
+
+### 15. Integração com Criação/Abertura de Conversa
+- `handleSpotlightSelect`:
+  - Verifica se já existe conversa direta entre os dois utilizadores
+  - Se existir: `setSelectedConversationId()` — abre diretamente
+  - Se não existir: `createConversationFromUsers()` — cria e abre
+- Fecha popup automaticamente ao abrir/criar
 
 ### 1. Role-Based Search Filtering (`lib/chat/realtime-chat.ts`)
 - Added `getEligibleStageParticipantIds()` helper
@@ -90,7 +133,7 @@ Audited and improved the InternLink chat system across 11 areas. All changes fol
 | `tests/actions/search-eligibility.test.ts` | Unit (NEW) | `isValidEmail` — 6 cases |
 | `tests/realtime/user-tutors.rules.test.mjs` | Rules (NEW) | `userTutors` RTDB rules — 6 cases |
 
-**Existing tests still pass**: 16 chat unit tests + all rules tests
+**Existing tests still pass**: 26 chat unit tests + all rules tests
 
 ## Files Changed
 
@@ -98,11 +141,12 @@ Audited and improved the InternLink chat system across 11 areas. All changes fol
 |------|--------|
 | `lib/chat/realtime-chat.ts` | Role-based search, email validation, userTutors sync, auto-conversation |
 | `lib/types/chat.ts` | (unchanged) |
-| `components/chat/internal-chat-hub.tsx` | DM/Group split, role badges, help dialog, unblock, deleted indicator |
+| `components/chat/internal-chat-hub.tsx` | DM/Group split, role badges, help dialog, unblock, deleted indicator, empty state, sidebar badges, spotlight search |
 | `components/estagios/create-estagio-dialog.tsx` | userTutors sync after creation |
 | `components/professor/internship-manager.tsx` | userTutors sync + auto-conversation on create + reassign |
-| `firestore.rules` | chatAccess type validation |
-| `database.rules.json` | (unchanged, rules already correct for userTutors) |
+| `firestore.rules` | chatAccess type validation, isStudent + student→tutor rule |
+| `database.rules.json` | Added "encarregado" role validation |
+| `firestore.indexes.json` | Added courses composite index |
 | `tests/actions/search-eligibility.test.ts` | NEW — isValidEmail tests |
 | `tests/realtime/user-tutors.rules.test.mjs` | NEW — userTutors RTDB rules tests |
 | `tests/firestore/run-rules-tests.mjs` | Added user-tutors test |
@@ -127,6 +171,8 @@ Audited and improved the InternLink chat system across 11 areas. All changes fol
 5. **`userTutors` index cleanup on tutor removal from estagio** — Currently only syncs on add, not remove.
 6. **Email notification of new messages** — Currently only in-app toast notification.
 7. **End-to-end testing** for chat flows — Would benefit from Cypress/Playwright tests.
+8. **Keyboard shortcut Cmd+K / Ctrl+K** to open spotlight — Currently only via button click; would be a natural UX addition.
+9. **Fuse.js fuzzy search** — Current `String.includes` search could be improved with fuzzy matching for better typo tolerance.
 
 ## Suggestions
 
