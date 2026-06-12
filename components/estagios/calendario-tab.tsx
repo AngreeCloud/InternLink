@@ -51,6 +51,7 @@ import { ScheduleChangeRequestModal } from "./schedule-change-request-modal";
 import { ScheduleChangeRequestThread } from "./schedule-change-request-thread";
 import { ComunicadoCard } from "./comunicado-card";
 import { TerminoAntecipadoConfirmationModal } from "./termino-antecipado-confirmation-modal";
+import { HolidayWorkDialog } from "./holiday-work-dialog";
 
 type Props = {
   estagioId: string;
@@ -64,6 +65,7 @@ type PresencaDoc = {
   date: string;
   hoursWorked: number;
   notes?: string;
+  isHolidayWork?: boolean;
 };
 
 type ViewMode = "month" | "week";
@@ -285,6 +287,20 @@ export function CalendarioTab({
   const [eligibility, setEligibility] = useState<EligibilityResult | null>(null);
   const [confirmationModalOpen, setConfirmationModalOpen] = useState(false);
 
+  // Holiday work dialog
+  const [holidayWorkDialogOpen, setHolidayWorkDialogOpen] = useState(false);
+  const [holidayWorkDate, setHolidayWorkDate] = useState<string>("");
+
+  const holidayWorkSet = useMemo(
+    () => new Set(Object.values(presencas).filter((p) => p.isHolidayWork).map((p) => p.date)),
+    [presencas]
+  );
+
+  const holidayDatesFiltered = useMemo(
+    () => holidayDates.filter((d) => !holidayWorkSet.has(toIsoDate(d))),
+    [holidayDates, holidayWorkSet]
+  );
+
   const presencaSet = useMemo(
     () =>
       new Set(
@@ -396,7 +412,7 @@ export function CalendarioTab({
       requestsByDate,
       horasDiarias,
     );
-    const isHoliday = holidaySet.has(tooltipDay);
+    const isHoliday = holidaySet.has(tooltipDay) && !holidayWorkSet.has(tooltipDay);
     const holidayName = holidayMap.get(tooltipDay) ?? "";
     const pendingPrev = previewIfApproved(tooltipDay);
     const pct = totalHoras > 0 ? ((acumuladas / totalHoras) * 100).toFixed(1) : "0.0";
@@ -411,7 +427,7 @@ export function CalendarioTab({
       pendingPreview: pendingPrev,
       percentagem: pct,
     };
-  }, [tooltipDay, horasDiarias, totalHoras, workDays, presencas, presencaSet, requestsByDate, holidaySet]);
+  }, [tooltipDay, horasDiarias, totalHoras, workDays, presencas, presencaSet, requestsByDate, holidaySet, holidayWorkSet]);
 
   // New eligibility logic for terminoAntecipado
   const eligibilityResult = useMemo(() => {
@@ -449,8 +465,18 @@ export function CalendarioTab({
   }, []);
 
   function handleDayClick(date: Date) {
-    if (!isAluno) return;
     const iso = toIsoDate(date);
+
+    // Handle holiday clicks — offer to work on the holiday (any user)
+    if (holidaySet.has(iso)) {
+      if (holidayWorkSet.has(iso)) return;
+      setHolidayWorkDate(iso);
+      setHolidayWorkDialogOpen(true);
+      return;
+    }
+
+    if (!isAluno) return;
+
     if (!workDaySet.has(iso)) return;
 
     const req = requestsByDate.get(iso);
@@ -517,9 +543,10 @@ export function CalendarioTab({
   }).filter(Boolean) as Date[];
   const scheduledDates = [...workDaySet]
     .filter((iso) => !presencaSet.has(iso) && !missingHoursSet.has(iso) && !requestDateSet.has(iso) && !holidaySet.has(iso))
-    .map((iso) => {
-      return isoToDate(iso);
-    });
+    .map((iso) => isoToDate(iso));
+  const holidayScheduled = [...holidayWorkSet]
+    .filter((iso) => !presencaSet.has(iso))
+    .map(isoToDate);
   const missingDates = [...missingHoursSet].map((iso) => {
     return isoToDate(iso);
   });
@@ -794,7 +821,7 @@ export function CalendarioTab({
               endMonth={endDate}
               modifiers={{
                 worked: workedDates,
-                scheduled: scheduledDates,
+                scheduled: [...scheduledDates, ...holidayScheduled],
                 missing: missingDates,
                 requestJustification: requestTypeDates.justification,
                 requestFutureAbsence: requestTypeDates.futureAbsence,
@@ -806,7 +833,7 @@ export function CalendarioTab({
                 terminoApproved: terminoApprovedDates,
                 terminoObrigatorio: terminoObrigatorioDates,
                 terminoInvalidated: terminoInvalidatedDates,
-                holiday: holidayDates,
+                holiday: holidayDatesFiltered,
               }}
               modifiersClassNames={{
                 worked: "rdp-day--worked",
@@ -824,7 +851,7 @@ export function CalendarioTab({
                 terminoInvalidated: "rdp-day--termino-invalidated",
                 holiday: "rdp-day--holiday",
               }}
-              onDayClick={isAluno ? handleDayClick : undefined}
+              onDayClick={handleDayClick}
               onDayMouseEnter={(date: Date, _modifiers: unknown, e: React.MouseEvent) => {
                 const iso = toIsoDate(date);
                 if (!workDaySet.has(iso) && !holidaySet.has(iso)) return;
@@ -1071,6 +1098,19 @@ export function CalendarioTab({
         canRequestEarlyTermination={eligibleForEarlyTermination}
         onCreated={handleUpdated}
         defaultType={modalDefaultType}
+      />
+
+      {/* Holiday work dialog */}
+      <HolidayWorkDialog
+        open={holidayWorkDialogOpen}
+        onClose={() => setHolidayWorkDialogOpen(false)}
+        estagioId={estagioId}
+        targetDate={holidayWorkDate}
+        isPast={holidayWorkDate <= todayIso}
+        horasDiarias={horasDiarias}
+        currentUserId={currentUserId}
+        currentUserRole={currentUserRole}
+        onCreated={handleUpdated}
       />
 
       {/* TerminoAntecipado confirmation modal */}

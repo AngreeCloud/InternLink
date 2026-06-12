@@ -47,6 +47,7 @@ type PresencaDoc = {
   updatedAt?: unknown;
   updatedBy?: string;
   updatedByRole?: string;
+  isHolidayWork?: boolean;
 };
 
 const MAX_HOURS_PER_DAY = 12;
@@ -130,9 +131,14 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
     };
   }, [estagioId, setPartialAbsenceDates]);
 
+  const holidayWorkSet = useMemo(
+    () => new Set(Object.values(presencas).filter((p) => p.isHolidayWork).map((p) => p.date)),
+    [presencas]
+  );
+
   const workDays = useMemo(
-    () => listWorkDays(dataInicio, effectiveDataFim, dias, fechoExcludedDates),
-    [dataInicio, effectiveDataFim, dias, fechoExcludedDates]
+    () => listWorkDays(dataInicio, effectiveDataFim, dias, fechoExcludedDates, holidayWorkSet),
+    [dataInicio, effectiveDataFim, dias, fechoExcludedDates, holidayWorkSet]
   );
   const weeks = useMemo(() => groupWorkDaysByWeek(workDays), [workDays]);
 

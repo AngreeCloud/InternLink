@@ -309,6 +309,62 @@ describe("absenceType fallback when field is missing", () => {
 });
 
 // ---------------------------------------------------------------------------
+// holiday work (isHolidayWork) — day was a holiday but user opted to work
+// ---------------------------------------------------------------------------
+describe("holiday work", () => {
+  it("hasRegistered=true when presenca exists on a holiday (hoursWorked>0)", () => {
+    const r = fixt("2026-06-10", {
+      workDays: [{ iso: "2026-06-08" }, { iso: "2026-06-09" }, { iso: "2026-06-10" }, { iso: "2026-06-11" }],
+      presencas: { "2026-06-10": { hoursWorked: 5 } },
+      presencaSet: presencaSetFrom("2026-06-10"),
+      horasDiarias: 7.5,
+    });
+    expect(r.hasRegistered).toBe(true);
+    expect(r.registadasDia).toBe(5);
+    expect(r.previstasDia).toBe(7.5); // no request, so full horasDiarias
+  });
+
+  it("hasRegistered=false when holiday work set for future (hoursWorked=0, no presencaSet)", () => {
+    const r = fixt("2026-06-10", {
+      workDays: [{ iso: "2026-06-08" }, { iso: "2026-06-09" }, { iso: "2026-06-10" }, { iso: "2026-06-11" }],
+      presencas: { "2026-06-10": { hoursWorked: 0 } },
+      presencaSet: presencaSetFrom(), // 0h not in set
+      horasDiarias: 7.5,
+    });
+    expect(r.hasRegistered).toBe(false);
+    expect(r.registadasDia).toBe(0);
+    expect(r.previstasDia).toBe(7.5);
+  });
+
+  it("acumuladas includes real hours from a past holiday work day", () => {
+    const r = fixt("2026-06-10", {
+      workDays: [{ iso: "2026-06-08" }, { iso: "2026-06-09" }, { iso: "2026-06-10" }],
+      presencas: {
+        "2026-06-08": { hoursWorked: 7 },
+        "2026-06-09": { hoursWorked: 7 },
+        "2026-06-10": { hoursWorked: 5 },
+      },
+      presencaSet: presencaSetFrom("2026-06-08", "2026-06-09", "2026-06-10"),
+      horasDiarias: 7.5,
+    });
+    expect(r.acumuladas).toBe(19); // 7 + 7 + 5
+  });
+
+  it("acumuladas uses horasDiarias for future holiday work day (no presenca)", () => {
+    const r = fixt("2026-06-10", {
+      workDays: [{ iso: "2026-06-08" }, { iso: "2026-06-09" }, { iso: "2026-06-10" }],
+      presencas: {
+        "2026-06-08": { hoursWorked: 7 },
+        "2026-06-09": { hoursWorked: 7 },
+      },
+      presencaSet: presencaSetFrom("2026-06-08", "2026-06-09"),
+      horasDiarias: 7.5,
+    });
+    expect(r.acumuladas).toBe(21.5); // 7 + 7 + 7.5 (predicted for holiday)
+  });
+});
+
+// ---------------------------------------------------------------------------
 // edge cases
 // ---------------------------------------------------------------------------
 describe("edge cases", () => {
