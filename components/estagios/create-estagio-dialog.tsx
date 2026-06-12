@@ -21,6 +21,8 @@ import {
   formatIsoDatePt,
   type DiasSemana,
 } from "@/lib/estagios/date-calc";
+import { getAuthRuntime } from "@/lib/firebase-runtime";
+import { ensureUserTutorsIndex, ensureAutoConversationForTutorAssignment } from "@/lib/chat/realtime-chat";
 
 type StudentOption = {
   id: string;
@@ -276,6 +278,16 @@ export function CreateEstagioDialog({
         setErrorMessage(data.error || "Não foi possível criar o estágio.");
         return;
       }
+
+      if (tutorId && alunoId) {
+        const auth = await getAuthRuntime();
+        const professorId = auth.currentUser?.uid;
+        if (professorId) {
+          void ensureUserTutorsIndex(alunoId, tutorId);
+          void ensureAutoConversationForTutorAssignment(alunoId, professorId, tutorId);
+        }
+      }
+
       setOpen(false);
       onCreated(data.id);
     } catch (error) {
