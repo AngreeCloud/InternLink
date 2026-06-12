@@ -269,6 +269,46 @@ describe("base schedule change 7h -> 7.5h", () => {
 });
 
 // ---------------------------------------------------------------------------
+// absenceType fallback when field is missing
+// ---------------------------------------------------------------------------
+describe("absenceType fallback when field is missing", () => {
+  it("request without absenceType but hoursAffected=0 → treated as total absence (previstasDia=0)", () => {
+    const r = fixt("2026-05-13", {
+      requestsByDate: reqs([["2026-05-13", { status: "approved", hoursAffected: 0 }]]),
+    });
+    expect(r.previstasDia).toBe(0);
+  });
+
+  it("request without absenceType but hoursAffected=0 → 0 in acumuladas", () => {
+    const r = fixt("2026-05-14", {
+      workDays: [{ iso: "2026-05-12" }, { iso: "2026-05-13" }, { iso: "2026-05-14" }],
+      presencas: { "2026-05-12": { hoursWorked: 7 } },
+      presencaSet: presencaSetFrom("2026-05-12"),
+      requestsByDate: reqs([["2026-05-13", { status: "approved", hoursAffected: 0 }]]),
+      horasDiarias: 7.5,
+    });
+    expect(r.acumuladas).toBe(14.5); // 7 (real) + 0 (absence) + 7.5 (predicted)
+  });
+
+  it("request without absenceType but hoursAffected>0 → treated as partial absence", () => {
+    const r = fixt("2026-05-13", {
+      requestsByDate: reqs([["2026-05-13", { status: "approved", hoursAffected: 3 }]]),
+      horasDiarias: 7.5,
+    });
+    expect(r.previstasDia).toBe(4.5);
+  });
+
+  it("request without absenceType and hoursAffected>0 → reduced in acumuladas", () => {
+    const r = fixt("2026-05-14", {
+      workDays: [{ iso: "2026-05-12" }, { iso: "2026-05-13" }, { iso: "2026-05-14" }],
+      requestsByDate: reqs([["2026-05-13", { status: "approved", hoursAffected: 3 }]]),
+      horasDiarias: 7.5,
+    });
+    expect(r.acumuladas).toBe(19.5); // 7.5 + 4.5 + 7.5
+  });
+});
+
+// ---------------------------------------------------------------------------
 // edge cases
 // ---------------------------------------------------------------------------
 describe("edge cases", () => {

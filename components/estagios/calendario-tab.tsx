@@ -335,7 +335,11 @@ export function CalendarioTab({
     if (req.absenceType === "partial" && typeof req.hoursAffected === "number") {
       return Math.max(0, horasDiarias - req.hoursAffected);
     }
-    return horasDiarias;
+    // Fallback for requests missing absenceType: infer from hoursAffected
+    if (typeof req.hoursAffected === "number" && req.hoursAffected > 0) {
+      return Math.max(0, horasDiarias - req.hoursAffected);
+    }
+    return 0;
   }
 
   const pendingRequestsMap = useMemo(() => {
@@ -848,6 +852,8 @@ export function CalendarioTab({
                     <p>{tooltipData.isReal ? "Registadas acumuladas" : "Previstas acumuladas"}: {tooltipData.acumuladas}h</p>
                     {tooltipData.isReal ? (
                       <p>Registadas no dia: {tooltipData.registadasDia}h</p>
+                    ) : tooltipData.previstasDia === 0 && !tooltipData.isHoliday ? (
+                      <p>Registadas no dia: 0h</p>
                     ) : (
                       <p>Previstas do dia: {tooltipData.previstasDia}h
                         {tooltipData.pendingPreview !== null && tooltipData.pendingPreview !== tooltipData.previstasDia && (
