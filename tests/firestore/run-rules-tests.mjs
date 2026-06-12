@@ -2,6 +2,12 @@ import { readdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 
+const TEST_FILES = [
+  "tests/firestore/school-isolation.rules.test.mjs",
+  "tests/realtime/chat-creation.rules.test.mjs",
+  "tests/realtime/user-tutors.rules.test.mjs",
+];
+
 async function cleanupFirebaseDebugLogs() {
   const workspaceRoot = process.cwd();
   const entries = await readdir(workspaceRoot, { withFileTypes: true });
@@ -22,25 +28,25 @@ async function cleanupFirebaseDebugLogs() {
   );
 }
 
-const testProcess = spawn(
-  process.execPath,
-  [
-    "--test",
-    "tests/firestore/school-isolation.rules.test.mjs",
-    "tests/realtime/chat-creation.rules.test.mjs",
-    "tests/realtime/user-tutors.rules.test.mjs",
-  ],
-  {
-    stdio: "inherit",
+async function runTests() {
+  let exitCode = 0;
+
+  for (const file of TEST_FILES) {
+    const code = await new Promise((resolve) => {
+      const proc = spawn(process.execPath, ["--test", file], {
+        stdio: "inherit",
+      });
+      proc.on("close", resolve);
+      proc.on("error", () => resolve(1));
+    });
+
+    if (code !== 0) {
+      exitCode = code ?? 1;
+    }
   }
-);
 
-testProcess.on("close", async (code) => {
   await cleanupFirebaseDebugLogs();
-  process.exit(code ?? 1);
-});
+  process.exit(exitCode);
+}
 
-testProcess.on("error", async () => {
-  await cleanupFirebaseDebugLogs();
-  process.exit(1);
-});
+runTests();
