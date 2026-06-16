@@ -650,6 +650,7 @@ export async function ensureAutoConversationForTutorAssignment(
       updates[`userConversations/${uid}/${conversationId}`] = {
         lastMessageText: null,
         lastMessageAt: ts,
+        lastSeenAt: ts,
         unreadCount: 0,
         isMuted: false,
       } satisfies UserConversationMeta;
@@ -789,6 +790,7 @@ export async function createConversationFromUsers(
     updates[`userConversations/${participant.uid}/${conversationId}`] = {
       lastMessageText: null,
       lastMessageAt: ts,
+      lastSeenAt: ts,
       unreadCount: 0,
       isMuted: false,
     } satisfies UserConversationMeta;

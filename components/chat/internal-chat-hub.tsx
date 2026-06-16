@@ -93,7 +93,7 @@ type PendingMessage = {
 };
 
 const PAGE_SIZE = 30;
-const MESSAGE_SEQUENCE_WINDOW_MS = 60 * 60 * 1000;
+const MESSAGE_SEQUENCE_WINDOW_MS = 5 * 60 * 1000;
 
 function initials(name: string): string {
   const chunks = name.trim().split(/\s+/).slice(0, 2);
@@ -1556,10 +1556,12 @@ export function InternalChatHub() {
                             </>
                           ) : null}
 
-                          <div className="shrink-0">
-                            <span>{formatMessageDateTime(message.createdAt)}</span>
-                            {editedMeta ? <span className="ml-2 italic">{editedMeta}</span> : null}
-                          </div>
+                          {!sameSenderAsPrev ? (
+                            <div className="shrink-0">
+                              <span>{formatMessageDateTime(message.createdAt)}</span>
+                              {editedMeta ? <span className="ml-2 italic">{editedMeta}</span> : null}
+                            </div>
+                          ) : null}
                         </div>
 
                         <div className={[
