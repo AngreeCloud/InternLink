@@ -151,7 +151,11 @@ export function listWorkDays(
     const isWorkday = Boolean(diasSemana[key]);
     const isHoliday = holidays.has(iso);
     const isIncluded = includedSet.has(iso);
-    if (excludedDates?.has(iso)) continue;
+    if (excludedDates?.has(iso)) {
+      cursor.setDate(cursor.getDate() + 1);
+      safety += 1;
+      continue;
+    }
     if ((isWorkday && !isHoliday) || isIncluded) {
       const isoWeek = getIsoWeek(cursor);
       const relativeWeekNumber = getRelativeWeekNumber(cursor, start);
