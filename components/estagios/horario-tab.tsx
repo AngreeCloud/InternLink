@@ -131,6 +131,8 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
     };
   }, [estagioId, setPartialAbsenceDates]);
 
+  const [presencas, setPresencas] = useState<Record<string, PresencaDoc>>({});
+
   const holidayWorkSet = useMemo(
     () => new Set(Object.values(presencas).filter((p) => p.isHolidayWork).map((p) => p.date)),
     [presencas]
@@ -141,8 +143,6 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
     [dataInicio, effectiveDataFim, dias, fechoExcludedDates, holidayWorkSet]
   );
   const weeks = useMemo(() => groupWorkDaysByWeek(workDays), [workDays]);
-
-  const [presencas, setPresencas] = useState<Record<string, PresencaDoc>>({});
   const [loading, setLoading] = useState(true);
   const [drafts, setDrafts] = useState<Record<string, { hours: string; notes: string }>>({});
   const [saving, setSaving] = useState<string | null>(null);
