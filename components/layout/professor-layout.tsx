@@ -13,7 +13,8 @@ import { NotificationsInbox, type InboxNotification } from "@/components/chat/no
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications";
 import { useEstagioNotifications, type EstagioNotification } from "@/lib/notifications/use-estagio-notifications";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sidebar } from "@/components/layout/sidebar";
+import { useSidebarCollapsed } from "@/lib/use-sidebar-collapsed";
 import { TRANSITION_PORTAL_MS } from "@/components/layout/access-validation-overlay";
 import { LogoutOverlay } from "@/components/layout/logout-overlay";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -79,6 +80,7 @@ function buildNotificationHref(notification: EstagioNotification): string | null
 
 export function ProfessorLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { collapsed, toggle: toggleSidebar } = useSidebarCollapsed();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [state, setState] = useState<AuthState>({
     loading: true,
@@ -244,86 +246,54 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       {isLoggingOut ? <LogoutOverlay /> : null}
-      {/* Mobile sidebar */}
-      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <SheetContent side="left" className="w-72 p-0">
-          <div className="flex h-full flex-col bg-card">
-            <div className="flex h-16 items-center gap-2 px-6 border-b border-border">
-              <GraduationCap className="h-6 w-6 text-primary" />
-              <div>
-                <p className="text-sm font-semibold">InternLink</p>
-                <p className="text-xs text-muted-foreground">Professor</p>
-              </div>
-            </div>
-            <nav className="flex-1 space-y-1 p-4">
-              {filteredNavigation.map((item) => (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={[
-                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                    isActiveRoute(item.href)
-                      ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                  ].join(" ")}
-                  aria-current={isActiveRoute(item.href) ? "page" : undefined}
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  <item.icon className="h-4 w-4" />
-                  <span>{item.name}</span>
-                  {item.href === "/professor/chat" && (
-                    <ChatNavUnreadBadge userId={state.userId} isActive={isActiveRoute(item.href)} />
-                  )}
-                </Link>
-              ))}
-            </nav>
-          </div>
-        </SheetContent>
-      </Sheet>
-
-      {/* Desktop sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col">
-        <div className="flex grow flex-col gap-y-6 overflow-y-auto border-r border-border bg-card px-6">
-          <div className="flex h-16 items-center gap-2">
-            <GraduationCap className="h-6 w-6 text-primary" />
-            <div>
+      <Sidebar
+        collapsed={collapsed}
+        onToggle={toggleSidebar}
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+      >
+        <div className={`flex h-16 shrink-0 items-center transition-all duration-300 ${collapsed ? "justify-center" : "gap-x-3"}`}>
+          <GraduationCap className="h-7 w-7 text-primary" />
+          {!collapsed && (
+            <div className="leading-tight">
               <p className="text-sm font-semibold">InternLink</p>
               <p className="text-xs text-muted-foreground">Professor</p>
             </div>
-          </div>
-          <nav className="flex flex-1 flex-col">
-            <ul role="list" className="flex flex-1 flex-col gap-y-7">
-              <li>
-                <ul role="list" className="-mx-2 space-y-1">
-                  {filteredNavigation.map((item) => (
-                    <li key={item.name}>
-                      <Link
-                        href={item.href}
-                        className={[
-                          "flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 transition-colors",
-                          isActiveRoute(item.href)
-                            ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
-                            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                        ].join(" ")}
-                        aria-current={isActiveRoute(item.href) ? "page" : undefined}
-                      >
-                        <item.icon className="h-4 w-4 shrink-0" />
-                        <span>{item.name}</span>
-                        {item.href === "/professor/chat" && (
-                          <ChatNavUnreadBadge userId={state.userId} isActive={isActiveRoute(item.href)} />
-                        )}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            </ul>
-          </nav>
+          )}
         </div>
-      </div>
+        <nav className="flex flex-1 flex-col">
+          <ul role="list" className="flex flex-1 flex-col gap-y-7">
+            <li>
+              <ul role="list" className="-mx-2 space-y-1">
+                {filteredNavigation.map((item) => (
+                  <li key={item.name}>
+                    <Link
+                      href={item.href}
+                      className={[
+                        "flex items-center gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 transition-colors",
+                        collapsed ? "justify-center" : "",
+                        isActiveRoute(item.href)
+                          ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                      ].join(" ")}
+                      aria-current={isActiveRoute(item.href) ? "page" : undefined}
+                    >
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      {!collapsed && <span>{item.name}</span>}
+                      {!collapsed && item.href === "/professor/chat" && (
+                        <ChatNavUnreadBadge userId={state.userId} isActive={isActiveRoute(item.href)} />
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          </ul>
+        </nav>
+      </Sidebar>
 
       {/* Main content */}
-      <div className="lg:pl-72">
+      <div className={`transition-all duration-300 ${collapsed ? "lg:pl-[72px]" : "lg:pl-72"}`}>
         {/* Top bar */}
         <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-border bg-card px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
           <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
