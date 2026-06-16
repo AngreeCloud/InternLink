@@ -1363,7 +1363,7 @@ export function InternalChatHub() {
                       type="button"
                       onClick={() => setSelectedConversationId(conv.id)}
                       className={[
-                        "w-full rounded-lg border px-3 py-2 text-left transition-colors",
+                        "w-full rounded-lg border px-3 py-2 pr-8 text-left transition-colors",
                         selected ? "border-primary/50 bg-primary/10" : "border-transparent hover:bg-muted",
                       ].join(" ")}
                     >
