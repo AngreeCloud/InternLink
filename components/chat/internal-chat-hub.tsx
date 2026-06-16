@@ -729,34 +729,18 @@ export function InternalChatHub() {
     const normalized = email.trim().toLowerCase();
     if (!normalized || !isValidEmail(normalized)) return null;
 
-    const fsDb = await getDbRuntime();
-    const [byEmail] = await Promise.all([
-      getDocs(query(collection(fsDb, "users"), where("email", "==", normalized), limit(1))),
-    ]);
-
-    const docSnap = byEmail.docs[0] || null;
-    if (!docSnap) return null;
-
-    const data = docSnap.data() as {
-      nome?: string;
-      email?: string;
-      photoURL?: string;
-      role?: string;
-      estado?: string;
-      schoolId?: string;
-      escolaId?: string;
-    };
-
-    if ((data.estado || "").toLowerCase() === "removido") return null;
-
-    return {
-      uid: docSnap.id,
-      name: data.nome || "Utilizador",
-      email: data.email || normalized,
-      photoURL: data.photoURL || "",
-      role: data.role === "professor" ? "teacher" : data.role === "tutor" ? "tutor" : data.role === "admin_escolar" ? "admin" : "student",
-      orgId: data.schoolId || data.escolaId || null,
-    };
+    try {
+      const res = await fetch("/api/chat/resolve-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalized }),
+      });
+      if (!res.ok) return null;
+      const json = (await res.json()) as { user?: ChatUserProfile | null };
+      return json.user || null;
+    } catch {
+      return null;
+    }
   }, []);
 
   const handleCreateConversation = useCallback(async () => {

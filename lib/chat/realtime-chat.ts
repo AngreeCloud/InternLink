@@ -338,10 +338,6 @@ export async function searchInternalMembers(
       for (const docSnap of usersBySchoolId.docs) mergedDocs.set(docSnap.id, docSnap);
       for (const docSnap of usersByEscolaId.docs) mergedDocs.set(docSnap.id, docSnap);
 
-      // Pre-compute eligible stage participants for tutors
-      const stageParticipants =
-        role === "tutor" ? await getEligibleStageParticipantIds(currentUserId, role) : null;
-
       for (const docSnap of Array.from(mergedDocs.values())) {
         const data = docSnap.data() as {
           nome?: string;
@@ -366,7 +362,7 @@ export async function searchInternalMembers(
 
         // Role-based eligibility filtering
         if (role === "tutor") {
-          if (!stageParticipants || !stageParticipants.has(docSnap.id)) continue;
+          // Tutors can see all same-school active users (professors, admins, students)
         } else if (role === "student") {
           if (profileRole === "encarregado") {
             // Student only sees their own EE
@@ -389,8 +385,27 @@ export async function searchInternalMembers(
 
         merged.set(profile.uid, profile);
       }
-    } catch {
-      // Ignore Firestore search errors; fallback paths may still return useful candidates.
+      console.log("[searchInternalMembers] client query: merged.size =", merged.size);
+    } catch (e) {
+      console.error("[searchInternalMembers] Firestore query error, falling back to API:", e);
+      try {
+        const res = await fetch("/api/chat/search-members", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orgId, queryText, currentUserId, currentUserRole: role }),
+        });
+        if (res.ok) {
+          const json = (await res.json()) as { members?: ChatUserProfile[] };
+          console.log("[searchInternalMembers] API fallback returned", json.members?.length ?? 0, "members");
+          if (json.members) {
+            for (const m of json.members) merged.set(m.uid, m);
+          }
+        } else {
+          console.error("[searchInternalMembers] API fallback returned", res.status, await res.text());
+        }
+      } catch (apiErr) {
+        console.error("[searchInternalMembers] API fallback also failed:", apiErr);
+      }
     }
 
     // Enrich with orgMember index — verify estado for RTDB entries
@@ -441,23 +456,24 @@ export async function searchInternalMembers(
     }
   }
 
-  // For students and teachers, also fetch their associated tutors
-  if (role === "student" || role === "teacher") {
+  // Fetch stage participants for students, teachers, and tutors
+  if (role === "student" || role === "teacher" || role === "tutor") {
     try {
       const allEligible = await getEligibleStageParticipantIds(currentUserId, role);
-      const tutorIds = Array.from(allEligible).filter(
+      const relevantIds = Array.from(allEligible).filter(
         (id) => id !== currentUserId && !merged.has(id)
       );
 
-      if (tutorIds.length > 0) {
-        const tutorProfiles = await getChatProfilesByIds(tutorIds);
-        for (const profile of tutorProfiles) {
-          if (profile.role !== "tutor") continue;
-          merged.set(profile.uid, profile);
+      if (relevantIds.length > 0) {
+        const profiles = await getChatProfilesByIds(relevantIds);
+        for (const profile of profiles) {
+          if (role === "tutor" || profile.role === "tutor") {
+            merged.set(profile.uid, profile);
+          }
         }
       }
     } catch {
-      // Optional tutor enrichment should not block standard member search.
+      // Optional enrichment should not block standard member search.
     }
   }
 
@@ -667,6 +683,21 @@ export async function ensureAutoConversationForTutorAssignment(
   }
 }
 
+async function fetchProfileViaApi(uid: string): Promise<ChatUserProfile | null> {
+  try {
+    const res = await fetch("/api/chat/get-profiles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userIds: [uid] }),
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { profiles?: ChatUserProfile[] };
+    return json.profiles?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getChatProfilesByIds(userIds: string[]): Promise<ChatUserProfile[]> {
   const fsDb = await getDbRuntime();
   const profiles = await Promise.all(
@@ -693,7 +724,8 @@ export async function getChatProfilesByIds(userIds: string[]): Promise<ChatUserP
           orgId: getOrgIdFromUserData(data),
         } satisfies ChatUserProfile;
       } catch {
-        return null;
+        // Client SDK failed (security rules), fallback to Admin SDK API
+        return fetchProfileViaApi(uid);
       }
     })
   );
