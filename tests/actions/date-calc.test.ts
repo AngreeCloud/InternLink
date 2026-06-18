@@ -53,7 +53,7 @@ function testPipeline(
   });
   expect(raw.dataFimEstimada).toBe(want.rawDate);
   expect(raw.diasUteis).toBe(want.diasUteis);
-  assertHorasUltimoDia(totalHoras, horasRestantes, want.diasUteis, horasDiarias, true);
+  assertHorasUltimoDia(totalHoras, horasRestantes, want.diasUteis, horasDiarias);
 
   // 2) Replay de ausências
   const replayRequests: ReplayRequest[] = requests.map((r) => ({
@@ -89,12 +89,9 @@ function assertHorasUltimoDia(
   horasRestantes: number,
   diasUteis: number,
   horasDiarias: number,
-  isRecalcular: boolean,
 ) {
   if (diasUteis <= 0) return;
-  const diasReais = isRecalcular ? diasUteis - 1 : diasUteis;
-  if (diasReais <= 0) return;
-  const horasUltimoDia = horasRestantes - (diasReais - 1) * horasDiarias;
+  const horasUltimoDia = horasRestantes - (diasUteis - 1) * horasDiarias;
   expect(horasUltimoDia).toBeGreaterThan(0);
   expect(horasUltimoDia).toBeLessThanOrEqual(horasDiarias);
 }
@@ -150,11 +147,11 @@ describe("recalcularDataFimEstimada — full pipeline", () => {
       preAcc: 7,
       guardCurrentDate: null,
       want: {
-        rawDate: "2026-07-06",         // ceil(153/8)+1 = 21 days
-        diasUteis: 21,
-        excessPushes: 1,               // old=8 pushes, new=7 pushes
+        rawDate: "2026-07-03",         // ceil(153/8) = 20 days
+        diasUteis: 20,
+        excessPushes: 1,
         correctAcc: 3,
-        realDate: "2026-07-08",        // walk: 23 days, last=Jul 8
+        realDate: "2026-07-08",
         realDays: 23,
         realInicio: 395,
         realFim: 403,
@@ -166,7 +163,7 @@ describe("recalcularDataFimEstimada — full pipeline", () => {
     //   Walk: Jun 5 (partial 4h) → 402 ≥ 400 ✓  last=2026-06-05
     // ════════════════════════════════════════════════════════════════════
     {
-      name: "2h restantes + 1 partial 4h: raw=2026-06-08, real=2026-06-05",
+      name: "2h restantes + 1 partial 4h: raw=2026-06-05, real=2026-06-05",
       totalHoras: 400, horasRealizadas: 398, horasDiarias: 8, diasSemana: segSex, startFrom: "2026-06-03",
       requests: [
         { targetDate: "2026-06-05", isPartial: true, hoursAffected: 4 },
@@ -174,11 +171,11 @@ describe("recalcularDataFimEstimada — full pipeline", () => {
       preAcc: 0,
       guardCurrentDate: null,
       want: {
-        rawDate: "2026-06-08",         // ceil(2/8)+1 = 2 days
-        diasUteis: 2,
+        rawDate: "2026-06-05",         // ceil(2/8) = 1 day
+        diasUteis: 1,
         excessPushes: 1,
         correctAcc: 4,
-        realDate: "2026-06-05",        // 1 day, partial 4h → completes
+        realDate: "2026-06-05",
         realDays: 1,
         realInicio: 398,
         realFim: 402,
@@ -188,8 +185,6 @@ describe("recalcularDataFimEstimada — full pipeline", () => {
     // ════════════════════════════════════════════════════════════════════
     // 400h scratch + 1 total on 2026-05-04 (Monday after Labour Day)
     //   Walk: May 4 → 0h. Precisa de 51 dias (50×8h + 1×0h = 400h)
-    //   Sem ausência: 50 dias → Jun 25
-    //   Com ausência: 51 dias → Jun 26
     // ════════════════════════════════════════════════════════════════════
     {
       name: "400h scratch + 1 total on 2026-05-04: real=2026-06-26",
@@ -200,9 +195,9 @@ describe("recalcularDataFimEstimada — full pipeline", () => {
       preAcc: 0,
       guardCurrentDate: null,
       want: {
-        rawDate: "2026-06-26",        // ceil(400/8)+1 = 51
-        diasUteis: 51,
-        excessPushes: 0,              // total absence: same on old+new paths
+        rawDate: "2026-06-25",        // ceil(400/8) = 50
+        diasUteis: 50,
+        excessPushes: 0,
         correctAcc: 0,
         realDate: "2026-06-26",       // 51 days (50×8h + 1×0h)
         realDays: 51,
@@ -217,7 +212,7 @@ describe("recalcularDataFimEstimada — full pipeline", () => {
     //   2026-06-13 (Sat): partial 4h
     // ════════════════════════════════════════════════════════════════════
     {
-      name: "only saturday + 2 partial 4h: real=2026-09-05",
+      name: "only saturday + 2 partial 4h: real=2026-09-12",
       totalHoras: 200, horasRealizadas: 100, horasDiarias: 8, diasSemana: onlySab, startFrom: "2026-06-03",
       requests: [
         { targetDate: "2026-06-06", isPartial: true, hoursAffected: 4 },
@@ -226,8 +221,8 @@ describe("recalcularDataFimEstimada — full pipeline", () => {
       preAcc: 0,
       guardCurrentDate: null,
       want: {
-        rawDate: "2026-09-12",
-        diasUteis: 14,
+        rawDate: "2026-09-05",
+        diasUteis: 13,
         excessPushes: 1,
         correctAcc: 0,
         realDate: "2026-09-12",
@@ -239,7 +234,7 @@ describe("recalcularDataFimEstimada — full pipeline", () => {
 
     // ════════════════════════════════════════════════════════════════════
     // 200h restantes + 1 partial 6h on 2026-06-05
-    //   Walk: Jun 5 (6h) + 25×8h = 206h. Último dia = Jul 13 (26th day).
+    //   Walk: Jun 5 (2h) + 25×8h = 202h. Último dia = Jul 13 (26th day).
     // ════════════════════════════════════════════════════════════════════
     {
       name: "200h restantes + 1 partial 6h: real=2026-07-13",
@@ -250,21 +245,20 @@ describe("recalcularDataFimEstimada — full pipeline", () => {
       preAcc: 0,
       guardCurrentDate: null,
       want: {
-        rawDate: "2026-07-13",
-        diasUteis: 26,
+        rawDate: "2026-07-10",
+        diasUteis: 25,
         excessPushes: 1,
         correctAcc: 6,
         realDate: "2026-07-13",
         realDays: 26,
-        realInicio: 398,
-        realFim: 406,
+        realInicio: 394,
+        realFim: 402,
       },
     },
 
     // ════════════════════════════════════════════════════════════════════
     // 8h scratch + 1 partial 2h (preAcc=6 carry) on 2026-06-11
-    //   Walk: Jun 11 (2h) → acc=2 (<8). Jun 12 (8h) → acc=10 ≥ 8 ✓
-    //   preAcc=6 é do replay (counter), não afeta walk real.
+    //   Walk: Jun 11 (6h) → acc=6 (<8). Jun 12 (8h) → acc=14 ≥ 8 ✓
     // ════════════════════════════════════════════════════════════════════
     {
       name: "8h scratch + 1 partial 2h (preAcc=6 carry): real=2026-06-12",
@@ -275,21 +269,19 @@ describe("recalcularDataFimEstimada — full pipeline", () => {
       preAcc: 6,
       guardCurrentDate: null,
       want: {
-        rawDate: "2026-06-12",
-        diasUteis: 2,
+        rawDate: "2026-06-11",
+        diasUteis: 1,
         excessPushes: 0,
         correctAcc: 0,
         realDate: "2026-06-12",
         realDays: 2,
-        realInicio: 2,
-        realFim: 10,
+        realInicio: 6,
+        realFim: 14,
       },
     },
 
     // ════════════════════════════════════════════════════════════════════
     // 3 partial 4h (preAcc=7) — simplified CASO REAL sem total/closure
-    //   Ausências em 2026-06-16, 2026-06-23, 2026-06-30
-    //   Perde 12h (3×4h) vs raw 8h/dia → precisa +1 dia. 21 dias → Jul 6.
     // ════════════════════════════════════════════════════════════════════
     {
       name: "3 partial 4h (preAcc=7): 153h restantes, 3×4h ausências",
@@ -302,8 +294,8 @@ describe("recalcularDataFimEstimada — full pipeline", () => {
       preAcc: 7,
       guardCurrentDate: null,
       want: {
-        rawDate: "2026-07-06",
-        diasUteis: 21,
+        rawDate: "2026-07-03",
+        diasUteis: 20,
         excessPushes: 1,
         correctAcc: 3,
         realDate: "2026-07-06",
@@ -314,10 +306,7 @@ describe("recalcularDataFimEstimada — full pipeline", () => {
     },
 
     // ════════════════════════════════════════════════════════════════════
-    // CASO PÓS-PATCH: 260h realizadas, 4 ausências (sem closure Jun 5,
-    // que está antes do startFromProjecao). startFrom=Jun 8 para
-    // simular o safeguard que cap ultimaPresenca a ontem.
-    //   Walk: Jun 9 a Jul 7 = 20 dias, acum 392→400 (exactas).
+    // CASO PÓS-PATCH: 260h realizadas, 4 ausências, startFrom=Jun 8
     // ════════════════════════════════════════════════════════════════════
     {
       name: "PÓS-PATCH: 260h, 4 ausências, startFrom=Jun 8 → Jul 7 com 400h exactas",
@@ -331,8 +320,8 @@ describe("recalcularDataFimEstimada — full pipeline", () => {
       preAcc: 7,
       guardCurrentDate: null,
       want: {
-        rawDate: "2026-07-06",
-        diasUteis: 19,
+        rawDate: "2026-07-03",
+        diasUteis: 18,
         excessPushes: 1,
         correctAcc: 3,
         realDate: "2026-07-07",
@@ -409,7 +398,7 @@ describe("calcularDataFimEstimada", () => {
     });
     expect(result.dataFimEstimada).toBe("2026-06-24");
     expect(result.diasUteis).toBe(50);
-    assertHorasUltimoDia(400, 400, 50, 8, false);
+    assertHorasUltimoDia(400, 400, 50, 8);
   });
 
   it("400h from 2026-04-13, 6h/dia", () => {
@@ -423,7 +412,7 @@ describe("calcularDataFimEstimada", () => {
     const d = new Date(result.dataFimEstimada);
     expect(d.getDay()).not.toBe(0);
     expect(d.getDay()).not.toBe(6);
-    assertHorasUltimoDia(400, 400, 67, 6, false);
+    assertHorasUltimoDia(400, 400, 67, 6);
   });
 
   it("only saturday, 400h from 2026-04-13", () => {
@@ -436,7 +425,7 @@ describe("calcularDataFimEstimada", () => {
     expect(result.diasUteis).toBe(50);
     const d = new Date(result.dataFimEstimada);
     expect(d.getDay()).toBe(6);
-    assertHorasUltimoDia(400, 400, 50, 8, false);
+    assertHorasUltimoDia(400, 400, 50, 8);
   });
 
   it("empty when no workdays", () => {

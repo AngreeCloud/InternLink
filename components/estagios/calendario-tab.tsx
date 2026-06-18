@@ -378,19 +378,37 @@ export function CalendarioTab({
     return horasDiarias;
   }
 
-  // Missing hours days (past workdays without registered hours or below expected)
-  const missingHoursSet = useMemo(() => {
+  // Days with hours within/above tolerance (green fill)
+  const workedOkSet = useMemo(() => {
     const set = new Set<string>();
     for (const d of workDays) {
-      if (d.iso >= todayIso) continue;
+      if (holidaySet.has(d.iso)) continue;
       const p = presencas[d.iso];
       const hours = typeof p?.hoursWorked === "number" ? p.hoursWorked : 0;
-      if (horasDiarias - hours > 1 && !requestsByDate.has(d.iso) && !holidaySet.has(d.iso)) {
+      if (hours <= 0) continue;
+      const expected = effectiveHoursForDay(d.iso);
+      if (hours >= expected - 1) {
         set.add(d.iso);
       }
     }
     return set;
-  }, [workDays, todayIso, presencas, horasDiarias, requestsByDate, holidaySet]);
+  }, [workDays, presencas, requestsByDate, horasDiarias, holidaySet]);
+
+  // Past days below tolerance (yellow fill)
+  const missingSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const d of workDays) {
+      if (d.iso >= todayIso) continue;
+      if (holidaySet.has(d.iso)) continue;
+      const p = presencas[d.iso];
+      const hours = typeof p?.hoursWorked === "number" ? p.hoursWorked : 0;
+      const expected = effectiveHoursForDay(d.iso);
+      if (hours < expected - 1) {
+        set.add(d.iso);
+      }
+    }
+    return set;
+  }, [workDays, todayIso, presencas, requestsByDate, horasDiarias, holidaySet]);
 
   // Remaining hours
   const totalRealizado = useMemo(() => {
@@ -537,50 +555,27 @@ export function CalendarioTab({
   }
 
   // Build modifiers for DayPicker
-  const workedDates = [...presencaSet].map((iso) => {
-    if (requestDateSet.has(iso)) return null;
-    return isoToDate(iso);
-  }).filter(Boolean) as Date[];
+  const workedOkDates = [...workedOkSet].map(isoToDate);
   const scheduledDates = [...workDaySet]
-    .filter((iso) => !presencaSet.has(iso) && !missingHoursSet.has(iso) && !requestDateSet.has(iso) && !holidaySet.has(iso))
-    .map((iso) => isoToDate(iso));
-  const holidayScheduled = [...holidayWorkSet]
-    .filter((iso) => !presencaSet.has(iso))
+    .filter((iso) => {
+      if (iso <= todayIso) return false;
+      if (presencaSet.has(iso)) return false;
+      if (requestDateSet.has(iso)) return false;
+      if (holidaySet.has(iso)) return false;
+      return true;
+    })
     .map(isoToDate);
-  const missingDates = [...missingHoursSet].map((iso) => {
-    return isoToDate(iso);
-  });
-  const requestTypeDates = (() => {
-    const justification: Date[] = [];
-    const futureAbsence: Date[] = [];
-    const earlyTermination: Date[] = [];
-    for (const [iso, req] of requestsByDate.entries()) {
-      const date = isoToDate(iso);
-      if (req.type === "past_absence_justification") {
-        justification.push(date);
-      } else if (req.type === "future_absence") {
-        futureAbsence.push(date);
-      } else if (req.type === "early_termination") {
-        earlyTermination.push(date);
-      }
-    }
-    return { justification, futureAbsence, earlyTermination };
-  })();
+  const missingDates = [...missingSet].map(isoToDate);
   const pendingDates = [...requestsByDate.entries()]
     .filter(([, r]) => r.status === "pending_professor" || r.status === "pending_tutor")
-    .map(([iso]) => {
-      return isoToDate(iso);
-    });
+    .map(([iso]) => isoToDate(iso));
   const approvedReqDates = [...requestsByDate.entries()]
     .filter(([, r]) => r.status === "approved" || r.status === "acknowledged" || r.status === "expired")
-    .map(([iso]) => {
-      return isoToDate(iso);
-    });
+    .map(([iso]) => isoToDate(iso));
   const rejectedReqDates = [...requestsByDate.entries()]
     .filter(([, r]) => r.status === "rejected")
-    .map(([iso]) => {
-      return isoToDate(iso);
-    });
+    .map(([iso]) => isoToDate(iso));
+  const todayDates = [isoToDate(todayIso)];
 
   // TerminoAntecipado date modifiers
   const terminoPendingDates = useMemo(() => {
@@ -635,14 +630,12 @@ export function CalendarioTab({
           {/* Legend */}
           <div className="space-y-2 text-xs">
             <div className="flex flex-wrap gap-3">
-              <LegendItem color="bg-emerald-500" label="Dia trabalhado" />
-              <LegendItem color="bg-primary/20 border border-primary" label="Dia previsto" />
-              <LegendItem color="bg-amber-100 border-2 border-amber-400" label="Horas em falta" />
+              <LegendItem color="bg-emerald-500" label="Dia dentro do esperado" />
+              <LegendItem color="bg-blue-500" label="Dia atual" />
+              <LegendItem color="bg-yellow-200" label="Horas abaixo do esperado" />
             </div>
             <div className="flex flex-wrap gap-3">
-              <LegendItem color="bg-sky-100 border border-sky-400" label="Justificação de falta" />
-              <LegendItem color="bg-orange-100 border border-orange-400" label="Falta futura" />
-              <LegendItem color="bg-teal-100 border border-teal-400" label="Término antecipado" />
+              <LegendItem color="bg-card ring-2 ring-blue-400" label="Dia previsto" />
               <LegendItem color="bg-card ring-2 ring-amber-500" label="Pendente" />
               <LegendItem color="bg-card ring-2 ring-emerald-500" label="Aprovado/justificado" />
               <LegendItem color="bg-card ring-2 ring-red-500" label="Rejeitado" />
@@ -650,9 +643,9 @@ export function CalendarioTab({
             </div>
             {terminoAntecipado && (
               <div className="flex flex-wrap gap-3 border-t pt-2">
-                <LegendItem color="bg-yellow-200 border-2 border-yellow-500" label="Dispensa pendente" />
-                <LegendItem color="bg-teal-200 border-2 border-teal-500" label="Dispensa aprovada" />
-                <LegendItem color="bg-orange-200 border-2 border-orange-500" label="Dia obrigatório (dispensa)" />
+                <LegendItem color="bg-card ring-2 ring-yellow-500" label="Dispensa pendente" />
+                <LegendItem color="bg-card ring-2 ring-teal-500" label="Dispensa aprovada" />
+                <LegendItem color="bg-card ring-2 ring-orange-500" label="Dia obrigatório (dispensa)" />
               </div>
             )}
           </div>
@@ -797,19 +790,17 @@ export function CalendarioTab({
             }}
           >
             <style>{`
-              .rdp-day--worked .rdp-day_button { background-color: rgb(16 185 129); color: white; border-radius: 9999px; }
-              .rdp-day--scheduled .rdp-day_button { background-color: rgb(219 234 254); border: 2px solid rgb(96 165 250); border-radius: 9999px; color: rgb(30 64 175); }
-              .rdp-day--missing .rdp-day_button { background-color: rgb(254 243 199); border: 2px solid rgb(251 191 36); border-radius: 9999px; color: rgb(146 64 14); }
-              .rdp-day--req-justification .rdp-day_button { background-color: rgb(224 242 254); color: rgb(30 64 175); border-radius: 9999px; }
-              .rdp-day--req-future .rdp-day_button { background-color: rgb(255 237 213); color: rgb(154 52 18); border-radius: 9999px; }
-              .rdp-day--req-termination .rdp-day_button { background-color: rgb(204 251 241); color: rgb(15 118 110); border-radius: 9999px; }
+              .rdp-day--scheduled .rdp-day_button { box-shadow: 0 0 0 2px rgb(96 165 250); border-radius: 9999px; }
               .rdp-day--status-pending .rdp-day_button { box-shadow: 0 0 0 2px rgb(245 158 11); }
               .rdp-day--status-approved .rdp-day_button { box-shadow: 0 0 0 2px rgb(16 185 129); }
               .rdp-day--status-rejected .rdp-day_button { box-shadow: 0 0 0 2px rgb(239 68 68); }
-              .rdp-day--termino-pending .rdp-day_button { background-color: rgb(254 240 138); border: 2px solid rgb(234 179 8); border-radius: 9999px; color: rgb(113 63 18); }
-              .rdp-day--termino-approved .rdp-day_button { background-color: rgb(204 251 241); border: 2px solid rgb(20 184 166); border-radius: 9999px; color: rgb(15 118 110); }
-              .rdp-day--termino-obrigatorio .rdp-day_button { background-color: rgb(255 237 213); border: 2px solid rgb(249 115 22); border-radius: 9999px; color: rgb(154 52 18); }
-              .rdp-day--termino-invalidated .rdp-day_button { background-color: rgb(254 202 202); border: 2px solid rgb(239 68 68); border-radius: 9999px; color: rgb(153 27 27); }
+              .rdp-day--termino-pending .rdp-day_button { box-shadow: 0 0 0 2px rgb(234 179 8); border-radius: 9999px; }
+              .rdp-day--termino-approved .rdp-day_button { box-shadow: 0 0 0 2px rgb(20 184 166); border-radius: 9999px; }
+              .rdp-day--termino-obrigatorio .rdp-day_button { box-shadow: 0 0 0 2px rgb(249 115 22); border-radius: 9999px; }
+              .rdp-day--termino-invalidated .rdp-day_button { box-shadow: 0 0 0 2px rgb(239 68 68); border-radius: 9999px; }
+              .rdp-day--today .rdp-day_button { background-color: rgb(59 130 246); color: white; border-radius: 9999px; }
+              .rdp-day--worked-ok .rdp-day_button { background-color: rgb(16 185 129); color: white; border-radius: 9999px; }
+              .rdp-day--missing .rdp-day_button { background-color: rgb(254 240 138); color: rgb(113 63 18); border-radius: 9999px; }
               .rdp-day--holiday .rdp-day_button { background-color: rgb(243 232 255); border: 2px solid rgb(192 132 252); border-radius: 9999px; color: rgb(107 33 168); }
               .rdp-day--can-click .rdp-day_button:hover { cursor: pointer; opacity: 0.8; }
             `}</style>
@@ -820,12 +811,10 @@ export function CalendarioTab({
               startMonth={startDate}
               endMonth={endDate}
               modifiers={{
-                worked: workedDates,
-                scheduled: [...scheduledDates, ...holidayScheduled],
+                today: todayDates,
+                workedOk: workedOkDates,
+                scheduled: scheduledDates,
                 missing: missingDates,
-                requestJustification: requestTypeDates.justification,
-                requestFutureAbsence: requestTypeDates.futureAbsence,
-                requestEarlyTermination: requestTypeDates.earlyTermination,
                 statusPending: pendingDates,
                 statusApproved: approvedReqDates,
                 statusRejected: rejectedReqDates,
@@ -836,12 +825,10 @@ export function CalendarioTab({
                 holiday: holidayDatesFiltered,
               }}
               modifiersClassNames={{
-                worked: "rdp-day--worked",
+                today: "rdp-day--today",
+                workedOk: "rdp-day--worked-ok",
                 scheduled: "rdp-day--scheduled",
                 missing: "rdp-day--missing",
-                requestJustification: "rdp-day--req-justification",
-                requestFutureAbsence: "rdp-day--req-future",
-                requestEarlyTermination: "rdp-day--req-termination",
                 statusPending: "rdp-day--status-pending",
                 statusApproved: "rdp-day--status-approved",
                 statusRejected: "rdp-day--status-rejected",
@@ -934,7 +921,7 @@ export function CalendarioTab({
               const hours = typeof presenca?.hoursWorked === "number" ? presenca.hoursWorked : 0;
               const notes = presenca?.notes ?? "";
               const isPast = day.iso <= todayIso;
-              const isMissing = missingHoursSet.has(day.iso);
+              const isMissing = missingSet.has(day.iso);
               const req = requestsByDate.get(day.iso);
               const hasNoHours = !isPast ? false : hours <= 0 && !req;
 
