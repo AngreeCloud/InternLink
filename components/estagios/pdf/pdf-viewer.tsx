@@ -89,6 +89,8 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
   const [pages, setPages] = useState<PdfPageInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [containerKey, setContainerKey] = useState(0);
+  const shouldLoadRef = useRef(false);
 
   // Lazy rendering refs
   const pdfRef = useRef<any>(null);
@@ -368,13 +370,8 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
     setLoading(true);
     setErrorMessage(null);
 
-    await new Promise<void>((resolve) =>
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-    );
-
     if (!rootRef.current) return;
     if (loadTokenRef.current !== myLoadToken) return;
-    rootRef.current.replaceChildren();
 
     try {
       const source = fileBytes
@@ -467,6 +464,14 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
   };
 
   useEffect(() => {
+    shouldLoadRef.current = true;
+    setContainerKey(k => k + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileUrl, fileBlobUrl, fileBytes, scale]);
+
+  useEffect(() => {
+    if (!shouldLoadRef.current) return;
+    shouldLoadRef.current = false;
     void load();
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
@@ -475,7 +480,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileUrl, fileBlobUrl, fileBytes, scale]);
+  }, [containerKey]);
 
   useImperativeHandle(ref, () => ({
     getPages: () => pagesRef.current,
@@ -491,7 +496,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
 
   return (
     <div className={className ?? "w-full"}>
-      <div ref={rootRef} className="mx-auto w-fit" />
+      <div key={containerKey} ref={rootRef} className="mx-auto w-fit" />
       {loading ? (
         <p className="py-6 text-center text-sm text-muted-foreground">A carregar PDF...</p>
       ) : null}
