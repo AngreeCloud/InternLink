@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
-import { getFirebaseAdminDb } from "@/lib/firebase-admin";
+import { getFirebaseAdminDb, getFirebaseAdminStorage } from "@/lib/firebase-admin";
 import {
   assertEstagioAccess,
   EstagioAccessError,
@@ -25,12 +25,59 @@ type SignatureRecord = {
   signedAt?: { toDate?: () => Date };
 };
 
-async function fetchPdfBuffer(url: string): Promise<Uint8Array> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new EstagioAccessError(500, "fetch_pdf_failed", `Não foi possível obter o PDF (${res.status}).`);
+function extractPathFromDownloadUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.endsWith("storage.googleapis.com")) return null;
+    const match = parsed.pathname.match(/\/v0\/b\/[^/]+\/o\/(.+)/);
+    if (!match) return null;
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
   }
-  return new Uint8Array(await res.arrayBuffer());
+}
+
+async function fetchPdfBuffer(path: string, fallbackUrl?: string): Promise<Uint8Array> {
+  const tryDownload = async (p: string): Promise<Uint8Array | null> => {
+    try {
+      const bucket = getFirebaseAdminStorage().bucket();
+      const [contents] = await bucket.file(p).download();
+      const bytes = new Uint8Array(contents);
+      return bytes.length > 0 ? bytes : null;
+    } catch {
+      return null;
+    }
+  };
+
+  // 1) Usar currentFilePath diretamente
+  if (path) {
+    const result = await tryDownload(path);
+    if (result) return result;
+  }
+
+  // 2) Extrair caminho do currentFileUrl (cobre documentos antigos sem path)
+  if (fallbackUrl) {
+    const extracted = extractPathFromDownloadUrl(fallbackUrl);
+    if (extracted) {
+      const result = await tryDownload(extracted);
+      if (result) return result;
+    }
+  }
+
+  // 3) Fallback: fetch direto à URL (último recurso)
+  if (fallbackUrl) {
+    const res = await fetch(fallbackUrl);
+    if (!res.ok) {
+      throw new EstagioAccessError(500, "fetch_pdf_failed", `Não foi possível obter o PDF (${res.status}).`);
+    }
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.length === 0) {
+      throw new EstagioAccessError(500, "fetch_pdf_failed", "PDF vazio.");
+    }
+    return bytes;
+  }
+
+  throw new EstagioAccessError(400, "no_file", "O documento ainda não tem PDF associado.");
 }
 
 function dataUrlToBuffer(dataUrl: string): { bytes: Uint8Array; mime: string } {
@@ -71,22 +118,22 @@ export async function GET(
     const docData = docSnap.data() as {
       nome?: string;
       currentFileUrl?: string;
+      currentFilePath?: string;
       signatureRoles?: EstagioRole[];
       signatureUserIds?: string[];
     };
 
-    if (!docData.currentFileUrl) {
+    if (!docData.currentFileUrl && !docData.currentFilePath) {
       throw new EstagioAccessError(400, "no_file", "O documento ainda não tem PDF associado.");
     }
 
     const fileName = (docData.nome ?? "documento").replace(/[^\w\s-]/g, "").trim() || "documento";
-    const pdfBytes = await fetchPdfBuffer(docData.currentFileUrl);
+    const pdfBytes = await fetchPdfBuffer(docData.currentFilePath ?? "", docData.currentFileUrl);
 
     // Modo raw: devolver diretamente sem assinaturas.
     if (raw) {
-      return new NextResponse(Buffer.from(pdfBytes), {
+      return new NextResponse(new Blob([Buffer.from(pdfBytes)], { type: "application/pdf" }), {
         headers: {
-          "Content-Type": "application/pdf",
           "Content-Disposition": inline
             ? `inline; filename="${fileName}.pdf"`
             : `attachment; filename="${fileName}.pdf"`,
@@ -315,9 +362,8 @@ export async function GET(
 
     const signedPdfBytes = await pdfDoc.save();
 
-    return new NextResponse(Buffer.from(signedPdfBytes), {
+    return new NextResponse(new Blob([Buffer.from(signedPdfBytes)], { type: "application/pdf" }), {
       headers: {
-        "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${fileName}-assinado.pdf"`,
       },
     });
