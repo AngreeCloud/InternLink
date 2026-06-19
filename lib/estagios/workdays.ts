@@ -127,7 +127,8 @@ export function listWorkDays(
   dataInicio: string,
   dataFim: string,
   diasSemana: DiasSemanaMap,
-  excludedDates?: Set<string>
+  excludedDates?: Set<string>,
+  includedDates?: Set<string>
 ): WorkDay[] {
   const start = parseIsoDate(dataInicio);
   const end = parseIsoDate(dataFim);
@@ -135,20 +136,27 @@ export function listWorkDays(
   if (end.getTime() < start.getTime()) return [];
 
   const anyDayActive = WEEKDAY_KEYS.some((k) => diasSemana[k]);
-  if (!anyDayActive) return [];
+  if (!anyDayActive && !includedDates?.size) return [];
 
   const holidays = getPortugueseHolidays(start.getFullYear(), end.getFullYear() + 1);
   const days: WorkDay[] = [];
   const cursor = new Date(start);
   let safety = 0;
   const HARD_LIMIT = 366 * 6; // estágio máx ~6 anos
+  const includedSet = includedDates ?? new Set<string>();
   while (cursor.getTime() <= end.getTime() && safety < HARD_LIMIT) {
     const iso = toIsoDate(cursor);
     const weekday = cursor.getDay();
     const key = WEEKDAY_KEYS[weekday];
     const isWorkday = Boolean(diasSemana[key]);
     const isHoliday = holidays.has(iso);
-    if (isWorkday && !isHoliday && !excludedDates?.has(iso)) {
+    const isIncluded = includedSet.has(iso);
+    if (excludedDates?.has(iso)) {
+      cursor.setDate(cursor.getDate() + 1);
+      safety += 1;
+      continue;
+    }
+    if ((isWorkday && !isHoliday) || isIncluded) {
       const isoWeek = getIsoWeek(cursor);
       const relativeWeekNumber = getRelativeWeekNumber(cursor, start);
       const weekStart = getIsoWeekStart(cursor);

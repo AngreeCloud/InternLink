@@ -144,7 +144,7 @@ export function recalcularDataFimEstimada(input: {
     return { dataFimEstimada: "", diasUteis: 0, horasPorDia: horasDiarias, totalHoras }; // concluído
   }
 
-  const diasNecessarios = Math.ceil(horasRestantes / horasDiarias) + 1; // +1 día extra para garantir horas completas
+  const diasNecessarios = Math.ceil(horasRestantes / horasDiarias);
 
   // Projetar a partir do dia seguinte a startFrom (ou hoje+1 se não fornecido)
   let cursor: Date;
@@ -324,7 +324,7 @@ export function calcularDataFimComAusencias(input: {
   const absMap = new Map<string, number>();
   for (const r of requests) {
     const isPartial = r.absenceType === "partial" && r.hoursAffected > 0;
-    absMap.set(r.targetDate, isPartial ? r.hoursAffected : 0);
+    absMap.set(r.targetDate, isPartial ? Math.max(0, horasDiarias - r.hoursAffected) : 0);
   }
 
   const [y, m, d] = startFrom.split("-").map(Number);

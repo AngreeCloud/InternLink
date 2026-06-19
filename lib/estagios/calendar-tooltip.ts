@@ -25,7 +25,11 @@ function dayEffectiveHours(
   if (req.absenceType === "partial" && typeof req.hoursAffected === "number") {
     return Math.max(0, horasDiarias - req.hoursAffected);
   }
-  return horasDiarias;
+  // Fallback for requests missing absenceType: infer from hoursAffected
+  if (typeof req.hoursAffected === "number" && req.hoursAffected > 0) {
+    return Math.max(0, horasDiarias - req.hoursAffected);
+  }
+  return 0;
 }
 
 export function calcTooltipDayInfo(

@@ -93,7 +93,7 @@ type PendingMessage = {
 };
 
 const PAGE_SIZE = 30;
-const MESSAGE_SEQUENCE_WINDOW_MS = 60 * 60 * 1000;
+const MESSAGE_SEQUENCE_WINDOW_MS = 5 * 60 * 1000;
 
 function initials(name: string): string {
   const chunks = name.trim().split(/\s+/).slice(0, 2);
@@ -729,34 +729,18 @@ export function InternalChatHub() {
     const normalized = email.trim().toLowerCase();
     if (!normalized || !isValidEmail(normalized)) return null;
 
-    const fsDb = await getDbRuntime();
-    const [byEmail] = await Promise.all([
-      getDocs(query(collection(fsDb, "users"), where("email", "==", normalized), limit(1))),
-    ]);
-
-    const docSnap = byEmail.docs[0] || null;
-    if (!docSnap) return null;
-
-    const data = docSnap.data() as {
-      nome?: string;
-      email?: string;
-      photoURL?: string;
-      role?: string;
-      estado?: string;
-      schoolId?: string;
-      escolaId?: string;
-    };
-
-    if ((data.estado || "").toLowerCase() === "removido") return null;
-
-    return {
-      uid: docSnap.id,
-      name: data.nome || "Utilizador",
-      email: data.email || normalized,
-      photoURL: data.photoURL || "",
-      role: data.role === "professor" ? "teacher" : data.role === "tutor" ? "tutor" : data.role === "admin_escolar" ? "admin" : "student",
-      orgId: data.schoolId || data.escolaId || null,
-    };
+    try {
+      const res = await fetch("/api/chat/resolve-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalized }),
+      });
+      if (!res.ok) return null;
+      const json = (await res.json()) as { user?: ChatUserProfile | null };
+      return json.user || null;
+    } catch {
+      return null;
+    }
   }, []);
 
   const handleCreateConversation = useCallback(async () => {
@@ -1363,7 +1347,7 @@ export function InternalChatHub() {
                       type="button"
                       onClick={() => setSelectedConversationId(conv.id)}
                       className={[
-                        "w-full rounded-lg border px-3 py-2 text-left transition-colors",
+                        "w-full rounded-lg border px-3 py-2 pr-8 text-left transition-colors",
                         selected ? "border-primary/50 bg-primary/10" : "border-transparent hover:bg-muted",
                       ].join(" ")}
                     >
@@ -1556,10 +1540,12 @@ export function InternalChatHub() {
                             </>
                           ) : null}
 
-                          <div className="shrink-0">
-                            <span>{formatMessageDateTime(message.createdAt)}</span>
-                            {editedMeta ? <span className="ml-2 italic">{editedMeta}</span> : null}
-                          </div>
+                          {!sameSenderAsPrev ? (
+                            <div className="shrink-0">
+                              <span>{formatMessageDateTime(message.createdAt)}</span>
+                              {editedMeta ? <span className="ml-2 italic">{editedMeta}</span> : null}
+                            </div>
+                          ) : null}
                         </div>
 
                         <div className={[

@@ -9,7 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ArrowLeft, ArrowRight, FileText, FileUp, User } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileText, FileUp, Search, User } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 type Estagio = {
   id: string;
@@ -18,6 +19,8 @@ type Estagio = {
   alunoEmail: string;
   empresa: string;
   estado: string;
+  professorId: string;
+  professorNome: string;
 };
 
 type SchoolData = {
@@ -41,8 +44,21 @@ export function TutorSchoolInternships({ schoolId }: { schoolId: string }) {
     bannerFocusY: 50,
   });
   const [estagios, setEstagios] = useState<Estagio[]>([]);
+  const [search, setSearch] = useState("");
 
   const schoolLabel = useMemo(() => school.shortName || school.name, [school]);
+
+  const filteredEstagios = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return estagios;
+    return estagios.filter(
+      (e) =>
+        e.professorNome.toLowerCase().includes(term) ||
+        e.alunoNome.toLowerCase().includes(term) ||
+        e.empresa.toLowerCase().includes(term) ||
+        e.titulo.toLowerCase().includes(term)
+    );
+  }, [estagios, search]);
 
   useEffect(() => {
     let unsubscribe = () => {};
@@ -102,6 +118,8 @@ export function TutorSchoolInternships({ schoolId }: { schoolId: string }) {
               alunoEmail?: string;
               empresa?: string;
               estado?: string;
+              professorId?: string;
+              professorNome?: string;
             };
             map.set(docSnap.id, {
               id: docSnap.id,
@@ -110,6 +128,8 @@ export function TutorSchoolInternships({ schoolId }: { schoolId: string }) {
               alunoEmail: data.alunoEmail || "",
               empresa: data.empresa || "—",
               estado: data.estado || "ativo",
+              professorId: data.professorId || "",
+              professorNome: data.professorNome || "—",
             });
           }
 
@@ -137,6 +157,16 @@ export function TutorSchoolInternships({ schoolId }: { schoolId: string }) {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Trocar escola
         </Button>
+      </div>
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Pesquisar por professor, aluno, empresa ou título..."
+          className="pl-9"
+        />
       </div>
 
       <div className="overflow-hidden rounded-lg border border-border">
@@ -172,11 +202,15 @@ export function TutorSchoolInternships({ schoolId }: { schoolId: string }) {
         <CardContent>
           {loading ? (
             <p className="text-sm text-muted-foreground">A carregar estágios...</p>
-          ) : estagios.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Ainda não existem estágios atribuídos nesta escola.</p>
+          ) : filteredEstagios.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {search.trim()
+                ? "Nenhum estágio encontrado para esta pesquisa."
+                : "Ainda não existem estágios atribuídos nesta escola."}
+            </p>
           ) : (
             <div className="space-y-3">
-              {estagios.map((estagio) => (
+              {filteredEstagios.map((estagio) => (
                 <div key={estagio.id} className="rounded-lg border border-border p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-1">
@@ -191,6 +225,7 @@ export function TutorSchoolInternships({ schoolId }: { schoolId: string }) {
                       <p className="text-xs text-muted-foreground">{estagio.alunoEmail || "Sem email"}</p>
                       <p className="text-sm text-foreground">{estagio.titulo}</p>
                       <p className="text-xs text-muted-foreground">Empresa: {estagio.empresa}</p>
+                      <p className="text-xs text-muted-foreground">Orientador: {estagio.professorNome}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button

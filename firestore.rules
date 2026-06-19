@@ -263,7 +263,12 @@ service cloud.firestore {
           ))
         || (isSchoolAdmin() && resource.data.schoolId == currentUserData().schoolId)
         || (isProfessor() && resource.data.schoolId == currentUserData().schoolId)
-        || (isTutor() && resource.data.role == "aluno")
+        || (isTutor()
+          && (resource.data.role == "aluno"
+            || resource.data.schoolId == currentUserData().schoolId
+            || resource.data.schoolId == currentUserData().escolaId
+            || resource.data.escolaId == currentUserData().schoolId
+            || resource.data.escolaId == currentUserData().escolaId))
         || (isStudent() && resource.data.role == "tutor");
 
       // Criação final de utilizadores vindos de pendingRegistrations (aluno/professor).

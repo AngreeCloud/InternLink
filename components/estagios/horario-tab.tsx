@@ -47,6 +47,7 @@ type PresencaDoc = {
   updatedAt?: unknown;
   updatedBy?: string;
   updatedByRole?: string;
+  isHolidayWork?: boolean;
 };
 
 const MAX_HOURS_PER_DAY = 12;
@@ -130,19 +131,25 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
     };
   }, [estagioId, setPartialAbsenceDates]);
 
+  const [presencas, setPresencas] = useState<Record<string, PresencaDoc>>({});
+
+  const holidayWorkSet = useMemo(
+    () => new Set(Object.values(presencas).filter((p) => p.isHolidayWork).map((p) => p.date)),
+    [presencas]
+  );
+
   const workDays = useMemo(
-    () => listWorkDays(dataInicio, effectiveDataFim, dias, fechoExcludedDates),
-    [dataInicio, effectiveDataFim, dias, fechoExcludedDates]
+    () => listWorkDays(dataInicio, effectiveDataFim, dias, fechoExcludedDates, holidayWorkSet),
+    [dataInicio, effectiveDataFim, dias, fechoExcludedDates, holidayWorkSet]
   );
   const weeks = useMemo(() => groupWorkDaysByWeek(workDays), [workDays]);
-
-  const [presencas, setPresencas] = useState<Record<string, PresencaDoc>>({});
   const [loading, setLoading] = useState(true);
   const [drafts, setDrafts] = useState<Record<string, { hours: string; notes: string }>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
   const [collapsedWeeks, setCollapsedWeeks] = useState<Record<string, boolean>>({});
+  const prevPresencasKeyRef = useRef("");
 
   // Subscribe to all presencas of this estagio.
   useEffect(() => {
@@ -160,7 +167,11 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
             const data = d.data() as PresencaDoc;
             out[d.id] = data;
           });
-          setPresencas(out);
+          const key = JSON.stringify(out);
+          if (key !== prevPresencasKeyRef.current) {
+            prevPresencasKeyRef.current = key;
+            setPresencas(out);
+          }
           setLoading(false);
         },
         (err) => {
@@ -183,13 +194,16 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
   const todayIso = toIsoDate(new Date());
 
   useEffect(() => {
-    if (weeks.length === 0 || Object.keys(collapsedWeeks).length > 0) return;
-    const init: Record<string, boolean> = {};
-    for (const w of weeks) {
-      if (isPastWeek(w, todayIso)) init[w.weekId] = true;
-    }
-    setCollapsedWeeks(init);
-  }, [weeks, todayIso, collapsedWeeks]);
+    if (weeks.length === 0) return;
+    setCollapsedWeeks((prev) => {
+      if (Object.keys(prev).length > 0) return prev;
+      const init: Record<string, boolean> = {};
+      for (const w of weeks) {
+        if (isPastWeek(w, todayIso)) init[w.weekId] = true;
+      }
+      return init;
+    });
+  }, [weeks, todayIso]);
 
   const sortedWeeks = useMemo(
     () => sortWeeksHorario(weeks, todayIso),
@@ -207,9 +221,12 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
   const restante = Math.max(0, totalHoras - totalRealizado);
   const pct = totalHoras > 0 ? Math.round((totalRealizado / totalHoras) * 100) : 0;
 
-  const diasRegistados = Object.values(presencas).filter(
-    (p) => typeof p.hoursWorked === "number" && p.hoursWorked > 0
-  ).length;
+  const diasRegistados = useMemo(
+    () => Object.values(presencas).filter(
+      (p) => typeof p.hoursWorked === "number" && p.hoursWorked > 0
+    ).length,
+    [presencas]
+  );
 
   // Recalcular dataFimEstimada quando todas as presenças registadas mas ainda faltam horas.
   useEffect(() => {
