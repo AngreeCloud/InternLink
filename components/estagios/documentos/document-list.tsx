@@ -333,6 +333,7 @@ export function DocumentList({
                 const mustSign = signerRequirementMet(d) && !!d.currentFileUrl;
                 const signedCount = d.signedBy?.length ?? 0;
                 const totalSigners = d.signatureUserIds.length || d.signatureRoles.length || 0;
+                const noSignatures = totalSigners === 0;
                 const hasFile = !!d.currentFileUrl;
                 const isDeleting = deletingDocId === d.id;
                 return (
@@ -359,9 +360,11 @@ export function DocumentList({
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <Badge className={cn("font-normal", STATUS_LABEL[d.estado].className)}>
-                        {STATUS_LABEL[d.estado].label}
-                      </Badge>
+                      {!noSignatures && (
+                        <Badge className={cn("font-normal", STATUS_LABEL[d.estado].className)}>
+                          {STATUS_LABEL[d.estado].label}
+                        </Badge>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {hasFile
@@ -374,107 +377,116 @@ export function DocumentList({
                       {d.updatedAt ? new Date(d.updatedAt).toLocaleDateString("pt-PT") : "—"}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {canManage && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              setUploadDoc({
-                                id: d.id,
-                                nome: d.nome,
-                                descricao: d.descricao,
-                                categoria: d.categoria,
-                                templateCode: d.templateCode,
-                                signatureBoxes: d.signatureBoxes,
-                                signatureRoles: d.signatureRoles,
-                                accessRoles: d.accessRoles,
-                                currentFileUrl: d.currentFileUrl,
-                                currentFilePath: d.currentFilePath,
-                                fileMimeType: d.fileMimeType,
-                                fileExtension: d.fileExtension,
-                                estado: d.estado,
-                              })
-                            }
-                          >
-                            <Upload className="mr-1.5 h-3.5 w-3.5" />
-                            {hasFile ? "Nova versão" : "Carregar"}
+                      {noSignatures ? (
+                        hasFile && (
+                          <Button size="sm" variant="outline" onClick={() => void downloadDoc(d, false)}>
+                            <Download className="mr-1.5 h-3.5 w-3.5" />
+                            Descarregar PDF
                           </Button>
-                        )}
-                        {mustSign && (
-                          <Button size="sm" onClick={() => setSignDoc(d)}>
-                            <PenLine className="mr-1.5 h-3.5 w-3.5" />
-                            Assinar documento
-                          </Button>
-                        )}
-                        {hasFile && (
-                          <Button size="sm" variant="ghost" onClick={() => setPreviewDoc(d)}>
-                            <Eye className="h-4 w-4" />
-                            <span className="sr-only">Pré-visualizar</span>
-                          </Button>
-                        )}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button size="sm" variant="ghost" disabled={isDeleting}>
-                              {isDeleting ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <MoreHorizontal className="h-4 w-4" />
-                              )}
-                              <span className="sr-only">Mais ações</span>
+                        )
+                      ) : (
+                        <div className="flex items-center justify-end gap-1">
+                          {canManage && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                setUploadDoc({
+                                  id: d.id,
+                                  nome: d.nome,
+                                  descricao: d.descricao,
+                                  categoria: d.categoria,
+                                  templateCode: d.templateCode,
+                                  signatureBoxes: d.signatureBoxes,
+                                  signatureRoles: d.signatureRoles,
+                                  accessRoles: d.accessRoles,
+                                  currentFileUrl: d.currentFileUrl,
+                                  currentFilePath: d.currentFilePath,
+                                  fileMimeType: d.fileMimeType,
+                                  fileExtension: d.fileExtension,
+                                  estado: d.estado,
+                                })
+                              }
+                            >
+                              <Upload className="mr-1.5 h-3.5 w-3.5" />
+                              {hasFile ? "Nova versão" : "Carregar"}
                             </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setHistoryDoc(d)} disabled={isDeleting}>
-                              <History className="mr-2 h-4 w-4" />
-                              Histórico de versões
-                            </DropdownMenuItem>
-                            {hasFile && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => void downloadDoc(d, false)}>
-                                  <Download className="mr-2 h-4 w-4" />
-                                  Descarregar PDF
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => void downloadDoc(d, true)}>
-                                  <FileDown className="mr-2 h-4 w-4" />
-                                  Descarregar PDF (sem assinaturas)
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                            {canManage && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => togglePin(d)}>
-                                  {d.pinned ? (
-                                    <>
-                                      <PinOff className="mr-2 h-4 w-4" />
-                                      Desafixar
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Pin className="mr-2 h-4 w-4" />
-                                      Fixar no topo
-                                    </>
-                                  )}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  className="text-destructive focus:text-destructive"
-                                  onClick={() => void deleteDoc(d)}
-                                  disabled={isDeleting}
-                                >
-                                  {isDeleting ? (
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                  )}
-                                  Eliminar documento
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
+                          )}
+                          {mustSign && (
+                            <Button size="sm" onClick={() => setSignDoc(d)}>
+                              <PenLine className="mr-1.5 h-3.5 w-3.5" />
+                              Assinar documento
+                            </Button>
+                          )}
+                          {hasFile && (
+                            <Button size="sm" variant="ghost" onClick={() => setPreviewDoc(d)}>
+                              <Eye className="h-4 w-4" />
+                              <span className="sr-only">Pré-visualizar</span>
+                            </Button>
+                          )}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="sm" variant="ghost" disabled={isDeleting}>
+                                {isDeleting ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <MoreHorizontal className="h-4 w-4" />
+                                )}
+                                <span className="sr-only">Mais ações</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => setHistoryDoc(d)} disabled={isDeleting}>
+                                <History className="mr-2 h-4 w-4" />
+                                Histórico de versões
+                              </DropdownMenuItem>
+                              {hasFile && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => void downloadDoc(d, false)}>
+                                    <Download className="mr-2 h-4 w-4" />
+                                    Descarregar PDF
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => void downloadDoc(d, true)}>
+                                    <FileDown className="mr-2 h-4 w-4" />
+                                    Descarregar PDF (sem assinaturas)
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              {canManage && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => togglePin(d)}>
+                                    {d.pinned ? (
+                                      <>
+                                        <PinOff className="mr-2 h-4 w-4" />
+                                        Desafixar
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Pin className="mr-2 h-4 w-4" />
+                                        Fixar no topo
+                                      </>
+                                    )}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => void deleteDoc(d)}
+                                    disabled={isDeleting}
+                                  >
+                                    {isDeleting ? (
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                    )}
+                                    Eliminar documento
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
@@ -515,7 +527,7 @@ export function DocumentList({
       )}
       {fullscreenDoc?.currentFileUrl && (
         <FullscreenDocumentViewer
-          fileUrl={fullscreenDoc.currentFileUrl}
+          fileUrl={`/api/estagios/${estagioId}/documentos/${fullscreenDoc.id}/download?raw=true&inline=true`}
           fileName={fullscreenDoc.nome}
           fileType="pdf"
           onClose={() => setFullscreenDoc(null)}
