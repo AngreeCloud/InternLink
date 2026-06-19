@@ -7,4 +7,7 @@ export default defineConfig({
       "@": path.resolve("."),
     },
   },
+  test: {
+    exclude: ["**/node_modules/**", "**/dist/**", "**/*.test.mjs"],
+  },
 });
