@@ -38,7 +38,7 @@ import {
   type DiasSemana,
 } from "@/lib/estagios/date-calc";
 import { EstagiosSection } from "@/components/professor/estagios-section";
-import { EditEstagioDialog } from "@/components/estagios/edit-estagio-dialog";
+import { EditEstagioSheet } from "@/components/estagios/edit-estagio-sheet";
 import type { EstagioListItem } from "@/components/professor/estagio-types";
 
 const DAY_LABEL: Record<keyof DiasSemana, string> = {
@@ -94,8 +94,7 @@ export function InternshipManager() {
   const [createHorasDiarias, setCreateHorasDiarias] = useState<number>(7);
   const [createDiasSemana, setCreateDiasSemana] = useState<DiasSemana>(DEFAULT_DIAS_SEMANA);
 
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editingScheduleEstagio, setEditingScheduleEstagio] = useState<EstagioListItem | null>(null);
+  const [editingSheetEstagio, setEditingSheetEstagio] = useState<EstagioListItem | null>(null);
 
   const [studentSearch, setStudentSearch] = useState("");
   const [tutorSearch, setTutorSearch] = useState("");
@@ -112,6 +111,9 @@ export function InternshipManager() {
   const [updatingTutor, setUpdatingTutor] = useState(false);
   const [confirmDeleteEstagio, setConfirmDeleteEstagio] = useState<Estagio | null>(null);
   const [deletingEstagioId, setDeletingEstagioId] = useState<string | null>(null);
+  const [requestDeleteEstagio, setRequestDeleteEstagio] = useState<Estagio | null>(null);
+  const [requestingDelete, setRequestingDelete] = useState(false);
+  const [courseDirectorMap, setCourseDirectorMap] = useState<Record<string, { isDirector: boolean; canDelete: boolean }>>({});
 
   const filteredStudents = useMemo(() => {
     const term = studentSearch.trim().toLowerCase();
@@ -199,6 +201,27 @@ export function InternshipManager() {
           address?: string;
           contact?: string;
         };
+      }
+
+      // Load courses with director info for delete permission checks
+      try {
+        const coursesSnap = await getDocs(
+          query(collection(db, "courses"), where("schoolId", "==", userData.schoolId))
+        );
+        const map: Record<string, { isDirector: boolean; canDelete: boolean }> = {};
+        coursesSnap.docs.forEach((c) => {
+          const cData = c.data() as {
+            courseDirectorId?: string;
+            directorCanDeleteEstagio?: boolean;
+          };
+          map[c.id] = {
+            isDirector: cData.courseDirectorId === user.uid,
+            canDelete: cData.directorCanDeleteEstagio === true,
+          };
+        });
+        setCourseDirectorMap(map);
+      } catch {
+        // ignore
       }
 
       try {
@@ -516,7 +539,12 @@ export function InternshipManager() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Estágios</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-foreground">Estágios</h1>
+            <span className="rounded-full bg-muted px-3 py-1 text-sm text-muted-foreground">
+              {estagios.length} estágio(s)
+            </span>
+          </div>
           <p className="text-muted-foreground">
             Crie e gerencie estágios dos alunos.
           </p>
@@ -798,12 +826,17 @@ export function InternshipManager() {
         students={students}
         tutors={schoolTutors}
         loading={loading}
+        schoolId={schoolId}
+        courseDirectorMap={courseDirectorMap}
         onOpenChangeTutor={(estagio) => openEditTutorDialog(estagio)}
         onOpenEdit={(estagio) => {
-          setEditingScheduleEstagio(estagio);
-          setEditDialogOpen(true);
+          setEditingSheetEstagio(estagio);
         }}
         onDelete={(estagio) => setConfirmDeleteEstagio(estagio)}
+        onRequestDelete={(estagio) => {
+          // Director without permission: show dialog to create delete request
+          setRequestDeleteEstagio(estagio);
+        }}
       />
 
       <Dialog open={Boolean(confirmDeleteEstagio)} onOpenChange={(open) => !open && setConfirmDeleteEstagio(null)}>
@@ -838,15 +871,61 @@ export function InternshipManager() {
         </DialogContent>
       </Dialog>
 
-      <EditEstagioDialog
-        estagio={editingScheduleEstagio}
-        open={editDialogOpen}
+      <Dialog open={Boolean(requestDeleteEstagio)} onOpenChange={(open) => !open && setRequestDeleteEstagio(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Solicitar eliminação de estágio?</DialogTitle>
+            <DialogDescription>
+              O diretor do curso não tem permissão para eliminar estágios autonomamente.
+              <br />
+              <br />
+              Será enviado um pedido ao administrador da escola para aprovação.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline" disabled={requestingDelete}>Cancelar</Button>
+            </DialogClose>
+            <Button
+              type="button"
+              variant="default"
+              disabled={!requestDeleteEstagio || requestingDelete}
+              onClick={async () => {
+                if (!requestDeleteEstagio) return;
+                setRequestingDelete(true);
+                try {
+                  const res = await fetch(`/api/estagios/${requestDeleteEstagio.id}/delete-request`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ motivo: "" }),
+                  });
+                  if (res.ok) {
+                    setRequestDeleteEstagio(null);
+                  } else {
+                    const err = (await res.json()) as { error?: string };
+                    console.error("Erro ao solicitar eliminação:", err.error);
+                  }
+                } catch (err) {
+                  console.error("Erro ao solicitar eliminação:", err);
+                } finally {
+                  setRequestingDelete(false);
+                }
+              }}
+            >
+              {requestingDelete ? "A enviar..." : "Solicitar eliminação"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <EditEstagioSheet
+        estagio={editingSheetEstagio}
+        open={Boolean(editingSheetEstagio)}
         onOpenChange={(open) => {
-          setEditDialogOpen(open);
-          if (!open) setEditingScheduleEstagio(null);
+          if (!open) setEditingSheetEstagio(null);
         }}
         onSaved={() => {
-          setEditingScheduleEstagio(null);
+          setEditingSheetEstagio(null);
           loadData();
         }}
       />

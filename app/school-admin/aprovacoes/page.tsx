@@ -1,5 +1,6 @@
 import { PendingTeachersSection } from "@/components/school-admin/pending-teachers";
 import { ActiveProfessorsSection } from "@/components/school-admin/active-professors";
+import { DeleteEstagioRequestsSection } from "@/components/school-admin/delete-estagio-requests";
 
 export default function SchoolAdminApprovalsPage() {
   return (
@@ -12,6 +13,8 @@ export default function SchoolAdminApprovalsPage() {
       <PendingTeachersSection showActions={true} />
       
       <ActiveProfessorsSection />
+
+      <DeleteEstagioRequestsSection />
     </div>
   );
 }

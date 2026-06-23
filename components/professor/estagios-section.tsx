@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -29,15 +29,19 @@ import {
 } from "lucide-react";
 import { formatIsoDatePt } from "@/lib/estagios/date-calc";
 import type { EstagioListItem, StudentLite, TutorLite } from "./estagio-types";
+import { ArchiveEstagioButton } from "@/components/estagios/archive-estagio-button";
 
 type Props = {
   estagios: EstagioListItem[];
   students: StudentLite[];
   tutors: TutorLite[];
   loading: boolean;
+  schoolId: string;
+  courseDirectorMap: Record<string, { isDirector: boolean; canDelete: boolean }>;
   onOpenChangeTutor: (estagio: EstagioListItem) => void;
   onOpenEdit: (estagio: EstagioListItem) => void;
   onDelete?: (estagio: EstagioListItem) => void;
+  onRequestDelete?: (estagio: EstagioListItem) => void;
 };
 
 type SortMode = "recent" | "title" | "student" | "course";
@@ -49,9 +53,12 @@ export function EstagiosSection({
   students,
   tutors,
   loading,
+  schoolId,
+  courseDirectorMap,
   onOpenChangeTutor,
   onOpenEdit,
   onDelete,
+  onRequestDelete,
 }: Props) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -159,22 +166,8 @@ export function EstagiosSection({
   const filteredCount = sorted.length;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Briefcase className="h-5 w-5" />
-          Estágios
-        </CardTitle>
-        <CardDescription>
-          {loading
-            ? "A carregar..."
-            : totalCount === filteredCount
-              ? `${totalCount} estágio(s) criado(s)`
-              : `${filteredCount} de ${totalCount} estágio(s) após filtros`}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Toolbar */}
+    <div className="space-y-4">
+      {/* Toolbar */}
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -384,18 +377,65 @@ export function EstagiosSection({
                                 <Pencil className="mr-2 h-4 w-4" />
                                 Editar
                               </Button>
-                              {onDelete && (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                  onClick={() => onDelete(estagio)}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Eliminar
-                                </Button>
-                              )}
+                              <ArchiveEstagioButton
+                                estagioId={estagio.id}
+                                schoolId={schoolId}
+                                estado={estagio.estado}
+                                dataFimEstimada={estagio.dataFimEstimada}
+                              />
+                              {(() => {
+                                const courseInfo = courseDirectorMap[estagio.courseId];
+                                const isDirector = courseInfo?.isDirector ?? false;
+                                const directorCanDelete = courseInfo?.canDelete ?? false;
+
+                                if (isDirector && directorCanDelete && onDelete) {
+                                  return (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                      onClick={() => onDelete(estagio)}
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Eliminar
+                                    </Button>
+                                  );
+                                }
+
+                                if (isDirector && !directorCanDelete && (onDelete || onRequestDelete)) {
+                                  return (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="border-amber-500/40 text-amber-700 hover:bg-amber-50 dark:text-amber-400"
+                                      onClick={() => onRequestDelete?.(estagio)}
+                                      title="O diretor não tem permissão para eliminar autonomamente. Solicite ao administrador da escola."
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Solicitar eliminação
+                                    </Button>
+                                  );
+                                }
+
+                                if (!isDirector) {
+                                  return (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      disabled
+                                      title="Apenas o Diretor do Curso pode eliminar estágios."
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Eliminar
+                                    </Button>
+                                  );
+                                }
+
+                                return null;
+                              })()}
                               <Button
                                 type="button"
                                 variant="outline"
@@ -422,7 +462,6 @@ export function EstagiosSection({
             })}
           </div>
         )}
-      </CardContent>
-    </Card>
+    </div>
   );
 }

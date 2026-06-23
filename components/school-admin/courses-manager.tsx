@@ -60,6 +60,7 @@ type Course = {
   internshipEndDate?: string | null;
   reportMinHours?: number | null;
   reportWaitDays?: number | null;
+  directorCanDeleteEstagio?: boolean;
   createdAt?: Date | null;
 };
 
@@ -224,6 +225,7 @@ export function CoursesManager() {
             internshipEndDate?: string | null;
             reportMinHours?: number;
             reportWaitDays?: number;
+            directorCanDeleteEstagio?: boolean;
             createdAt?: { toDate?: () => Date };
           };
           const legacyTeacherIds = Array.isArray(data.teacherIds) ? data.teacherIds : [];
@@ -252,6 +254,7 @@ export function CoursesManager() {
             internshipEndDate: data.internshipEndDate ?? null,
             reportMinHours: data.reportMinHours ?? 80,
             reportWaitDays: data.reportWaitDays ?? 0,
+            directorCanDeleteEstagio: data.directorCanDeleteEstagio === true,
             createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
           };
         });
@@ -357,6 +360,7 @@ export function CoursesManager() {
         internshipEndDate?: string | null;
         reportMinHours?: number;
         reportWaitDays?: number;
+        directorCanDeleteEstagio?: boolean;
         createdAt?: { toDate?: () => Date };
       };
       const legacyTeacherIds = Array.isArray(data.teacherIds) ? data.teacherIds : [];
@@ -385,6 +389,7 @@ export function CoursesManager() {
         internshipEndDate: data.internshipEndDate ?? null,
         reportMinHours: data.reportMinHours ?? 80,
         reportWaitDays: data.reportWaitDays ?? 0,
+        directorCanDeleteEstagio: data.directorCanDeleteEstagio === true,
         createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
       };
     });
@@ -545,6 +550,7 @@ export function CoursesManager() {
       internshipEndDate: endDate,
       reportMinHours: editCourse.reportMinHours ?? 80,
       reportWaitDays: editCourse.reportWaitDays ?? 0,
+      directorCanDeleteEstagio: editCourse.directorCanDeleteEstagio ?? false,
       updatedAt: serverTimestamp(),
     });
     cancelEdit();
@@ -1346,6 +1352,22 @@ export function CoursesManager() {
                                     </div>
                                   )}
                                 </div>
+                                <div className="flex items-center gap-2 py-2">
+                                  <input
+                                    type="checkbox"
+                                    id="directorCanDelete"
+                                    className="h-4 w-4"
+                                    checked={draft.directorCanDeleteEstagio ?? false}
+                                    onChange={(event) =>
+                                      setEditCourse((prev) =>
+                                        prev ? { ...prev, directorCanDeleteEstagio: event.target.checked } : prev
+                                      )
+                                    }
+                                  />
+                                  <Label htmlFor="directorCanDelete" className="text-sm font-normal">
+                                    Diretor do Curso pode eliminar estágios autonomamente
+                                  </Label>
+                                </div>
                                 <div className="flex gap-2">
                                   <Button type="button" onClick={saveCourse}>
                                     Guardar
@@ -1382,6 +1404,10 @@ export function CoursesManager() {
                                   <p>Data de conclusão: {course.internshipEndDate || "—"}</p>
                                   <p>Horas mínimas para relatório: {course.reportMinHours ?? 80}h</p>
                                   <p>Espera para relatório: {course.reportWaitDays ?? 0} dia(s)</p>
+                                  <p>
+                                    Eliminação direta por diretor:{" "}
+                                    {course.directorCanDeleteEstagio ? "Sim" : "Não"}
+                                  </p>
                                 </div>
                                 <div className="space-y-2">
                                   <p className="text-xs uppercase tracking-wide text-muted-foreground">

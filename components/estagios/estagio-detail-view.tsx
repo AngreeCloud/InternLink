@@ -20,6 +20,7 @@ import {
 import { OverviewTab } from "./overview-tab";
 import { DocumentList } from "./documentos/document-list";
 import { ComingSoonTab } from "./coming-soon-tab";
+import { ArchiveEstagioButton } from "./archive-estagio-button";
 import { HorarioTab } from "./horario-tab";
 import { SumariosTab } from "./sumarios-tab";
 import { CalendarioTab } from "./calendario-tab";
@@ -260,16 +261,26 @@ export function EstagioDetailView({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
-        {backHref ? (
-          <Button variant="ghost" size="sm" asChild className="-ml-2">
-            <Link href={backHref}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              {backLabel}
-            </Link>
-          </Button>
-        ) : (
-          <div />
-        )}
+        <div className="flex items-center gap-2">
+          {backHref ? (
+            <Button variant="ghost" size="sm" asChild className="-ml-2">
+              <Link href={backHref}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                {backLabel}
+              </Link>
+            </Button>
+          ) : (
+            <div />
+          )}
+          {(effectiveRole === "professor" || effectiveRole === "diretor") && (
+            <ArchiveEstagioButton
+              estagioId={estagio.id}
+              schoolId={estagio.schoolId ?? ""}
+              estado={(raw.estadoEstagio as string) ?? (raw.estado as string) ?? ""}
+              dataFimEstimada={estagio.dataFimEstimada as string | undefined}
+            />
+          )}
+        </div>
       </div>
 
       <Tabs
