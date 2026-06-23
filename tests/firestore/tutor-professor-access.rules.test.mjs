@@ -10,7 +10,7 @@ import assert from "node:assert";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
-import { collection, doc, getDoc, getDocs, setDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, setDoc, where } from "firebase/firestore";
 
 let testEnv;
 
@@ -171,7 +171,7 @@ test("active professor CAN read tutorInvites from own school", async () => {
 
 test("active professor CAN list tutorInvites from own school", async () => {
   const db = testEnv.authenticatedContext("profAtivo", {}).firestore();
-  const q = collection(db, "tutorInvites");
+  const q = query(collection(db, "tutorInvites"), where("schoolId", "==", "schoolA"));
   await assertSucceeds(getDocs(q));
 });
 
@@ -182,7 +182,7 @@ test("pending professor CAN read tutorInvites from own school", async () => {
 
 test("pending professor CAN list tutorInvites from own school", async () => {
   const db = testEnv.authenticatedContext("profPendente", {}).firestore();
-  const q = collection(db, "tutorInvites");
+  const q = query(collection(db, "tutorInvites"), where("schoolId", "==", "schoolA"));
   await assertSucceeds(getDocs(q));
 });
 
