@@ -663,6 +663,7 @@ service cloud.firestore {
           resource.data.professorId == request.auth.uid
           || (resource.data.schoolId != null && isSchoolAdminFor(resource.data.schoolId))
           || isTutorInviteReceiver()
+          || (resource.data.schoolId != null && isProfessorFor(resource.data.schoolId))
         );
 
       allow create: if isSignedIn()
