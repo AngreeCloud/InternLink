@@ -144,7 +144,7 @@ export function TutoresManager() {
         professorPhotoURL: userData.photoURL || "",
       });
 
-      const loadInvites = async (all: boolean) => {
+      const loadInvites = async () => {
         try {
           const baseQuery = query(
             collection(db, "tutorInvites"),
@@ -177,7 +177,7 @@ export function TutoresManager() {
         }
       };
 
-      await loadInvites(showAllInvites);
+      await loadInvites();
 
       try {
         const tutorsSnap = await getDocs(collection(db, "schools", userData.schoolId, "tutors"));

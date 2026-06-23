@@ -111,6 +111,7 @@ vi.mock("lucide-react", () => {
     GraduationCap: Icon,
     Home: Icon,
     Users: Icon,
+    UserPlus: Icon,
     UserCheck: Icon,
     ClipboardCheck: Icon,
     Briefcase: Icon,

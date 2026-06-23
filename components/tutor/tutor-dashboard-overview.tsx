@@ -83,7 +83,7 @@ export function TutorDashboardOverview() {
 
           for (const estagioId of estagioIds) {
             try {
-              const docsSnap = await getDocs(query(collection(db, "documentos"), where("estagioId", "==", estagioId)));
+              const docsSnap = await getDocs(collection(db, "estagios", estagioId, "documentos"));
               documentos += docsSnap.size;
             } catch {
               // ignore
