@@ -114,6 +114,8 @@ export function InternshipManager() {
   const [requestDeleteEstagio, setRequestDeleteEstagio] = useState<Estagio | null>(null);
   const [requestingDelete, setRequestingDelete] = useState(false);
   const [courseDirectorMap, setCourseDirectorMap] = useState<Record<string, { isDirector: boolean; canDelete: boolean }>>({});
+  const [userUid, setUserUid] = useState("");
+  const [showOnlyMyEstagios, setShowOnlyMyEstagios] = useState(false);
 
   const filteredStudents = useMemo(() => {
     const term = studentSearch.trim().toLowerCase();
@@ -166,6 +168,7 @@ export function InternshipManager() {
       };
       if (!userData.schoolId) return;
 
+      setUserUid(user.uid);
       setSchoolId(userData.schoolId);
       setProfessorName(userData.nome || user.displayName || "Professor");
       setProfessorPhotoURL(userData.photoURL || "");
@@ -224,17 +227,55 @@ export function InternshipManager() {
         // ignore
       }
 
+      const directorCourseIds = Object.entries(courseDirectorMap)
+        .filter(([, v]) => v.isDirector)
+        .map(([k]) => k);
+
       try {
-        const estagiosSnap = await getDocs(
+        const myEstagiosSnap = await getDocs(
           query(
             collection(db, "estagios"),
             where("professorId", "==", user.uid),
             where("schoolId", "==", userData.schoolId)
           )
         );
+
+        let allEstagiosDocs = [...myEstagiosSnap.docs];
+
+        if (directorCourseIds.length > 0) {
+          const extraSnaps: Array<{ docs: Array<{ id: string; data: () => Record<string, unknown> }> }> = [];
+          for (let i = 0; i < directorCourseIds.length; i += 10) {
+            const batch = directorCourseIds.slice(i, i + 10);
+            const [courseSnap, alunoCourseSnap] = await Promise.all([
+              getDocs(query(
+                collection(db, "estagios"),
+                where("courseId", "in", batch),
+                where("schoolId", "==", userData.schoolId)
+              )),
+              getDocs(query(
+                collection(db, "estagios"),
+                where("alunoCourseId", "in", batch),
+                where("schoolId", "==", userData.schoolId)
+              )),
+            ]);
+            extraSnaps.push(courseSnap, alunoCourseSnap);
+          }
+          extraSnaps.forEach((snap) => {
+            allEstagiosDocs = [...allEstagiosDocs, ...snap.docs];
+          });
+        }
+
+        const seenIds = new Set<string>();
+        allEstagiosDocs = allEstagiosDocs.filter((doc) => {
+          if (seenIds.has(doc.id)) return false;
+          seenIds.add(doc.id);
+          return true;
+        });
+
         const estagiosToNormalize: string[] = [];
-        const list: Estagio[] = estagiosSnap.docs.map((docSnap) => {
+        const list: Estagio[] = allEstagiosDocs.map((docSnap) => {
           const data = docSnap.data() as {
+            professorId?: string;
             titulo?: string;
             alunoId?: string;
             alunoNome?: string;
@@ -278,6 +319,7 @@ export function InternshipManager() {
 
           return {
             id: docSnap.id,
+            professorId: data.professorId || "",
             titulo: data.titulo || "—",
             alunoId: data.alunoId || "",
             alunoNome: data.alunoNome || "—",
@@ -378,6 +420,16 @@ export function InternshipManager() {
       setLoading(false);
     }
   };
+
+  const isDirector = useMemo(
+    () => Object.values(courseDirectorMap).some((v) => v.isDirector),
+    [courseDirectorMap]
+  );
+
+  const displayEstagios = useMemo(() => {
+    if (!showOnlyMyEstagios || !userUid) return estagios;
+    return estagios.filter((e) => e.professorId === userUid);
+  }, [estagios, showOnlyMyEstagios, userUid]);
 
   useEffect(() => {
     let unsubscribe = () => {};
@@ -822,12 +874,15 @@ export function InternshipManager() {
       </Dialog>
 
       <EstagiosSection
-        estagios={estagios}
+        estagios={displayEstagios}
         students={students}
         tutors={schoolTutors}
         loading={loading}
         schoolId={schoolId}
         courseDirectorMap={courseDirectorMap}
+        showOnlyMyEstagios={showOnlyMyEstagios}
+        onToggleShowOnlyMy={() => setShowOnlyMyEstagios((v) => !v)}
+        isDirector={isDirector}
         onOpenChangeTutor={(estagio) => openEditTutorDialog(estagio)}
         onOpenEdit={(estagio) => {
           setEditingSheetEstagio(estagio);

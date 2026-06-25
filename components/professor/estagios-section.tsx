@@ -21,6 +21,8 @@ import {
   CalendarRange,
   ChevronDown,
   ChevronRight,
+  Eye,
+  EyeOff,
   Filter,
   Pencil,
   Search,
@@ -38,6 +40,9 @@ type Props = {
   loading: boolean;
   schoolId: string;
   courseDirectorMap: Record<string, { isDirector: boolean; canDelete: boolean }>;
+  showOnlyMyEstagios?: boolean;
+  onToggleShowOnlyMy?: () => void;
+  isDirector?: boolean;
   onOpenChangeTutor: (estagio: EstagioListItem) => void;
   onOpenEdit: (estagio: EstagioListItem) => void;
   onDelete?: (estagio: EstagioListItem) => void;
@@ -55,6 +60,9 @@ export function EstagiosSection({
   loading,
   schoolId,
   courseDirectorMap,
+  showOnlyMyEstagios = false,
+  onToggleShowOnlyMy,
+  isDirector = false,
   onOpenChangeTutor,
   onOpenEdit,
   onDelete,
@@ -229,6 +237,22 @@ export function EstagiosSection({
                 </SelectContent>
               </Select>
             </div>
+
+            {isDirector && onToggleShowOnlyMy && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onToggleShowOnlyMy}
+                className="gap-1.5"
+              >
+                {showOnlyMyEstagios ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+                {showOnlyMyEstagios ? "Meus estágios" : "Todos os estágios"}
+              </Button>
+            )}
           </div>
         </div>
 

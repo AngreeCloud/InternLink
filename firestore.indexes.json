@@ -60,6 +60,22 @@
       ]
     },
     {
+      "collectionGroup": "estagios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "schoolId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "estagios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "alunoCourseId", "order": "ASCENDING" },
+        { "fieldPath": "schoolId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "auditLogs",
       "queryScope": "COLLECTION",
       "fields": [
