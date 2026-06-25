@@ -100,6 +100,10 @@ vi.mock("lucide-react", () => {
     LogOut: Icon,
     Menu: Icon,
     PanelLeftClose: Icon,
+    UserCheck: Icon,
+    ChevronDown: Icon,
+    Briefcase: Icon,
+    User: Icon,
   };
 });
 
