@@ -243,7 +243,6 @@ export function InternshipManager() {
         let allEstagiosDocs = [...myEstagiosSnap.docs];
 
         if (directorCourseIds.length > 0) {
-          const extraSnaps: Array<{ docs: Array<{ id: string; data: () => Record<string, unknown> }> }> = [];
           for (let i = 0; i < directorCourseIds.length; i += 10) {
             const batch = directorCourseIds.slice(i, i + 10);
             const [courseSnap, alunoCourseSnap] = await Promise.all([
@@ -258,11 +257,9 @@ export function InternshipManager() {
                 where("schoolId", "==", userData.schoolId)
               )),
             ]);
-            extraSnaps.push(courseSnap, alunoCourseSnap);
+            courseSnap.docs.forEach((d) => { allEstagiosDocs.push(d); });
+            alunoCourseSnap.docs.forEach((d) => { allEstagiosDocs.push(d); });
           }
-          extraSnaps.forEach((snap) => {
-            allEstagiosDocs = [...allEstagiosDocs, ...snap.docs];
-          });
         }
 
         const seenIds = new Set<string>();
