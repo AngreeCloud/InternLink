@@ -68,7 +68,11 @@ function calculateAge(dataNascimento: string): number {
   return age;
 }
 
-export function PendingStudentsManager() {
+type PendingStudentsManagerProps = {
+  embedded?: boolean;
+};
+
+export function PendingStudentsManager({ embedded }: PendingStudentsManagerProps) {
   const [students, setStudents] = useState<PendingStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -383,20 +387,36 @@ export function PendingStudentsManager() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Aprovações de Alunos</h1>
-        <p className="text-muted-foreground">Aprovar ou rejeitar alunos com acesso pendente à plataforma.</p>
-      </div>
+      {!embedded && (
+        <>
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Aprovações de Alunos</h1>
+            <p className="text-muted-foreground">Aprovar ou rejeitar alunos com acesso pendente à plataforma.</p>
+          </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Pesquisar por nome, email ou curso..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
-      </div>
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Pesquisar por nome, email ou curso..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </>
+      )}
+
+      {embedded && (
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Pesquisar por nome, email ou curso..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+      )}
 
       <Card>
         <CardHeader>

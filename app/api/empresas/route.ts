@@ -130,7 +130,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { uid, schoolId, db } = auth;
+    const { uid, schoolId, db, role } = auth;
 
     const optional = <T>(val: T | undefined | null): T | undefined =>
       val == null || (typeof val === "string" && val.trim() === "") ? undefined : val;

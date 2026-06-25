@@ -23,7 +23,7 @@ type PatchBody = {
   totalHoras?: number;
   horasDiarias?: number;
   diasSemana?: Partial<DiasSemana>;
-  estadoEstagio?: "em_curso" | "concluido" | "suspenso";
+  estadoEstagio?: "em_curso" | "concluido" | "suspenso" | "arquivado" | "eliminado";
   horasRealizadas?: number;
 };
 
@@ -49,7 +49,24 @@ export async function DELETE(
     const db = getFirebaseAdminDb();
     const estagioTitulo = (session.estagio.titulo as string) || id;
     const schoolId = session.estagio.schoolId as string;
-    await db.collection("estagios").doc(id).delete();
+
+    // Check if director has delete permission
+    const directorCanDelete = session.course?.directorCanDeleteEstagio === true;
+    if (!directorCanDelete) {
+      return NextResponse.json(
+        { error: "O diretor do curso não tem permissão para eliminar estágios autonomamente. Solicite a eliminação ao administrador da escola.", code: "director_cannot_delete" },
+        { status: 403 }
+      );
+    }
+
+    // Soft-delete: set estado to eliminado
+    await db.collection("estagios").doc(id).update({
+      estado: "eliminado",
+      estadoEstagio: "eliminado",
+      deletedAt: FieldValue.serverTimestamp(),
+      deletedBy: session.uid,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
 
     writeAuditLog({ schoolId, entityType: "estagio", entityId: id, entityLabel: estagioTitulo, action: "delete", changedBy: session.uid, summary: buildSummary("estagio", "delete", estagioTitulo) });
 
@@ -89,10 +106,14 @@ export async function PATCH(
     }
     if (
       body.estadoEstagio &&
-      ["em_curso", "concluido", "suspenso"].includes(body.estadoEstagio)
+      ["em_curso", "concluido", "suspenso", "arquivado", "eliminado"].includes(body.estadoEstagio)
     ) {
       updates.estadoEstagio = body.estadoEstagio;
-      updates.estado = body.estadoEstagio === "concluido" ? "concluido" : "ativo";
+      updates.estado = body.estadoEstagio === "concluido" ? "concluido" : body.estadoEstagio === "arquivado" ? "arquivado" : body.estadoEstagio === "eliminado" ? "eliminado" : "ativo";
+      if (body.estadoEstagio === "eliminado") {
+        updates.deletedAt = FieldValue.serverTimestamp();
+        updates.deletedBy = session.uid;
+      }
     }
     if (typeof body.horasRealizadas === "number" && body.horasRealizadas >= 0) {
       updates.horasRealizadas = body.horasRealizadas;

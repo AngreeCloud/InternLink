@@ -81,6 +81,14 @@ service cloud.firestore {
         && currentUserData().schoolId == schoolId;
     }
 
+    /** Like isProfessorFor, but without the estado == "ativo" gate — for reads only. */
+    function isProfessorForRead(schoolId) {
+      return isSignedIn()
+        && currentUserExists()
+        && currentUserData().role == "professor"
+        && currentUserData().schoolId == schoolId;
+    }
+
     function isTutor() {
       return currentUserExists()
         && currentUserData().role == "tutor";
@@ -359,6 +367,12 @@ service cloud.firestore {
         allow read, update, delete: if isSchoolAdminFor(schoolId);
       }
 
+      match /deleteEstagioRequests/{requestId} {
+        allow read: if isSchoolAdminFor(schoolId);
+        allow create: if isSignedIn();
+        allow update: if isSchoolAdminFor(schoolId);
+      }
+
       match /approvalHistory/{docId} {
         allow read, create: if isSchoolAdminFor(schoolId);
       }
@@ -368,7 +382,7 @@ service cloud.firestore {
           || (isTutor() && resource.data.tutorId == request.auth.uid)
           || tutorEmailMatches(resource.data.email)
           || isSchoolAdminFor(schoolId)
-          || isProfessorFor(schoolId);
+          || isProfessorForRead(schoolId);
 
         allow create: if isSelf(tutorId)
           && request.resource.data.tutorId == tutorId
@@ -663,6 +677,7 @@ service cloud.firestore {
           resource.data.professorId == request.auth.uid
           || (resource.data.schoolId != null && isSchoolAdminFor(resource.data.schoolId))
           || isTutorInviteReceiver()
+          || (resource.data.schoolId != null && isProfessorForRead(resource.data.schoolId))
         );
 
       allow create: if isSignedIn()

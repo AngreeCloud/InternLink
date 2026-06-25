@@ -37,6 +37,9 @@ export function buildSummary(
     })(),
     "course:associate": `Professor adicionado a ${label}.`,
     "course:disassociate": `Professor removido de ${label}.`,
+    "estagio:delete_request": `Pedido de eliminação de estágio: ${label}.`,
+    "estagio:delete_approved": `Pedido de eliminação de estágio aprovado: ${label}.`,
+    "estagio:delete_rejected": `Pedido de eliminação de estágio rejeitado: ${label}.`,
   };
 
   const key = `${entityType}:${action}`;

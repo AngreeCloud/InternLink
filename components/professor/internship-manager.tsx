@@ -2,10 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  addDoc,
   collection,
   deleteField,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -19,9 +17,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { ensureUserTutorsIndex, ensureAutoConversationForTutorAssignment } from "@/lib/chat/realtime-chat";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogClose,
@@ -34,7 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DoorOpen, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import { Plus } from "lucide-react";
 import {
   calcularDataFimEstimada,
   DEFAULT_DIAS_SEMANA,
@@ -42,7 +38,7 @@ import {
   type DiasSemana,
 } from "@/lib/estagios/date-calc";
 import { EstagiosSection } from "@/components/professor/estagios-section";
-import { EditEstagioDialog } from "@/components/estagios/edit-estagio-dialog";
+import { EditEstagioSheet } from "@/components/estagios/edit-estagio-sheet";
 import type { EstagioListItem } from "@/components/professor/estagio-types";
 
 const DAY_LABEL: Record<keyof DiasSemana, string> = {
@@ -76,35 +72,17 @@ type SchoolTutor = {
   joinedAt: string;
 };
 
-type TutorInvite = {
-  id: string;
-  nome: string;
-  email: string;
-  estado: string;
-  professorName: string;
-  createdAt: string;
-  createdAtMs: number;
-};
-
 export function InternshipManager() {
   const [estagios, setEstagios] = useState<Estagio[]>([]);
   const [students, setStudents] = useState<SimpleUser[]>([]);
   const [schoolTutors, setSchoolTutors] = useState<SchoolTutor[]>([]);
-  const [tutorInvites, setTutorInvites] = useState<TutorInvite[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [schoolId, setSchoolId] = useState("");
-  const [schoolName, setSchoolName] = useState("");
-  const [schoolShortName, setSchoolShortName] = useState("");
-  const [schoolBannerUrl, setSchoolBannerUrl] = useState("");
-  const [schoolProfileImageUrl, setSchoolProfileImageUrl] = useState("");
-  const [schoolAddress, setSchoolAddress] = useState("");
-  const [schoolContact, setSchoolContact] = useState("");
   const [professorName, setProfessorName] = useState("Professor");
   const [professorPhotoURL, setProfessorPhotoURL] = useState("");
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [tutorDialogOpen, setTutorDialogOpen] = useState(false);
   const [editTutorDialogOpen, setEditTutorDialogOpen] = useState(false);
 
   const [titulo, setTitulo] = useState("");
@@ -116,11 +94,7 @@ export function InternshipManager() {
   const [createHorasDiarias, setCreateHorasDiarias] = useState<number>(7);
   const [createDiasSemana, setCreateDiasSemana] = useState<DiasSemana>(DEFAULT_DIAS_SEMANA);
 
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editingScheduleEstagio, setEditingScheduleEstagio] = useState<EstagioListItem | null>(null);
-
-  const [inviteTutorEmail, setInviteTutorEmail] = useState("");
-  const [inviteTutorName, setInviteTutorName] = useState("");
+  const [editingSheetEstagio, setEditingSheetEstagio] = useState<EstagioListItem | null>(null);
 
   const [studentSearch, setStudentSearch] = useState("");
   const [tutorSearch, setTutorSearch] = useState("");
@@ -134,13 +108,14 @@ export function InternshipManager() {
 
   const [submitting, setSubmitting] = useState(false);
   const [createErrorMessage, setCreateErrorMessage] = useState<string | null>(null);
-  const [inviting, setInviting] = useState(false);
   const [updatingTutor, setUpdatingTutor] = useState(false);
-  const [removingInviteId, setRemovingInviteId] = useState<string | null>(null);
-  const [removingSchoolTutorId, setRemovingSchoolTutorId] = useState<string | null>(null);
-  const [confirmRemoveTutor, setConfirmRemoveTutor] = useState<SchoolTutor | null>(null);
   const [confirmDeleteEstagio, setConfirmDeleteEstagio] = useState<Estagio | null>(null);
   const [deletingEstagioId, setDeletingEstagioId] = useState<string | null>(null);
+  const [requestDeleteEstagio, setRequestDeleteEstagio] = useState<Estagio | null>(null);
+  const [requestingDelete, setRequestingDelete] = useState(false);
+  const [courseDirectorMap, setCourseDirectorMap] = useState<Record<string, { isDirector: boolean; canDelete: boolean }>>({});
+  const [userUid, setUserUid] = useState("");
+  const [showOnlyMyEstagios, setShowOnlyMyEstagios] = useState(false);
 
   const filteredStudents = useMemo(() => {
     const term = studentSearch.trim().toLowerCase();
@@ -175,8 +150,6 @@ export function InternshipManager() {
   }, [schoolTutors, editTutorSearch]);
 
   const selectedStudent = students.find((student) => student.id === alunoId) || null;
-  const pendingInvites = tutorInvites.filter((invite) => invite.estado === "pendente");
-  const pendingInvitesCount = pendingInvites.length;
 
   const loadData = async () => {
     setLoading(true);
@@ -195,6 +168,7 @@ export function InternshipManager() {
       };
       if (!userData.schoolId) return;
 
+      setUserUid(user.uid);
       setSchoolId(userData.schoolId);
       setProfessorName(userData.nome || user.displayName || "Professor");
       setProfessorPhotoURL(userData.photoURL || "");
@@ -230,32 +204,75 @@ export function InternshipManager() {
           address?: string;
           contact?: string;
         };
-        setSchoolName(schoolData.name || "");
-        setSchoolShortName(schoolData.shortName || "");
-        setSchoolBannerUrl(schoolData.bannerUrl || "");
-        setSchoolProfileImageUrl(schoolData.profileImageUrl || "");
-        setSchoolAddress(schoolData.address || "");
-        setSchoolContact(schoolData.contact || "");
-      } else {
-        setSchoolName("");
-        setSchoolShortName("");
-        setSchoolBannerUrl("");
-        setSchoolProfileImageUrl("");
-        setSchoolAddress("");
-        setSchoolContact("");
       }
 
+      // Load courses with director info for delete permission checks
       try {
-        const estagiosSnap = await getDocs(
+        const coursesSnap = await getDocs(
+          query(collection(db, "courses"), where("schoolId", "==", userData.schoolId))
+        );
+        const map: Record<string, { isDirector: boolean; canDelete: boolean }> = {};
+        coursesSnap.docs.forEach((c) => {
+          const cData = c.data() as {
+            courseDirectorId?: string;
+            directorCanDeleteEstagio?: boolean;
+          };
+          map[c.id] = {
+            isDirector: cData.courseDirectorId === user.uid,
+            canDelete: cData.directorCanDeleteEstagio === true,
+          };
+        });
+        setCourseDirectorMap(map);
+      } catch {
+        // ignore
+      }
+
+      const directorCourseIds = Object.entries(courseDirectorMap)
+        .filter(([, v]) => v.isDirector)
+        .map(([k]) => k);
+
+      try {
+        const myEstagiosSnap = await getDocs(
           query(
             collection(db, "estagios"),
             where("professorId", "==", user.uid),
             where("schoolId", "==", userData.schoolId)
           )
         );
+
+        let allEstagiosDocs = [...myEstagiosSnap.docs];
+
+        if (directorCourseIds.length > 0) {
+          for (let i = 0; i < directorCourseIds.length; i += 10) {
+            const batch = directorCourseIds.slice(i, i + 10);
+            const [courseSnap, alunoCourseSnap] = await Promise.all([
+              getDocs(query(
+                collection(db, "estagios"),
+                where("courseId", "in", batch),
+                where("schoolId", "==", userData.schoolId)
+              )),
+              getDocs(query(
+                collection(db, "estagios"),
+                where("alunoCourseId", "in", batch),
+                where("schoolId", "==", userData.schoolId)
+              )),
+            ]);
+            courseSnap.docs.forEach((d) => { allEstagiosDocs.push(d); });
+            alunoCourseSnap.docs.forEach((d) => { allEstagiosDocs.push(d); });
+          }
+        }
+
+        const seenIds = new Set<string>();
+        allEstagiosDocs = allEstagiosDocs.filter((doc) => {
+          if (seenIds.has(doc.id)) return false;
+          seenIds.add(doc.id);
+          return true;
+        });
+
         const estagiosToNormalize: string[] = [];
-        const list: Estagio[] = estagiosSnap.docs.map((docSnap) => {
+        const list: Estagio[] = allEstagiosDocs.map((docSnap) => {
           const data = docSnap.data() as {
+            professorId?: string;
             titulo?: string;
             alunoId?: string;
             alunoNome?: string;
@@ -299,6 +316,7 @@ export function InternshipManager() {
 
           return {
             id: docSnap.id,
+            professorId: data.professorId || "",
             titulo: data.titulo || "—",
             alunoId: data.alunoId || "",
             alunoNome: data.alunoNome || "—",
@@ -393,47 +411,22 @@ export function InternshipManager() {
         // ignore
       }
 
-      try {
-        const invitesSnap = await getDocs(
-          query(
-            collection(db, "tutorInvites"),
-            where("schoolId", "==", userData.schoolId),
-            where("professorId", "==", user.uid)
-          )
-        );
-
-        const list: TutorInvite[] = invitesSnap.docs
-          .map((docSnap) => {
-            const data = docSnap.data() as {
-              nome?: string;
-              email?: string;
-              estado?: string;
-              professorName?: string;
-              createdAt?: { toDate: () => Date };
-            };
-            const createdAtDate = data.createdAt?.toDate?.() || null;
-            return {
-              id: docSnap.id,
-              nome: data.nome || "Tutor",
-              email: data.email || "—",
-              estado: data.estado || "pendente",
-              professorName: data.professorName || "—",
-              createdAt: createdAtDate?.toLocaleDateString("pt-PT") || "—",
-              createdAtMs: createdAtDate?.getTime() || 0,
-            };
-          })
-          .sort((a, b) => b.createdAtMs - a.createdAtMs);
-
-        setTutorInvites(list);
-      } catch {
-        // ignore
-      }
     } catch (error) {
       console.error("Erro ao carregar estágios:", error);
     } finally {
       setLoading(false);
     }
   };
+
+  const isDirector = useMemo(
+    () => Object.values(courseDirectorMap).some((v) => v.isDirector),
+    [courseDirectorMap]
+  );
+
+  const displayEstagios = useMemo(() => {
+    if (!showOnlyMyEstagios || !userUid) return estagios;
+    return estagios.filter((e) => e.professorId === userUid);
+  }, [estagios, showOnlyMyEstagios, userUid]);
 
   useEffect(() => {
     let unsubscribe = () => {};
@@ -531,48 +524,6 @@ export function InternshipManager() {
         })
       : null;
 
-  const handleInviteTutor = async () => {
-    if (!inviteTutorEmail.trim()) return;
-    setInviting(true);
-    try {
-      const db = await getDbRuntime();
-      const auth = await getAuthRuntime();
-      const user = auth.currentUser;
-      if (!user) return;
-
-      const normalizedInviteEmail = inviteTutorEmail.trim().toLowerCase();
-      const defaultTutorName = normalizedInviteEmail.split("@")[0] || "Tutor";
-
-      await addDoc(collection(db, "tutorInvites"), {
-        email: normalizedInviteEmail,
-        emailNormalized: normalizedInviteEmail,
-        nome: inviteTutorName.trim() || defaultTutorName,
-        schoolId,
-        schoolName,
-        schoolShortName,
-        schoolBannerUrl,
-        schoolProfileImageUrl,
-        schoolAddress,
-        schoolContact,
-        professorId: user.uid,
-        professorName,
-        professorPhotoURL,
-        estado: "pendente",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      setInviteTutorEmail("");
-      setInviteTutorName("");
-      setTutorDialogOpen(false);
-      await loadData();
-    } catch (error) {
-      console.error("Erro ao convidar tutor:", error);
-    } finally {
-      setInviting(false);
-    }
-  };
-
   const handleDeleteEstagio = async (estagio: Estagio) => {
     setDeletingEstagioId(estagio.id);
     try {
@@ -587,34 +538,6 @@ export function InternshipManager() {
       console.error("Erro ao eliminar estágio:", error);
     } finally {
       setDeletingEstagioId(null);
-    }
-  };
-
-  const handleRemoveInvite = async (inviteId: string) => {
-    setRemovingInviteId(inviteId);
-    try {
-      const db = await getDbRuntime();
-      await deleteDoc(doc(db, "tutorInvites", inviteId));
-      setTutorInvites((prev) => prev.filter((invite) => invite.id !== inviteId));
-    } catch (error) {
-      console.error("Erro ao remover convite:", error);
-    } finally {
-      setRemovingInviteId(null);
-    }
-  };
-
-  const handleRemoveSchoolTutor = async (schoolTutorId: string) => {
-    if (!schoolId) return;
-
-    setRemovingSchoolTutorId(schoolTutorId);
-    try {
-      const db = await getDbRuntime();
-      await deleteDoc(doc(db, "schools", schoolId, "tutors", schoolTutorId));
-      setSchoolTutors((prev) => prev.filter((tutor) => tutor.id !== schoolTutorId));
-    } catch (error) {
-      console.error("Erro ao remover tutor do sistema da escola:", error);
-    } finally {
-      setRemovingSchoolTutorId(null);
     }
   };
 
@@ -661,59 +584,21 @@ export function InternshipManager() {
     }
   };
 
-  const schoolLabel = schoolShortName || schoolName || "Escola";
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Gestão de Estágios</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-foreground">Estágios</h1>
+            <span className="rounded-full bg-muted px-3 py-1 text-sm text-muted-foreground">
+              {estagios.length} estágio(s)
+            </span>
+          </div>
           <p className="text-muted-foreground">
-            Crie estágios, convide tutores por email e associe tutores mais tarde quando necessário.
+            Crie e gerencie estágios dos alunos.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Dialog open={tutorDialogOpen} onOpenChange={setTutorDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <UserPlus className="mr-2 h-4 w-4" />
-                Convidar Tutor
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Convidar Tutor para {schoolLabel}</DialogTitle>
-                <DialogDescription>
-                  O tutor será convidado para o sistema de estágio da escola. Pode ser associado a um estágio depois.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="tutorInviteName">Nome do Tutor (opcional)</Label>
-                  <Input
-                    id="tutorInviteName"
-                    placeholder="Nome completo"
-                    value={inviteTutorName}
-                    onChange={(event) => setInviteTutorName(event.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="tutorInviteEmail">Email do Tutor</Label>
-                  <Input
-                    id="tutorInviteEmail"
-                    type="email"
-                    placeholder="tutor@empresa.com"
-                    value={inviteTutorEmail}
-                    onChange={(event) => setInviteTutorEmail(event.target.value)}
-                  />
-                </div>
-                <Button onClick={handleInviteTutor} disabled={inviting} className="w-full">
-                  {inviting ? "A convidar..." : "Enviar Convite"}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-
           <Dialog
             open={dialogOpen}
             onOpenChange={(open) => {
@@ -932,142 +817,6 @@ export function InternshipManager() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Tutores Convidados
-          </CardTitle>
-          <CardDescription>
-            Convites pendentes enviados para {schoolLabel} ({pendingInvitesCount}).
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {pendingInvitesCount === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Não existem convites pendentes. Quando o tutor aceita, o convite desaparece desta lista.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {pendingInvites.map((invite) => (
-                <div key={invite.id} className="flex items-center justify-between rounded-lg border border-border p-3">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-9 w-9">
-                      <AvatarFallback>{invite.nome.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="text-sm font-medium">{invite.nome}</p>
-                      <p className="text-xs text-muted-foreground">{invite.email}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <Badge variant="secondary">pendente</Badge>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Por: {invite.professorName} • {invite.createdAt}
-                    </p>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="mt-1 h-7 px-2 text-destructive hover:text-destructive"
-                      onClick={() => handleRemoveInvite(invite.id)}
-                      disabled={removingInviteId === invite.id}
-                    >
-                      <Trash2 className="mr-1 h-3.5 w-3.5" />
-                      {removingInviteId === invite.id ? "A remover..." : "Remover"}
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Sistema de Estágios da Escola
-          </CardTitle>
-          <CardDescription>
-            Tutores já associados ao sistema da escola ({schoolTutors.length}).
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {schoolTutors.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Ainda não existem tutores associados ao sistema. Use "Convidar Tutor" para começar.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {schoolTutors.map((tutor) => (
-                <div key={tutor.id} className="flex items-center justify-between rounded-lg border border-border p-3">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-9 w-9">
-                      <AvatarImage src={tutor.photoURL || undefined} alt={tutor.nome} />
-                      <AvatarFallback>{tutor.nome.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="text-sm font-medium">{tutor.nome}</p>
-                      <p className="text-xs text-muted-foreground">{tutor.email} • {tutor.empresa}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right text-xs text-muted-foreground">
-                      <p>Convidado por: {tutor.approvedByProfessorName}</p>
-                      <p>Entrada: {tutor.joinedAt}</p>
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      onClick={() => setConfirmRemoveTutor(tutor)}
-                    >
-                      <DoorOpen className="mr-2 h-4 w-4" />
-                      Remover
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Dialog open={Boolean(confirmRemoveTutor)} onOpenChange={(open) => !open && setConfirmRemoveTutor(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Remover tutor do sistema da escola?</DialogTitle>
-            <DialogDescription>
-              Esta ação remove <strong>{confirmRemoveTutor?.nome || "o tutor"}</strong> do "Sistema de Estágios da Escola".
-              <br />
-              <br />
-              Aviso: isto pode impactar associações futuras. Use apenas se tiver certeza.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline">Cancelar</Button>
-            </DialogClose>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={!confirmRemoveTutor || removingSchoolTutorId === confirmRemoveTutor.id}
-              onClick={async () => {
-                if (!confirmRemoveTutor) return;
-                await handleRemoveSchoolTutor(confirmRemoveTutor.id);
-                setConfirmRemoveTutor(null);
-              }}
-            >
-              {confirmRemoveTutor && removingSchoolTutorId === confirmRemoveTutor.id ? "A remover..." : "Confirmar remoção"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={editTutorDialogOpen} onOpenChange={setEditTutorDialogOpen}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
@@ -1122,16 +871,24 @@ export function InternshipManager() {
       </Dialog>
 
       <EstagiosSection
-        estagios={estagios}
+        estagios={displayEstagios}
         students={students}
         tutors={schoolTutors}
         loading={loading}
+        schoolId={schoolId}
+        courseDirectorMap={courseDirectorMap}
+        showOnlyMyEstagios={showOnlyMyEstagios}
+        onToggleShowOnlyMy={() => setShowOnlyMyEstagios((v) => !v)}
+        isDirector={isDirector}
         onOpenChangeTutor={(estagio) => openEditTutorDialog(estagio)}
         onOpenEdit={(estagio) => {
-          setEditingScheduleEstagio(estagio);
-          setEditDialogOpen(true);
+          setEditingSheetEstagio(estagio);
         }}
         onDelete={(estagio) => setConfirmDeleteEstagio(estagio)}
+        onRequestDelete={(estagio) => {
+          // Director without permission: show dialog to create delete request
+          setRequestDeleteEstagio(estagio);
+        }}
       />
 
       <Dialog open={Boolean(confirmDeleteEstagio)} onOpenChange={(open) => !open && setConfirmDeleteEstagio(null)}>
@@ -1166,15 +923,61 @@ export function InternshipManager() {
         </DialogContent>
       </Dialog>
 
-      <EditEstagioDialog
-        estagio={editingScheduleEstagio}
-        open={editDialogOpen}
+      <Dialog open={Boolean(requestDeleteEstagio)} onOpenChange={(open) => !open && setRequestDeleteEstagio(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Solicitar eliminação de estágio?</DialogTitle>
+            <DialogDescription>
+              O diretor do curso não tem permissão para eliminar estágios autonomamente.
+              <br />
+              <br />
+              Será enviado um pedido ao administrador da escola para aprovação.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline" disabled={requestingDelete}>Cancelar</Button>
+            </DialogClose>
+            <Button
+              type="button"
+              variant="default"
+              disabled={!requestDeleteEstagio || requestingDelete}
+              onClick={async () => {
+                if (!requestDeleteEstagio) return;
+                setRequestingDelete(true);
+                try {
+                  const res = await fetch(`/api/estagios/${requestDeleteEstagio.id}/delete-request`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ motivo: "" }),
+                  });
+                  if (res.ok) {
+                    setRequestDeleteEstagio(null);
+                  } else {
+                    const err = (await res.json()) as { error?: string };
+                    console.error("Erro ao solicitar eliminação:", err.error);
+                  }
+                } catch (err) {
+                  console.error("Erro ao solicitar eliminação:", err);
+                } finally {
+                  setRequestingDelete(false);
+                }
+              }}
+            >
+              {requestingDelete ? "A enviar..." : "Solicitar eliminação"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <EditEstagioSheet
+        estagio={editingSheetEstagio}
+        open={Boolean(editingSheetEstagio)}
         onOpenChange={(open) => {
-          setEditDialogOpen(open);
-          if (!open) setEditingScheduleEstagio(null);
+          if (!open) setEditingSheetEstagio(null);
         }}
         onSaved={() => {
-          setEditingScheduleEstagio(null);
+          setEditingSheetEstagio(null);
           loadData();
         }}
       />

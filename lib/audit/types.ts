@@ -11,7 +11,10 @@ export type AuditAction =
   | "cancel"
   | "associate"
   | "disassociate"
-  | "update_settings";
+  | "update_settings"
+  | "delete_request"
+  | "delete_approved"
+  | "delete_rejected";
 
 export type AuditEntityType =
   | "empresa"

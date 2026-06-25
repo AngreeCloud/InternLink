@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
@@ -18,17 +18,49 @@ import { Button } from "@/components/ui/button";
 import { Sidebar } from "@/components/layout/sidebar";
 import { useSidebarCollapsed } from "@/lib/use-sidebar-collapsed";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { CheckSquare, Folder, GraduationCap, History, Home, Info, LogOut, Menu, MessageSquare, Users, Building2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Briefcase, ChevronDown, Folder, GraduationCap, History, Home, Info, LogOut, Menu, MessageSquare, Users, Building2, User, UserCheck } from "lucide-react";
 
-const navigation = [
+const standaloneNav = [
   { name: "Dashboard", href: "/school-admin", icon: Home },
   { name: "Informações da Escola", href: "/school-admin/informacoes", icon: Info },
-  { name: "Aprovações", href: "/school-admin/aprovacoes", icon: CheckSquare },
-  { name: "E. Educação", href: "/school-admin/encarregados", icon: Users },
-  { name: "Empresas", href: "/school-admin/empresas", icon: Building2 },
+];
+
+const pessoalGroup = {
+  label: "Pessoal",
+  icon: Users,
+  items: [
+    { name: "Professores", href: "/school-admin/professores", icon: UserCheck },
+    { name: "Tutores", href: "/school-admin/tutores", icon: Users },
+    { name: "E. Educação", href: "/school-admin/encarregados", icon: Users },
+  ],
+};
+
+const gestaoGroup = {
+  label: "Gestão",
+  icon: Briefcase,
+  items: [
+    { name: "Estágios", href: "/school-admin/estagios", icon: Briefcase },
+    { name: "Empresas", href: "/school-admin/empresas", icon: Building2 },
+    { name: "Cursos", href: "/school-admin/cursos", icon: Folder },
+  ],
+};
+
+const bottomNav = [
   { name: "Chat", href: "/school-admin/chat", icon: MessageSquare },
   { name: "Histórico", href: "/school-admin/historico", icon: History },
-  { name: "Cursos", href: "/school-admin/cursos", icon: Folder },
 ];
 
 type AuthState = {
@@ -59,9 +91,23 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
     if (href === "/school-admin") {
       return pathname === href;
     }
-
     return pathname === href || pathname.startsWith(`${href}/`);
   };
+
+  const isPersonnelChildActive = useMemo(
+    () => pessoalGroup.items.some((item) => isActiveRoute(item.href)),
+    [pathname]
+  );
+  const isManagementChildActive = useMemo(
+    () => gestaoGroup.items.some((item) => isActiveRoute(item.href)),
+    [pathname]
+  );
+
+  const [pessoalOpen, setPessoalOpen] = useState(isPersonnelChildActive);
+  const [gestaoOpen, setGestaoOpen] = useState(isManagementChildActive);
+
+  useEffect(() => { if (isPersonnelChildActive) setPessoalOpen(true); }, [isPersonnelChildActive]);
+  useEffect(() => { if (isManagementChildActive) setGestaoOpen(true); }, [isManagementChildActive]);
 
   const isChatPage = isActiveRoute("/school-admin/chat");
 
@@ -162,7 +208,119 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
             <ul role="list" className="flex flex-1 flex-col gap-y-7">
               <li>
                 <ul role="list" className="-mx-2 space-y-1">
-                  {navigation.map((item) => (
+                  {standaloneNav.map((item) => (
+                    <li key={item.name}>
+                      <Link
+                        href={item.href}
+                        className={[
+                          "flex items-center gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 transition-colors",
+                          collapsed ? "justify-center" : "",
+                          isActiveRoute(item.href)
+                            ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                        ].join(" ")}
+                        aria-current={isActiveRoute(item.href) ? "page" : undefined}
+                      >
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        {!collapsed && <span>{item.name}</span>}
+                      </Link>
+                    </li>
+                  ))}
+
+                  {!collapsed && (
+                    <>
+                      <Collapsible open={pessoalOpen} onOpenChange={setPessoalOpen}>
+                        <CollapsibleTrigger asChild>
+                          <button
+                            className={[
+                              "flex w-full items-center gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 transition-colors",
+                              isPersonnelChildActive
+                                ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                            ].join(" ")}
+                          >
+                            <Users className="h-4 w-4 shrink-0" />
+                            <span className="flex-1 text-left">Pessoal</span>
+                            <ChevronDown
+                              className={[
+                                "h-3.5 w-3.5 transition-transform",
+                                pessoalOpen ? "rotate-0" : "-rotate-90",
+                              ].join(" ")}
+                            />
+                          </button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="overflow-hidden data-[state=open]:animate-slideDown data-[state=closed]:animate-slideUp">
+                          <ul role="list" className="ml-4 border-l border-border pl-2 mt-1 space-y-1">
+                            {pessoalGroup.items.map((item) => (
+                              <li key={item.name}>
+                                <Link
+                                  href={item.href}
+                                  className={[
+                                    "flex items-center gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 transition-colors",
+                                    isActiveRoute(item.href)
+                                      ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                                  ].join(" ")}
+                                  aria-current={isActiveRoute(item.href) ? "page" : undefined}
+                                >
+                                  <item.icon className="h-4 w-4 shrink-0" />
+                                  <span>{item.name}</span>
+                                  {item.href === "/school-admin/professores" && (
+                                    <SchoolAdminApprovalsBadge schoolId={state.schoolId} isActive={isActiveRoute(item.href)} />
+                                  )}
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
+                        </CollapsibleContent>
+                      </Collapsible>
+
+                      <Collapsible open={gestaoOpen} onOpenChange={setGestaoOpen}>
+                        <CollapsibleTrigger asChild>
+                          <button
+                            className={[
+                              "flex w-full items-center gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 transition-colors",
+                              isManagementChildActive
+                                ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                            ].join(" ")}
+                          >
+                            <Briefcase className="h-4 w-4 shrink-0" />
+                            <span className="flex-1 text-left">Gestão</span>
+                            <ChevronDown
+                              className={[
+                                "h-3.5 w-3.5 transition-transform",
+                                gestaoOpen ? "rotate-0" : "-rotate-90",
+                              ].join(" ")}
+                            />
+                          </button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="overflow-hidden data-[state=open]:animate-slideDown data-[state=closed]:animate-slideUp">
+                          <ul role="list" className="ml-4 border-l border-border pl-2 mt-1 space-y-1">
+                            {gestaoGroup.items.map((item) => (
+                              <li key={item.name}>
+                                <Link
+                                  href={item.href}
+                                  className={[
+                                    "flex items-center gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 transition-colors",
+                                    isActiveRoute(item.href)
+                                      ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                                  ].join(" ")}
+                                  aria-current={isActiveRoute(item.href) ? "page" : undefined}
+                                >
+                                  <item.icon className="h-4 w-4 shrink-0" />
+                                  <span>{item.name}</span>
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    </>
+                  )}
+
+                  {bottomNav.map((item) => (
                     <li key={item.name}>
                       <Link
                         href={item.href}
@@ -179,9 +337,6 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
                         {!collapsed && <span>{item.name}</span>}
                         {!collapsed && item.href === "/school-admin/chat" && (
                           <ChatNavUnreadBadge userId={state.userId} isActive={isActiveRoute(item.href)} />
-                        )}
-                        {!collapsed && item.href === "/school-admin/aprovacoes" && (
-                          <SchoolAdminApprovalsBadge schoolId={state.schoolId} isActive={isActiveRoute(item.href)} />
                         )}
                       </Link>
                     </li>
@@ -200,29 +355,43 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
             <div className="flex flex-1 items-center justify-end gap-3">
               <NotificationsInbox notifications={notifications} onOpenChat={handleOpenConversation} />
 
-              <div className="flex items-center gap-3 rounded-full border border-border bg-card px-3 py-1">
-                <Avatar className="h-7 w-7">
-                  <AvatarImage src={state.photoURL || undefined} alt={state.name} />
-                  <AvatarFallback>{state.name.charAt(0)}</AvatarFallback>
-                </Avatar>
-                <div className="leading-tight">
-                  <p className="text-xs font-semibold text-foreground">{state.name}</p>
-                  <p className="text-[11px] text-muted-foreground">{state.email}</p>
-                </div>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  setIsLoggingOut(true);
-                  const logoutPromise = logoutWithServerSession({ deferClientSignOutMs: 150 });
-                  await waitForLogoutTransition(logoutPromise, TRANSITION_PORTAL_MS);
-                  router.replace("/login");
-                }}
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                Sair
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={state.photoURL || undefined} alt={state.name} />
+                      <AvatarFallback>{state.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">{state.name}</p>
+                      <p className="text-xs leading-none text-muted-foreground">{state.email}</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/school-admin/perfil">
+                      <User className="mr-2 h-4 w-4" />
+                      <span>Perfil</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      setIsLoggingOut(true);
+                      const logoutPromise = logoutWithServerSession({ deferClientSignOutMs: 150 });
+                      await waitForLogoutTransition(logoutPromise, TRANSITION_PORTAL_MS);
+                      router.replace("/login");
+                    }}
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Sair</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 

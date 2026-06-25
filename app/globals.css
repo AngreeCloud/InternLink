@@ -115,6 +115,8 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --animate-slideDown: slideDown 0.2s ease-out;
+  --animate-slideUp: slideUp 0.2s ease-out;
 }
 
 @layer base {
@@ -331,4 +333,14 @@ body.transition-overlay-active .grecaptcha-badge {
 
 .textLayer.selecting .endOfContent {
   top: 0;
+}
+
+@keyframes slideDown {
+  from { height: 0; opacity: 0; }
+  to { height: var(--radix-collapsible-content-height); opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { height: var(--radix-collapsible-content-height); opacity: 1; }
+  to { height: 0; opacity: 0; }
 }

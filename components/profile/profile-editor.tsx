@@ -11,9 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ArrowLeft, Save, Camera, Mail } from "lucide-react";
+import { ArrowLeft, Save, Camera, Mail, User, ShieldCheck, PenLine } from "lucide-react";
 import Link from "next/link";
 import { SignatureSettings } from "@/components/profile/signature-settings";
+import { SecuritySection } from "@/components/profile/security-section";
 
 type ProfileData = {
   nome: string;
@@ -25,6 +26,14 @@ type ProfileData = {
   role: string;
   funcaoEmpresa: string;
 };
+
+type Tab = "info" | "security" | "signature";
+
+const tabs: { id: Tab; label: string; icon: typeof User }[] = [
+  { id: "info", label: "Informações Pessoais", icon: User },
+  { id: "security", label: "Segurança", icon: ShieldCheck },
+  { id: "signature", label: "Assinatura Digital", icon: PenLine },
+];
 
 export function ProfileEditor() {
   const [loading, setLoading] = useState(true);
@@ -48,6 +57,7 @@ export function ProfileEditor() {
   const [processingCrop, setProcessingCrop] = useState(false);
   const [pendingPhotoDataUrl, setPendingPhotoDataUrl] = useState("");
   const [emailVerified, setEmailVerified] = useState(true);
+  const [activeTab, setActiveTab] = useState<Tab>("info");
   const router = useRouter();
 
   const applyCropToImage = async (source: string, zoom: number, offsetX: number, offsetY: number) => {
@@ -266,209 +276,238 @@ export function ProfileEditor() {
         </Link>
       </Button>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Perfil</CardTitle>
-          <CardDescription>
-            Edite as suas informações pessoais. O email não pode ser alterado.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Profile Photo */}
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <Avatar className="h-20 w-20">
-                <AvatarImage src={photoPreview || undefined} alt={profile.nome} />
-                <AvatarFallback className="text-lg">{profile.nome.charAt(0)}</AvatarFallback>
-              </Avatar>
-              <label
-                htmlFor="photo-upload"
-                className="absolute bottom-0 right-0 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
-              >
-                <Camera className="h-3.5 w-3.5" />
-              </label>
-              <input
-                id="photo-upload"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePhotoChange}
-              />
-            </div>
-            <div>
-              <p className="text-sm font-medium">{profile.nome || "Utilizador"}</p>
-              <p className="text-xs text-muted-foreground">{getRoleLabel(profile.role)}</p>
-              <p className="text-xs text-muted-foreground mt-1">Depois de escolher uma foto, ajuste o recorte manualmente.</p>
-            </div>
-          </div>
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        {/* Left nav */}
+        <nav className="flex shrink-0 flex-col gap-1 lg:w-56">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={[
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors",
+                activeTab === tab.id
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+              ].join(" ")}
+            >
+              <tab.icon className="h-4 w-4 shrink-0" />
+              {tab.label}
+            </button>
+          ))}
+        </nav>
 
-          {cropSource ? (
-            <div className="space-y-4 rounded-lg border border-border p-4">
-              <p className="text-sm font-medium">Ajustar recorte da imagem</p>
-              <div className="flex justify-center">
-                <div className="relative h-48 w-48 overflow-hidden rounded-full border border-border bg-muted">
-                  <img
-                    src={cropSource}
-                    alt="Pré-visualização do recorte"
-                    className="h-full w-full object-cover"
-                    style={{
-                      transform: `scale(${cropZoom}) translate(${(cropX - 50) * 0.6}px, ${(cropY - 50) * 0.6}px)`,
-                    }}
-                  />
+        {/* Content */}
+        <div className="min-w-0 flex-1">
+          {activeTab === "info" && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Informações Pessoais</CardTitle>
+                <CardDescription>
+                  Edite as suas informações pessoais. O email não pode ser alterado.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Profile Photo */}
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <Avatar className="h-20 w-20">
+                      <AvatarImage src={photoPreview || undefined} alt={profile.nome} />
+                      <AvatarFallback className="text-lg">{profile.nome.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <label
+                      htmlFor="photo-upload"
+                      className="absolute bottom-0 right-0 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
+                    >
+                      <Camera className="h-3.5 w-3.5" />
+                    </label>
+                    <input
+                      id="photo-upload"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handlePhotoChange}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{profile.nome || "Utilizador"}</p>
+                    <p className="text-xs text-muted-foreground">{getRoleLabel(profile.role)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Depois de escolher uma foto, ajuste o recorte manualmente.</p>
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <Label htmlFor="cropZoom">Zoom</Label>
+                {cropSource ? (
+                  <div className="space-y-4 rounded-lg border border-border p-4">
+                    <p className="text-sm font-medium">Ajustar recorte da imagem</p>
+                    <div className="flex justify-center">
+                      <div className="relative h-48 w-48 overflow-hidden rounded-full border border-border bg-muted">
+                        <img
+                          src={cropSource}
+                          alt="Pré-visualização do recorte"
+                          className="h-full w-full object-cover"
+                          style={{
+                            transform: `scale(${cropZoom}) translate(${(cropX - 50) * 0.6}px, ${(cropY - 50) * 0.6}px)`,
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="cropZoom">Zoom</Label>
+                        <Input
+                          id="cropZoom"
+                          type="range"
+                          min="1"
+                          max="3"
+                          step="0.05"
+                          value={cropZoom}
+                          onChange={(event) => setCropZoom(Number(event.target.value))}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="cropX">Posição Horizontal</Label>
+                        <Input
+                          id="cropX"
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={cropX}
+                          onChange={(event) => setCropX(Number(event.target.value))}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="cropY">Posição Vertical</Label>
+                        <Input
+                          id="cropY"
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={cropY}
+                          onChange={(event) => setCropY(Number(event.target.value))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button type="button" onClick={handleApplyCrop} disabled={processingCrop}>
+                        {processingCrop ? "A processar..." : "Aplicar recorte"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setCropSource("")}
+                        disabled={processingCrop}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Email */}
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input value={profile.email} disabled className="bg-muted" />
+                  <p className="text-xs text-muted-foreground">O email não pode ser alterado.</p>
+                  {!emailVerified && (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+                      <p className="mb-2 text-xs text-amber-800">
+                        O seu email ainda não está verificado.
+                      </p>
+                      <Button asChild type="button" variant="outline" size="sm" className="w-full bg-transparent">
+                        <Link href={`/verify-email?email=${encodeURIComponent(profile.email)}`}>
+                          <Mail className="mr-2 h-4 w-4" />
+                          Verificar email agora
+                        </Link>
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Name */}
+                <div className="space-y-2">
+                  <Label htmlFor="profileNome">Nome</Label>
                   <Input
-                    id="cropZoom"
-                    type="range"
-                    min="1"
-                    max="3"
-                    step="0.05"
-                    value={cropZoom}
-                    onChange={(event) => setCropZoom(Number(event.target.value))}
+                    id="profileNome"
+                    value={profile.nome}
+                    onChange={(e) => setProfile((prev) => ({ ...prev, nome: e.target.value }))}
+                    placeholder="O seu nome"
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="cropX">Posição Horizontal</Label>
+
+                {/* Phone */}
+                <div className="space-y-2">
+                  <Label htmlFor="profileTelefone">Telefone (Opcional)</Label>
                   <Input
-                    id="cropX"
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={cropX}
-                    onChange={(event) => setCropX(Number(event.target.value))}
+                    id="profileTelefone"
+                    value={profile.telefone}
+                    onChange={(e) => setProfile((prev) => ({ ...prev, telefone: e.target.value }))}
+                    placeholder="O seu contacto"
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="cropY">Posição Vertical</Label>
+
+                {/* Função na empresa */}
+                {profile.role === "tutor" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="profileFuncao">Função na empresa</Label>
+                    <Input
+                      id="profileFuncao"
+                      value={profile.funcaoEmpresa}
+                      onChange={(e) => setProfile((prev) => ({ ...prev, funcaoEmpresa: e.target.value }))}
+                      placeholder="Ex: Diretor de TI, Engenheiro de Software..."
+                    />
+                    {!profile.funcaoEmpresa && (
+                      <p className="text-xs text-amber-600">
+                        Preenche a tua função na empresa para que apareça nos documentos do estágio.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Location */}
+                <div className="space-y-2">
+                  <Label htmlFor="profileLocalidade">Localidade (Opcional)</Label>
                   <Input
-                    id="cropY"
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={cropY}
-                    onChange={(event) => setCropY(Number(event.target.value))}
+                    id="profileLocalidade"
+                    value={profile.localidade}
+                    onChange={(e) => setProfile((prev) => ({ ...prev, localidade: e.target.value }))}
+                    placeholder="A sua localidade"
                   />
                 </div>
-              </div>
 
-              <div className="flex gap-2">
-                <Button type="button" onClick={handleApplyCrop} disabled={processingCrop}>
-                  {processingCrop ? "A processar..." : "Aplicar recorte"}
+                {/* Date of birth */}
+                <div className="space-y-2">
+                  <Label htmlFor="profileDob">Data de Nascimento</Label>
+                  <Input
+                    id="profileDob"
+                    type="date"
+                    value={profile.dataNascimento}
+                    onChange={(e) => setProfile((prev) => ({ ...prev, dataNascimento: e.target.value }))}
+                  />
+                </div>
+
+                {success && (
+                  <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                    Perfil atualizado com sucesso!
+                  </div>
+                )}
+
+                <Button onClick={handleSave} disabled={saving} className="w-full">
+                  <Save className="mr-2 h-4 w-4" />
+                  {saving ? "A guardar..." : "Guardar Alterações"}
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setCropSource("")}
-                  disabled={processingCrop}
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          ) : null}
-
-          {/* Email (read-only) */}
-          <div className="space-y-2">
-            <Label>Email</Label>
-            <Input value={profile.email} disabled className="bg-muted" />
-            <p className="text-xs text-muted-foreground">O email não pode ser alterado.</p>
-            {!emailVerified && (
-              <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
-                <p className="text-xs text-amber-800 mb-2">
-                  O seu email ainda não está verificado.
-                </p>
-                <Button asChild type="button" variant="outline" size="sm" className="w-full bg-transparent">
-                  <Link href={`/verify-email?email=${encodeURIComponent(profile.email)}`}>
-                    <Mail className="mr-2 h-4 w-4" />
-                    Verificar email agora
-                  </Link>
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {/* Name */}
-          <div className="space-y-2">
-            <Label htmlFor="profileNome">Nome</Label>
-            <Input
-              id="profileNome"
-              value={profile.nome}
-              onChange={(e) => setProfile((prev) => ({ ...prev, nome: e.target.value }))}
-              placeholder="O seu nome"
-            />
-          </div>
-
-          {/* Phone */}
-          <div className="space-y-2">
-            <Label htmlFor="profileTelefone">Telefone (Opcional)</Label>
-            <Input
-              id="profileTelefone"
-              value={profile.telefone}
-              onChange={(e) => setProfile((prev) => ({ ...prev, telefone: e.target.value }))}
-              placeholder="O seu contacto"
-            />
-          </div>
-
-          {/* Função na empresa */}
-          {profile.role === "tutor" && (
-            <div className="space-y-2">
-              <Label htmlFor="profileFuncao">Função na empresa</Label>
-              <Input
-                id="profileFuncao"
-                value={profile.funcaoEmpresa}
-                onChange={(e) => setProfile((prev) => ({ ...prev, funcaoEmpresa: e.target.value }))}
-                placeholder="Ex: Diretor de TI, Engenheiro de Software..."
-              />
-              {!profile.funcaoEmpresa && (
-                <p className="text-xs text-amber-600">
-                  Preenche a tua função na empresa para que apareça nos documentos do estágio.
-                </p>
-              )}
-            </div>
+              </CardContent>
+            </Card>
           )}
 
-          {/* Location */}
-          <div className="space-y-2">
-            <Label htmlFor="profileLocalidade">Localidade (Opcional)</Label>
-            <Input
-              id="profileLocalidade"
-              value={profile.localidade}
-              onChange={(e) => setProfile((prev) => ({ ...prev, localidade: e.target.value }))}
-              placeholder="A sua localidade"
-            />
-          </div>
+          {activeTab === "security" && <SecuritySection />}
 
-          {/* Date of birth */}
-          <div className="space-y-2">
-            <Label htmlFor="profileDob">Data de Nascimento</Label>
-            <Input
-              id="profileDob"
-              type="date"
-              value={profile.dataNascimento}
-              onChange={(e) => setProfile((prev) => ({ ...prev, dataNascimento: e.target.value }))}
-            />
-          </div>
-
-          {success && (
-            <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-              Perfil atualizado com sucesso!
-            </div>
-          )}
-
-          <Button onClick={handleSave} disabled={saving} className="w-full">
-            <Save className="mr-2 h-4 w-4" />
-            {saving ? "A guardar..." : "Guardar Alterações"}
-          </Button>
-        </CardContent>
-      </Card>
-
-      <SignatureSettings />
+          {activeTab === "signature" && <SignatureSettings />}
+        </div>
+      </div>
     </div>
   );
 }

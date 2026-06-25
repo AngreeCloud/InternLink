@@ -33,7 +33,7 @@ type Props = {
 };
 
 function buildDownloadUrl(estagioId: string, docId: string, raw: boolean): string {
-  return `/api/estagios/${estagioId}/documentos/${docId}/download?raw=${raw}`;
+  return `/api/estagios/${estagioId}/documentos/${docId}?raw=${raw}`;
 }
 
 function isPdfDocument(doc: EstagioDocument): boolean {
@@ -147,7 +147,7 @@ export function DocumentPreviewDialog({
             {canRenderPdf && (
               <div className="hidden min-w-0 min-h-0 flex-[1.25] flex-col gap-3 overflow-hidden md:flex">
                 <div className="min-h-0 min-w-0 flex-1 overflow-auto rounded-xl border bg-muted/10 p-2">
-                  <PdfViewer fileUrl={doc.currentFileUrl} scale={0.55} className="w-full" />
+                  <PdfViewer fileUrl={`/api/estagios/${estagioId}/documentos/${doc.id}?raw=true&inline=true`} scale={0.55} className="w-full" interactiveLinks={false} />
                 </div>
                 {onOpenFullscreen && (
                   <Button size="sm" variant="outline" className="w-full shrink-0 text-xs" onClick={onOpenFullscreen}>
@@ -160,7 +160,7 @@ export function DocumentPreviewDialog({
 
             {/* Painel lateral direito — largura fixa */}
             <div className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto">
-z              <div>
+              <div>
                 <h4 className="text-sm font-medium">Assinatários</h4>
                 <ul className="space-y-2 text-sm">
                   {signersList.map((s, idx) => (
@@ -209,19 +209,21 @@ z              <div>
                   )}
                   Descarregar PDF
                 </Button>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  disabled={!!downloading}
-                  onClick={() => void handleDownload(true)}
-                >
-                  {downloading === "raw" ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <FileDown className="mr-2 h-4 w-4" />
-                  )}
-                  Descarregar PDF (sem assinaturas)
-                </Button>
+                {totalSigners > 0 && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    disabled={!!downloading}
+                    onClick={() => void handleDownload(true)}
+                  >
+                    {downloading === "raw" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileDown className="mr-2 h-4 w-4" />
+                    )}
+                    Descarregar PDF (sem assinaturas)
+                  </Button>
+                )}
               </div>
 
               <p className="text-xs text-muted-foreground">

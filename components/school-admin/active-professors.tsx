@@ -31,6 +31,7 @@ type Course = {
   courseDirectorId?: string | null;
   supportingTeacherIds?: string[];
   teacherIds?: string[];
+  directorCanDeleteEstagio?: boolean;
 };
 
 type Professor = {
@@ -125,6 +126,7 @@ export function ActiveProfessorsSection() {
         courseDirectorId?: string | null;
         supportingTeacherIds?: string[];
         teacherIds?: string[];
+        directorCanDeleteEstagio?: boolean;
       };
 
       const teacherIds = Array.isArray(data.teacherIds) ? data.teacherIds : [];
@@ -134,6 +136,7 @@ export function ActiveProfessorsSection() {
         courseDirectorId: data.courseDirectorId || null,
         supportingTeacherIds: data.supportingTeacherIds || [],
         teacherIds,
+        directorCanDeleteEstagio: data.directorCanDeleteEstagio === true,
       });
 
       // Associar cursos aos professores
@@ -518,14 +521,19 @@ export function ActiveProfessorsSection() {
                                 key={course.id}
                                 className="flex items-center justify-between rounded bg-muted/50 px-3 py-2 text-sm"
                               >
-                                <div className="flex-1">
-                                  <span className="font-medium">{course.name}</span>
-                                  {isDirector && (
-                                    <span className="ml-2 text-xs bg-primary/20 text-primary px-2 py-1 rounded">
-                                      Diretor
-                                    </span>
-                                  )}
-                                </div>
+                                  <div className="flex-1">
+                                    <span className="font-medium">{course.name}</span>
+                                    {isDirector && (
+                                      <span className="ml-2 text-xs bg-primary/20 text-primary px-2 py-1 rounded">
+                                        Diretor
+                                      </span>
+                                    )}
+                                    {course.directorCanDeleteEstagio && (
+                                      <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded">
+                                        Pode eliminar estágios
+                                      </span>
+                                    )}
+                                  </div>
                                 <div className="flex gap-2">
                                   <Button
                                     size="sm"

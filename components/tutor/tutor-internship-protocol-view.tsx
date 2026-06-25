@@ -73,7 +73,7 @@ export function TutorInternshipProtocolView({ schoolId, estagioId }: { schoolId:
         let uploadedAt = "";
 
         try {
-          const docsSnap = await getDocs(query(collection(db, "documentos"), where("estagioId", "==", estagioId)));
+          const docsSnap = await getDocs(collection(db, "estagios", estagioId, "documentos"));
           const docsList = docsSnap.docs.map((docSnap) => {
             const data = docSnap.data() as {
               nome?: string;

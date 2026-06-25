@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 
 const TEST_FILES = [
   "tests/firestore/school-isolation.rules.test.mjs",
+  "tests/firestore/tutor-professor-access.rules.test.mjs",
   "tests/realtime/chat-creation.rules.test.mjs",
   "tests/realtime/user-tutors.rules.test.mjs",
 ];

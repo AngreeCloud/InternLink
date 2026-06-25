@@ -1,10 +1,5 @@
-import { ProfessorLayout } from "@/components/layout/professor-layout";
-import { PendingStudentsManager } from "@/components/professor/pending-students-manager";
+import { redirect } from "next/navigation";
 
 export default function AprovacoesProfessorPage() {
-  return (
-    <ProfessorLayout>
-      <PendingStudentsManager />
-    </ProfessorLayout>
-  );
+  redirect("/professor/alunos");
 }

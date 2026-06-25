@@ -49,7 +49,7 @@ export function TutorDocumentViewer() {
           for (const estagioDoc of estagiosSnap.docs) {
             try {
               const docsSnap = await getDocs(
-                query(collection(db, "documentos"), where("estagioId", "==", estagioDoc.id))
+                query(collection(db, "estagios", estagioDoc.id, "documentos"))
               );
               // NOTE: Firestore rules for documentos currently allow only professor (owner) and school admin reads.
               // Tutors can fetch documents via client-side queries if they know the estagioId, but rules should

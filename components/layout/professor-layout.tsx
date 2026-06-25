@@ -30,7 +30,7 @@ import {
   GraduationCap,
   Home,
   Users,
-  UserCheck,
+  UserPlus,
   ClipboardCheck,
   Briefcase,
   FileText,
@@ -44,7 +44,7 @@ import {
 const navigation = [
   { name: "Dashboard", href: "/professor", icon: Home },
   { name: "Alunos", href: "/professor/alunos", icon: Users },
-  { name: "Aprovações de Alunos", href: "/professor/aprovacoes", icon: UserCheck },
+  { name: "Tutores", href: "/professor/tutores", icon: UserPlus },
   { name: "Justificações", href: "/professor/justificacoes", icon: ClipboardCheck },
   { name: "Estágios", href: "/professor/estagios", icon: Briefcase },
   { name: "Documentos", href: "/professor/documentos", icon: FileText },
@@ -234,7 +234,7 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
   }
 
   const filteredNavigation = navigation.filter((item) => {
-    if (item.name === "Aprovações de Alunos") {
+    if (item.name === "Tutores") {
       return state.isDirector;
     }
     if (item.name === "Empresas") {
