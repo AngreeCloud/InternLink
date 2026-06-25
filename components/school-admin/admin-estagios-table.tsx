@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { type Firestore, collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { getDbRuntime } from "@/lib/firebase-runtime";
 import { useSchoolAdmin } from "@/components/school-admin/school-admin-context";
 import { Input } from "@/components/ui/input";
@@ -16,9 +16,12 @@ type EstagioRow = {
   alunoNome: string;
   alunoEmail: string;
   professorNome: string;
+  professorId?: string;
   tutorNome: string;
+  tutorId?: string;
   empresa: string;
   courseNome: string;
+  courseId?: string;
   estado: string;
   dataInicio: string;
   dataFimEstimada: string;
@@ -41,22 +44,60 @@ export function AdminEstagiosTable() {
           query(collection(db, "estagios"), where("schoolId", "==", schoolId))
         );
         if (cancelled) return;
-        const list: EstagioRow[] = snap.docs.map((d) => {
-          const data = d.data() as Record<string, unknown>;
-          return {
-            id: d.id,
-            titulo: (data.titulo as string) || "—",
-            alunoNome: (data.alunoNome as string) || "—",
-            alunoEmail: (data.alunoEmail as string) || "",
-            professorNome: (data.professorNome as string) || "—",
-            tutorNome: (data.tutorNome as string) || "",
-            empresa: (data.entidadeAcolhimento as string) || (data.empresa as string) || "—",
-            courseNome: (data.courseNome as string) || (data.courseName as string) || "—",
-            estado: (data.estado as string) || "ativo",
-            dataInicio: (data.dataInicio as string) || "",
-            dataFimEstimada: (data.dataFimEstimada as string) || (data.dataFim as string) || "",
-          };
-        });
+        let list: (EstagioRow & { professorId?: string; tutorId?: string; courseId?: string })[] =
+          snap.docs.map((d) => {
+            const data = d.data() as Record<string, unknown>;
+            return {
+              id: d.id,
+              titulo: (data.titulo as string) || "—",
+              alunoNome: (data.alunoNome as string) || "—",
+              alunoEmail: (data.alunoEmail as string) || "",
+              professorNome: (data.professorNome as string) || "",
+              professorId: (data.professorId as string) || undefined,
+              tutorNome: (data.tutorNome as string) || "",
+              tutorId: (data.tutorId as string) || undefined,
+              empresa: (data.entidadeAcolhimento as string) || (data.empresa as string) || "—",
+              courseNome: (data.courseNome as string) || (data.courseName as string) || "",
+              courseId: (data.courseId as string) || (data.alunoCourseId as string) || undefined,
+              estado: (data.estado as string) || "ativo",
+              dataInicio: (data.dataInicio as string) || "",
+              dataFimEstimada:
+                (data.dataFimEstimada as string) || (data.dataFim as string) || "",
+            };
+          });
+
+        // Resolve nomes em falta a partir das coleções respetivas
+        const missingProfessors: { professorId: string }[] = [];
+        const missingTutors: { tutorId: string }[] = [];
+        const missingCourses: { courseId: string }[] = [];
+        for (const e of list) {
+          if (!e.professorNome && e.professorId) missingProfessors.push({ professorId: e.professorId });
+          if (!e.tutorNome && e.tutorId) missingTutors.push({ tutorId: e.tutorId });
+          if (!e.courseNome && e.courseId) missingCourses.push({ courseId: e.courseId });
+        }
+
+        const [profMap, tutorMap, courseMap] = await Promise.all([
+          resolveProfessorNames(db, missingProfessors),
+          resolveTutorNames(db, schoolId, missingTutors),
+          resolveCourseNames(db, missingCourses),
+        ]);
+
+        list = list.map((e) => ({
+          ...e,
+          professorNome:
+            e.professorNome ||
+            (e.professorId && profMap.get(e.professorId)) ||
+            "—",
+          tutorNome:
+            e.tutorNome ||
+            (e.tutorId && tutorMap.get(e.tutorId)) ||
+            "",
+          courseNome:
+            e.courseNome ||
+            (e.courseId && courseMap.get(e.courseId)) ||
+            "—",
+        }));
+
         list.sort((a, b) => a.alunoNome.localeCompare(b.alunoNome, "pt-PT"));
         setEstagios(list);
       } catch (err) {
@@ -65,7 +106,9 @@ export function AdminEstagiosTable() {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [schoolId]);
 
   const filtered = useMemo(() => {
@@ -166,4 +209,73 @@ export function AdminEstagiosTable() {
       )}
     </div>
   );
+}
+
+async function resolveProfessorNames(
+  db: Firestore,
+  rows: { professorId: string }[]
+): Promise<Map<string, string>> {
+  const ids = [...new Set(rows.map((r) => r.professorId))];
+  const map = new Map<string, string>();
+  await Promise.all(
+    ids.map(async (uid) => {
+      try {
+        const snap = await getDoc(doc(db, "users", uid));
+        if (snap.exists()) {
+          const d = snap.data() as { nome?: string; displayName?: string };
+          map.set(uid, d.nome || d.displayName || uid);
+        }
+      } catch {
+        // ignore
+      }
+    })
+  );
+  return map;
+}
+
+async function resolveTutorNames(
+  db: Firestore,
+  schoolId: string,
+  rows: { tutorId: string }[]
+): Promise<Map<string, string>> {
+  const ids = [...new Set(rows.map((r) => r.tutorId))];
+  const map = new Map<string, string>();
+  await Promise.all(
+    ids.map(async (tutorId) => {
+      try {
+        const snap = await getDoc(
+          doc(db, "schools", schoolId, "tutors", tutorId)
+        );
+        if (snap.exists()) {
+          const d = snap.data() as { nome?: string; email?: string };
+          map.set(tutorId, d.nome || d.email || tutorId);
+        }
+      } catch {
+        // ignore
+      }
+    })
+  );
+  return map;
+}
+
+async function resolveCourseNames(
+  db: Firestore,
+  rows: { courseId: string }[]
+): Promise<Map<string, string>> {
+  const ids = [...new Set(rows.map((r) => r.courseId))];
+  const map = new Map<string, string>();
+  await Promise.all(
+    ids.map(async (courseId) => {
+      try {
+        const snap = await getDoc(doc(db, "courses", courseId));
+        if (snap.exists()) {
+          const d = snap.data() as { nome?: string; name?: string };
+          map.set(courseId, d.nome || d.name || courseId);
+        }
+      } catch {
+        // ignore
+      }
+    })
+  );
+  return map;
 }
