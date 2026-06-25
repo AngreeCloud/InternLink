@@ -18,7 +18,15 @@ import { Button } from "@/components/ui/button";
 import { Sidebar } from "@/components/layout/sidebar";
 import { useSidebarCollapsed } from "@/lib/use-sidebar-collapsed";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { CheckSquare, Folder, GraduationCap, History, Home, Info, LogOut, Menu, MessageSquare, Users, Building2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { CheckSquare, Folder, GraduationCap, History, Home, Info, LogOut, Menu, MessageSquare, Users, Building2, User } from "lucide-react";
 
 const navigation = [
   { name: "Dashboard", href: "/school-admin", icon: Home },
@@ -200,29 +208,43 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
             <div className="flex flex-1 items-center justify-end gap-3">
               <NotificationsInbox notifications={notifications} onOpenChat={handleOpenConversation} />
 
-              <div className="flex items-center gap-3 rounded-full border border-border bg-card px-3 py-1">
-                <Avatar className="h-7 w-7">
-                  <AvatarImage src={state.photoURL || undefined} alt={state.name} />
-                  <AvatarFallback>{state.name.charAt(0)}</AvatarFallback>
-                </Avatar>
-                <div className="leading-tight">
-                  <p className="text-xs font-semibold text-foreground">{state.name}</p>
-                  <p className="text-[11px] text-muted-foreground">{state.email}</p>
-                </div>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  setIsLoggingOut(true);
-                  const logoutPromise = logoutWithServerSession({ deferClientSignOutMs: 150 });
-                  await waitForLogoutTransition(logoutPromise, TRANSITION_PORTAL_MS);
-                  router.replace("/login");
-                }}
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                Sair
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={state.photoURL || undefined} alt={state.name} />
+                      <AvatarFallback>{state.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">{state.name}</p>
+                      <p className="text-xs leading-none text-muted-foreground">{state.email}</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/school-admin/perfil">
+                      <User className="mr-2 h-4 w-4" />
+                      <span>Perfil</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      setIsLoggingOut(true);
+                      const logoutPromise = logoutWithServerSession({ deferClientSignOutMs: 150 });
+                      await waitForLogoutTransition(logoutPromise, TRANSITION_PORTAL_MS);
+                      router.replace("/login");
+                    }}
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Sair</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 
