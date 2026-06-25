@@ -209,19 +209,21 @@ export function DocumentPreviewDialog({
                   )}
                   Descarregar PDF
                 </Button>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  disabled={!!downloading}
-                  onClick={() => void handleDownload(true)}
-                >
-                  {downloading === "raw" ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <FileDown className="mr-2 h-4 w-4" />
-                  )}
-                  Descarregar PDF (sem assinaturas)
-                </Button>
+                {totalSigners > 0 && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    disabled={!!downloading}
+                    onClick={() => void handleDownload(true)}
+                  >
+                    {downloading === "raw" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileDown className="mr-2 h-4 w-4" />
+                    )}
+                    Descarregar PDF (sem assinaturas)
+                  </Button>
+                )}
               </div>
 
               <p className="text-xs text-muted-foreground">
