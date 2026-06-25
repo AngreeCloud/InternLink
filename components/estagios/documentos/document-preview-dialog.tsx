@@ -33,7 +33,7 @@ type Props = {
 };
 
 function buildDownloadUrl(estagioId: string, docId: string, raw: boolean): string {
-  return `/api/estagios/${estagioId}/documentos/${docId}/download?raw=${raw}`;
+  return `/api/estagios/${estagioId}/documentos/${docId}?raw=${raw}`;
 }
 
 function isPdfDocument(doc: EstagioDocument): boolean {
@@ -147,7 +147,7 @@ export function DocumentPreviewDialog({
             {canRenderPdf && (
               <div className="hidden min-w-0 min-h-0 flex-[1.25] flex-col gap-3 overflow-hidden md:flex">
                 <div className="min-h-0 min-w-0 flex-1 overflow-auto rounded-xl border bg-muted/10 p-2">
-                  <PdfViewer fileUrl={`/api/estagios/${estagioId}/documentos/${doc.id}/download?raw=true&inline=true`} scale={0.55} className="w-full" interactiveLinks={false} />
+                  <PdfViewer fileUrl={`/api/estagios/${estagioId}/documentos/${doc.id}?raw=true&inline=true`} scale={0.55} className="w-full" interactiveLinks={false} />
                 </div>
                 {onOpenFullscreen && (
                   <Button size="sm" variant="outline" className="w-full shrink-0 text-xs" onClick={onOpenFullscreen}>

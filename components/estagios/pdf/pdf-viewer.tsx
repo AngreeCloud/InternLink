@@ -54,20 +54,25 @@ async function getPdfJs(): Promise<PdfJsModule> {
 }
 
 async function fetchPdfBytes(url: string): Promise<Uint8Array> {
+  const direct = await fetch(url, { cache: "no-store" }).catch(() => null);
+  if (direct?.ok) {
+    return new Uint8Array(await direct.arrayBuffer());
+  }
+
+  // Proxy fallback only for external Firebase Storage URLs
   try {
-    const direct = await fetch(url, { cache: "no-store" });
-    if (direct.ok) {
-      return new Uint8Array(await direct.arrayBuffer());
+    const parsed = new URL(url);
+    if (parsed.hostname === "firebasestorage.googleapis.com" || parsed.hostname === "storage.googleapis.com") {
+      const proxyUrl = `/api/files/proxy?url=${encodeURIComponent(url)}`;
+      const proxied = await fetch(proxyUrl, { cache: "no-store" });
+      if (proxied.ok) {
+        return new Uint8Array(await proxied.arrayBuffer());
+      }
     }
   } catch {
   }
 
-  const proxyUrl = `/api/files/proxy?url=${encodeURIComponent(url)}`;
-  const proxied = await fetch(proxyUrl, { cache: "no-store" });
-  if (!proxied.ok) {
-    throw new Error("Falha a carregar PDF");
-  }
-  return new Uint8Array(await proxied.arrayBuffer());
+  throw new Error("Falha a carregar PDF");
 }
 
 function findScrollableParent(el: HTMLElement | null): HTMLElement | null {

@@ -239,7 +239,7 @@ export function DocumentList({
 
   const downloadDoc = async (d: EstagioDocument, raw: boolean) => {
     if (!d.currentFileUrl) return;
-    const url = `/api/estagios/${estagioId}/documentos/${d.id}/download?raw=${raw}`;
+    const url = `/api/estagios/${estagioId}/documentos/${d.id}?raw=${raw}`;
     const a = document.createElement("a");
     a.href = url;
     a.download = raw ? `${d.nome}.pdf` : `${d.nome}-assinado.pdf`;
@@ -527,7 +527,7 @@ export function DocumentList({
       )}
       {fullscreenDoc?.currentFileUrl && (
         <FullscreenDocumentViewer
-          fileUrl={`/api/estagios/${estagioId}/documentos/${fullscreenDoc.id}/download?raw=true&inline=true`}
+          fileUrl={`/api/estagios/${estagioId}/documentos/${fullscreenDoc.id}?raw=true&inline=true`}
           fileName={fullscreenDoc.nome}
           fileType="pdf"
           onClose={() => setFullscreenDoc(null)}
