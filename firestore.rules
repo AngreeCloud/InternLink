@@ -367,6 +367,12 @@ service cloud.firestore {
         allow read, update, delete: if isSchoolAdminFor(schoolId);
       }
 
+      match /deleteEstagioRequests/{requestId} {
+        allow read: if isSchoolAdminFor(schoolId);
+        allow create: if isSignedIn();
+        allow update: if isSchoolAdminFor(schoolId);
+      }
+
       match /approvalHistory/{docId} {
         allow read, create: if isSchoolAdminFor(schoolId);
       }

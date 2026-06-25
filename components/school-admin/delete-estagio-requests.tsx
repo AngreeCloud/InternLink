@@ -57,7 +57,11 @@ export function DeleteEstagioRequestsSection() {
         collection(db, "schools", schoolId, "deleteEstagioRequests"),
         orderBy("createdAt", "desc")
       );
-      unsub = onSnapshot(q, () => { refresh(); });
+      unsub = onSnapshot(
+        q,
+        () => { refresh(); },
+        () => { /* ignore permission-denied during logout */ }
+      );
     })();
     return () => { unsub?.(); };
   }, [schoolId, refresh]);
