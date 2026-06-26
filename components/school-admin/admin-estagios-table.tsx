@@ -41,7 +41,7 @@ export function AdminEstagiosTable() {
       try {
         const db = await getDbRuntime();
         const snap = await getDocs(
-          query(collection(db, "estagios"), where("schoolId", "==", schoolId), where("estado", "!=", "eliminado"))
+          query(collection(db, "estagios"), where("schoolId", "==", schoolId))
         );
         if (cancelled) return;
         let list: (EstagioRow & { professorId?: string; tutorId?: string; courseId?: string })[] =
@@ -64,7 +64,8 @@ export function AdminEstagiosTable() {
               dataFimEstimada:
                 (data.dataFimEstimada as string) || (data.dataFim as string) || "",
             };
-          });
+          })
+          .filter((e) => e.estado !== "eliminado");
 
         // Resolve nomes em falta a partir das coleções respetivas
         const missingProfessors: { professorId: string }[] = [];

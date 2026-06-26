@@ -254,8 +254,7 @@ export function InternshipManager() {
           query(
             collection(db, "estagios"),
             where("professorId", "==", user.uid),
-            where("schoolId", "==", userData.schoolId),
-            where("estado", "!=", "eliminado")
+            where("schoolId", "==", userData.schoolId)
           )
         );
 
@@ -268,14 +267,12 @@ export function InternshipManager() {
               getDocs(query(
                 collection(db, "estagios"),
                 where("courseId", "in", batch),
-                where("schoolId", "==", userData.schoolId),
-                where("estado", "!=", "eliminado")
+                where("schoolId", "==", userData.schoolId)
               )),
               getDocs(query(
                 collection(db, "estagios"),
                 where("alunoCourseId", "in", batch),
-                where("schoolId", "==", userData.schoolId),
-                where("estado", "!=", "eliminado")
+                where("schoolId", "==", userData.schoolId)
               )),
             ]);
             courseSnap.docs.forEach((d) => { allEstagiosDocs.push(d); });
@@ -495,8 +492,9 @@ export function InternshipManager() {
   );
 
   const displayEstagios = useMemo(() => {
-    if (!showOnlyMyEstagios || !userUid) return estagios;
-    return estagios.filter((e) => e.professorId === userUid);
+    const active = estagios.filter((e) => e.estado !== "eliminado");
+    if (!showOnlyMyEstagios || !userUid) return active;
+    return active.filter((e) => e.professorId === userUid);
   }, [estagios, showOnlyMyEstagios, userUid]);
 
   useEffect(() => {
