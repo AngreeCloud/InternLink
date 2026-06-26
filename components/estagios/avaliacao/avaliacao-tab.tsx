@@ -115,6 +115,8 @@ export function AvaliacaoTab({
       );
       unsubs.push(unsubProf);
 
+    })();
+
     return () => {
       cancelled = true;
       unsubs.forEach((u) => u());
