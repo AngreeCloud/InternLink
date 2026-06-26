@@ -193,7 +193,7 @@ export async function POST(request: Request) {
     const estagioRef = db.collection("estagios").doc();
     const now = FieldValue.serverTimestamp();
 
-    await estagioRef.set({
+    const estagioData: Record<string, unknown> = {
       titulo,
       schoolId: userData.schoolId,
       professorId: uid,
@@ -211,10 +211,6 @@ export async function POST(request: Request) {
       tutorEmpresa: tutorInfo?.empresa || resolvedEmpresaNome || "",
       empresa: resolvedEmpresaNome,
       entidadeAcolhimento: resolvedEmpresaNome,
-      empresaId: empresaId || undefined,
-      empresaSnapshot: empresaSnapshot || undefined,
-      empresaMorada: resolvedEmpresaMorada,
-      empresaCodigoPostal: resolvedEmpresaCodigoPostal,
       dataInicio,
       totalHoras,
       horasDiarias,
@@ -225,7 +221,14 @@ export async function POST(request: Request) {
       estado: "ativo",
       createdAt: now,
       updatedAt: now,
-    });
+    };
+
+    if (empresaId) estagioData.empresaId = empresaId;
+    if (empresaSnapshot) estagioData.empresaSnapshot = empresaSnapshot;
+    if (resolvedEmpresaMorada) estagioData.empresaMorada = resolvedEmpresaMorada;
+    if (resolvedEmpresaCodigoPostal) estagioData.empresaCodigoPostal = resolvedEmpresaCodigoPostal;
+
+    await estagioRef.set(estagioData);
 
     // Seed dos 12 templates de documentos.
     const batch = db.batch();
