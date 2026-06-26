@@ -208,27 +208,27 @@ export function InternshipManager() {
       }
 
       // Load courses with director info for delete permission checks
+      let courseDirectorMapLocal: Record<string, { isDirector: boolean; canDelete: boolean }> = {};
       try {
         const coursesSnap = await getDocs(
           query(collection(db, "courses"), where("schoolId", "==", userData.schoolId))
         );
-        const map: Record<string, { isDirector: boolean; canDelete: boolean }> = {};
         coursesSnap.docs.forEach((c) => {
           const cData = c.data() as {
             courseDirectorId?: string;
             directorCanDeleteEstagio?: boolean;
           };
-          map[c.id] = {
+          courseDirectorMapLocal[c.id] = {
             isDirector: cData.courseDirectorId === user.uid,
             canDelete: cData.directorCanDeleteEstagio === true,
           };
         });
-        setCourseDirectorMap(map);
+        setCourseDirectorMap(courseDirectorMapLocal);
       } catch {
         // ignore
       }
 
-      const directorCourseIds = Object.entries(courseDirectorMap)
+      const directorCourseIds = Object.entries(courseDirectorMapLocal)
         .filter(([, v]) => v.isDirector)
         .map(([k]) => k);
 
@@ -341,6 +341,36 @@ export function InternshipManager() {
             createdAtMs: createdAtDate?.getTime() || 0,
           };
         });
+
+        // Resolve professor names for director's course internships
+        try {
+          const profIds = new Set<string>();
+          for (const item of list) {
+            if (item.professorId && item.professorId !== user.uid) {
+              profIds.add(item.professorId);
+            }
+          }
+          if (profIds.size > 0) {
+            const profSnaps = await Promise.all(
+              Array.from(profIds).map((id) => getDoc(doc(db, "users", id)))
+            );
+            const profNameById = new Map<string, string>();
+            for (const snap of profSnaps) {
+              if (snap.exists()) {
+                const d = snap.data() as { nome?: string; displayName?: string };
+                profNameById.set(snap.id, d.nome || d.displayName || snap.id);
+              }
+            }
+            for (const item of list) {
+              if (item.professorId && profNameById.has(item.professorId)) {
+                item.professorNome = profNameById.get(item.professorId);
+              }
+            }
+          }
+        } catch {
+          // ignore
+        }
+
         setEstagios(list);
 
         if (estagiosToNormalize.length > 0) {
@@ -884,6 +914,7 @@ export function InternshipManager() {
         showOnlyMyEstagios={showOnlyMyEstagios}
         onToggleShowOnlyMy={() => setShowOnlyMyEstagios((v) => !v)}
         isDirector={isDirector}
+        currentUserId={userUid}
         onOpenChangeTutor={(estagio) => openEditTutorDialog(estagio)}
         onOpenEdit={(estagio) => {
           setEditingSheetEstagio(estagio);
