@@ -89,9 +89,11 @@ export function AvaliacaoTab({
           } else {
             setTutorData(null);
           }
+          setLoading(false);
         },
-        () => {
-          // permission-denied silently ignored
+        (err) => {
+          console.error("[avaliacao] tutor snapshot error", err);
+          if (!cancelled) setLoading(false);
         }
       );
       unsubs.push(unsubTutor);
@@ -107,14 +109,11 @@ export function AvaliacaoTab({
             setProfessorData(null);
           }
         },
-        () => {
-          // permission-denied silently ignored
+        (err) => {
+          console.error("[avaliacao] professor snapshot error", err);
         }
       );
       unsubs.push(unsubProf);
-
-      setLoading(false);
-    })();
 
     return () => {
       cancelled = true;
