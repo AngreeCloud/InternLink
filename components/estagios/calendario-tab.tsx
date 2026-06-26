@@ -59,6 +59,7 @@ type Props = {
   currentUserId: string;
   currentUserRole: EstagioRole;
   focusRequestId?: string;
+  isArchived?: boolean;
 };
 
 type PresencaDoc = {

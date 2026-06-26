@@ -7,7 +7,7 @@ import {
   toApiErrorResponse,
 } from "@/lib/estagios/estagio-access";
 import { writeAuditLog } from "@/lib/audit/write";
-import { validateNotaFinal } from "@/lib/avaliacao/validations";
+import { validateNotasTutor, calculateNotaFinal } from "@/lib/avaliacao/validations";
 import type {
   AvaliacaoConfig,
   NotaFinalProfessor,
@@ -18,7 +18,7 @@ import type {
 export const runtime = "nodejs";
 
 type ProfessorSubmitBody = {
-  notaFinal: number;
+  parametros: Record<string, number>;
   signatureDataUrl: string;
 };
 
@@ -82,11 +82,13 @@ export async function POST(
       );
     }
 
-    // Validate final grade
-    const validation = validateNotaFinal(body.notaFinal, config);
+    // Validate parameter scores
+    const validation = validateNotasTutor(body.parametros, config);
     if (!validation.valid) {
-      throw new EstagioAccessError(400, "invalid_final_grade", validation.error ?? "Nota final inválida.");
+      throw new EstagioAccessError(400, "invalid_scores", validation.error ?? "Notas inválidas.");
     }
+
+    const notaFinal = calculateNotaFinal(body.parametros, config);
 
     // Check not already signed
     const existingSnap = await db
@@ -117,7 +119,8 @@ export async function POST(
     };
 
     const professorDoc: NotaFinalProfessor = {
-      notaFinal: body.notaFinal,
+      parametros: body.parametros,
+      notaFinal,
       assinaturaProfessor: signature,
       estado: "assinado",
       assinadoEm: new Date().toISOString(),
@@ -174,7 +177,7 @@ export async function POST(
       action: "sign_avaliacao",
       changedBy: session.uid,
       summary: `Professor atribuiu nota final do estágio: ${estagioLabel}`,
-      metadata: { notaFinal: body.notaFinal },
+      metadata: { notaFinal },
     });
 
     return NextResponse.json({ ok: true });

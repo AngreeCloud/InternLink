@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   Loader2,
   Calendar,
@@ -57,6 +58,7 @@ export function AgendarPublicacaoNotas({ userId, schoolId }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [autoArquivar, setAutoArquivar] = useState(false);
   const [loadedDatas, setLoadedDatas] = useState<
     Record<string, CursoDatasAvaliacao | undefined>
   >({});
@@ -145,6 +147,7 @@ export function AgendarPublicacaoNotas({ userId, schoolId }: Props) {
           ? toDateInput(datas.datas.publicacaoNotaFinal)
           : ""
       );
+      setAutoArquivar(datas?.autoArquivarNaPublicacao === true);
     } catch {
       // ignore
     }
@@ -157,7 +160,7 @@ export function AgendarPublicacaoNotas({ userId, schoolId }: Props) {
     setSaving(true);
 
     try {
-      const body: Record<string, string> = {};
+      const body: Record<string, unknown> = {};
       if (disponibilidade) {
         body.disponibilidadePreenchimento =
           new Date(disponibilidade).toISOString();
@@ -166,6 +169,7 @@ export function AgendarPublicacaoNotas({ userId, schoolId }: Props) {
         body.publicacaoNotaFinal =
           new Date(publicacao).toISOString();
       }
+      body.autoArquivarNaPublicacao = autoArquivar;
 
       const res = await fetch(
         `/api/courses/${selectedCourseId}/avaliacao-datas`,
@@ -290,6 +294,24 @@ export function AgendarPublicacaoNotas({ userId, schoolId }: Props) {
                   <p className="text-xs text-muted-foreground">
                     A partir desta data o aluno vê a nota final.
                   </p>
+                </div>
+
+                <div className="flex items-center justify-between rounded-md border border-border p-3">
+                  <div>
+                    <Label className="cursor-pointer">
+                      Arquivar automaticamente
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Na data de publicação, arquiva automaticamente os
+                      estágios que cumpram todos os requisitos (data de
+                      fim, relatório assinado, sumários e avaliação
+                      concluídos).
+                    </p>
+                  </div>
+                  <Switch
+                    checked={autoArquivar}
+                    onCheckedChange={setAutoArquivar}
+                  />
                 </div>
               </>
             )}

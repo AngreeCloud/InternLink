@@ -64,7 +64,8 @@ export function AdminEstagiosTable() {
               dataFimEstimada:
                 (data.dataFimEstimada as string) || (data.dataFim as string) || "",
             };
-          });
+          })
+          .filter((e) => e.estado !== "eliminado");
 
         // Resolve nomes em falta a partir das coleções respetivas
         const missingProfessors: { professorId: string }[] = [];

@@ -36,12 +36,14 @@ const pendingTutorData: NotasTutor = {
 };
 
 const signedProfessorData: NotaFinalProfessor = {
+  parametros: { A: 5, B: 4 },
   notaFinal: 18,
   estado: "assinado",
   assinadoEm: "2026-06-02T10:00:00Z",
 };
 
 const pendingProfessorData: NotaFinalProfessor = {
+  parametros: { A: 5, B: 4 },
   notaFinal: 18,
   estado: "pendente",
 };

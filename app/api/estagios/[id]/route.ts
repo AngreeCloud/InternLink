@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getFirebaseAdminDb } from "@/lib/firebase-admin";
-import { assertEstagioAccess, toApiErrorResponse } from "@/lib/estagios/estagio-access";
+import { assertEstagioAccess, EstagioAccessError, toApiErrorResponse } from "@/lib/estagios/estagio-access";
 import {
   calcularDataFimEstimada,
   recalcularDataFimEstimada,
@@ -86,6 +86,23 @@ export async function PATCH(
     const session = await assertEstagioAccess(id, "director");
     const body = (await request.json()) as PatchBody;
     const db = getFirebaseAdminDb();
+
+    // Block edits on archived/eliminated internships (except archiving/eliminating itself)
+    const currentEstado =
+      (session.estagio.estado as string) ||
+      (session.estagio.estadoEstagio as string) ||
+      "ativo";
+    if (
+      (currentEstado === "arquivado" || currentEstado === "eliminado") &&
+      body.estadoEstagio !== "arquivado" &&
+      body.estadoEstagio !== "eliminado"
+    ) {
+      throw new EstagioAccessError(
+        403,
+        "archived_or_deleted",
+        "Não é possível editar um estágio arquivado ou eliminado."
+      );
+    }
 
     const updates: Record<string, unknown> = {
       updatedAt: FieldValue.serverTimestamp(),

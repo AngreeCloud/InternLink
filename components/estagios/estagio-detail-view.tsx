@@ -237,6 +237,11 @@ export function EstagioDetailView({
   }
 
   const raw = estagio as Record<string, unknown>;
+  const isArchived =
+    (raw.estado as string) === "arquivado" ||
+    (raw.estadoEstagio as string) === "arquivado" ||
+    (raw.estado as string) === "eliminado" ||
+    (raw.estadoEstagio as string) === "eliminado";
   const overviewData = {
     id: estagio.id,
     title: (raw.titulo as string | undefined) ?? (raw.title as string | undefined),
@@ -337,6 +342,7 @@ export function EstagioDetailView({
             estagio={estagio as Record<string, unknown>}
             currentUserId={currentUserId}
             currentUserRole={effectiveRole}
+            isArchived={isArchived}
           />
         </TabsContent>
 
@@ -347,6 +353,7 @@ export function EstagioDetailView({
             currentUserId={currentUserId}
             currentUserRole={effectiveRole}
             participants={participants}
+            isArchived={isArchived}
           />
         </TabsContent>
 
@@ -357,6 +364,7 @@ export function EstagioDetailView({
             currentUserId={currentUserId}
             currentUserRole={effectiveRole}
             focusRequestId={focusRequestId}
+            isArchived={isArchived}
           />
         </TabsContent>
 

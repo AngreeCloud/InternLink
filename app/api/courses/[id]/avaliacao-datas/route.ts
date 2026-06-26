@@ -49,6 +49,7 @@ export async function PATCH(
     const body = (await request.json()) as {
       disponibilidadePreenchimento?: string;
       publicacaoNotaFinal?: string;
+      autoArquivarNaPublicacao?: boolean;
       overridesPorEstagio?: Record<string, { disponibilidadePreenchimento: string }>;
     };
 
@@ -78,6 +79,10 @@ export async function PATCH(
           "",
       },
     };
+
+    if (body.autoArquivarNaPublicacao !== undefined) {
+      updates.autoArquivarNaPublicacao = body.autoArquivarNaPublicacao;
+    }
 
     if (body.overridesPorEstagio !== undefined) {
       updates.overridesPorEstagio = body.overridesPorEstagio;

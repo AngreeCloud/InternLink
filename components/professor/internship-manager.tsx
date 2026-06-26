@@ -492,8 +492,9 @@ export function InternshipManager() {
   );
 
   const displayEstagios = useMemo(() => {
-    if (!showOnlyMyEstagios || !userUid) return estagios;
-    return estagios.filter((e) => e.professorId === userUid);
+    const active = estagios.filter((e) => e.estado !== "eliminado");
+    if (!showOnlyMyEstagios || !userUid) return active;
+    return active.filter((e) => e.professorId === userUid);
   }, [estagios, showOnlyMyEstagios, userUid]);
 
   useEffect(() => {
@@ -663,7 +664,7 @@ export function InternshipManager() {
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold text-foreground">Estágios</h1>
             <span className="rounded-full bg-muted px-3 py-1 text-sm text-muted-foreground">
-              {estagios.length} estágio(s)
+              {displayEstagios.length} estágio(s)
             </span>
           </div>
           <p className="text-muted-foreground">
