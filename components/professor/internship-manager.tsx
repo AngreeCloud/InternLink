@@ -664,7 +664,7 @@ export function InternshipManager() {
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold text-foreground">Estágios</h1>
             <span className="rounded-full bg-muted px-3 py-1 text-sm text-muted-foreground">
-              {estagios.length} estágio(s)
+              {displayEstagios.length} estágio(s)
             </span>
           </div>
           <p className="text-muted-foreground">
