@@ -60,7 +60,7 @@ const gestaoGroup = {
 
 const bottomNav = [
   { name: "Chat", href: "/school-admin/chat", icon: MessageSquare },
-  { name: "Histórico", href: "/school-admin/historico", icon: History },
+  { name: "Auditoria", href: "/school-admin/historico", icon: History },
 ];
 
 type AuthState = {

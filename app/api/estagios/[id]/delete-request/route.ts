@@ -41,7 +41,7 @@ export async function POST(
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    writeAuditLog({
+    await writeAuditLog({
       schoolId,
       entityType: "estagio",
       entityId: id,
@@ -129,7 +129,7 @@ export async function PUT(
       decidedBy: session.uid,
     });
 
-    writeAuditLog({
+    await writeAuditLog({
       schoolId,
       entityType: "estagio",
       entityId: estagioId,
