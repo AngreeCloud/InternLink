@@ -19,13 +19,14 @@ import {
 } from "lucide-react";
 import { OverviewTab } from "./overview-tab";
 import { DocumentList } from "./documentos/document-list";
-import { ComingSoonTab } from "./coming-soon-tab";
 import { ArchiveEstagioButton } from "./archive-estagio-button";
 import { HorarioTab } from "./horario-tab";
 import { SumariosTab } from "./sumarios-tab";
 import { CalendarioTab } from "./calendario-tab";
+import { AvaliacaoTab } from "./avaliacao/avaliacao-tab";
 import {
   getUserRoleInEstagio,
+  getEstagioCourseId,
   isDirectorRole,
   type EstagioRole,
   type EstagioDoc,
@@ -50,6 +51,7 @@ type TabValue = (typeof TAB_VALUES)[number];
 export function EstagioDetailView({
   estagioId,
   currentUserId,
+  currentUserRole,
   backHref,
   backLabel = "Voltar",
 }: Props) {
@@ -192,9 +194,9 @@ export function EstagioDetailView({
     if (!estagio) return null;
     const role = getUserRoleInEstagio(currentUserId, estagio, course);
     if (role) return role;
-    // admin_escolar da mesma escola é tratado como diretor.
+    if (currentUserRole === "admin_escolar") return "diretor";
     return null;
-  }, [estagio, currentUserId, course]);
+  }, [estagio, currentUserId, course, currentUserRole]);
 
   // Diretor e Professor orientador podem gerir documentos do estágio.
   const canManage = effectiveRole === "diretor" || effectiveRole === "professor";
@@ -309,12 +311,10 @@ export function EstagioDetailView({
             <CalendarSearch className="mr-2 h-4 w-4" />
             Calendário
           </TabsTrigger>
-          {effectiveRole !== "aluno" && (
-            <TabsTrigger value="avaliacao">
-              <Star className="mr-2 h-4 w-4" />
-              Avaliação
-            </TabsTrigger>
-          )}
+          <TabsTrigger value="avaliacao">
+            <Star className="mr-2 h-4 w-4" />
+            Avaliação
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -362,10 +362,27 @@ export function EstagioDetailView({
 
         {effectiveRole !== "aluno" && (
           <TabsContent value="avaliacao">
-            <ComingSoonTab
-              title="Avaliação final"
-              description="Ficha de avaliação a preencher pelo tutor e pelo professor orientador no final do estágio, com cálculo automático da classificação FCT."
-              icon={Star}
+            <AvaliacaoTab
+              estagioId={estagio.id}
+              schoolId={estagio.schoolId ?? ""}
+              courseId={
+                getEstagioCourseId(estagio as EstagioDoc & Record<string, unknown>)
+              }
+              currentUserId={currentUserId}
+              currentUserRole={effectiveRole}
+            />
+          </TabsContent>
+        )}
+        {effectiveRole === "aluno" && (
+          <TabsContent value="avaliacao">
+            <AvaliacaoTab
+              estagioId={estagio.id}
+              schoolId={estagio.schoolId ?? ""}
+              courseId={
+                getEstagioCourseId(estagio as EstagioDoc & Record<string, unknown>)
+              }
+              currentUserId={currentUserId}
+              currentUserRole={effectiveRole}
             />
           </TabsContent>
         )}

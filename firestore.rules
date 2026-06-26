@@ -418,6 +418,19 @@ service cloud.firestore {
 
       allow delete: if isSchoolAdmin()
         && resource.data.schoolId == currentUserData().schoolId;
+
+      match /settings/{settingId} {
+        allow read: if true;
+        allow write: if isSignedIn()
+          && resource.data.schoolId == currentUserData().schoolId
+          && (
+            isSchoolAdminFor(resource.data.schoolId)
+            || (
+              isProfessor()
+              && resource.data.courseDirectorId == request.auth.uid
+            )
+          );
+      }
     }
 
     // EMPRESAS — base de dados institucional de entidades de acolhimento
@@ -499,6 +512,16 @@ service cloud.firestore {
             && currentUserData().role == "encarregado"
             && currentUserData().educandoIds is list
             && currentUserData().educandoIds.hasAny([estagioData.alunoId]))
+          || isCourseDirectorOfEstagio(estagioData)
+        );
+    }
+
+    function isCourseDirectorOfEstagio(estagioData) {
+      return isSignedIn()
+        && isProfessor()
+        && (
+          (estagioData.alunoCourseId is string && isCourseDirectorOf(estagioData.alunoCourseId))
+          || (estagioData.courseId is string && isCourseDirectorOf(estagioData.courseId))
         );
     }
 
@@ -609,13 +632,15 @@ service cloud.firestore {
       }
 
       match /avaliacao/{avalId} {
-        allow read: if isEstagioMember(get(/databases/$(database)/documents/estagios/$(estagioId)).data)
-          && get(/databases/$(database)/documents/estagios/$(estagioId)).data.alunoId != request.auth.uid;
+        allow read: if isEstagioMember(get(/databases/$(database)/documents/estagios/$(estagioId)).data);
         allow write: if isSignedIn()
           && (
             isEstagioDirector(get(/databases/$(database)/documents/estagios/$(estagioId)).data)
             || get(/databases/$(database)/documents/estagios/$(estagioId)).data.professorId == request.auth.uid
-            || get(/databases/$(database)/documents/estagios/$(estagioId)).data.tutorId == request.auth.uid
+            || (
+              avalId == "tutor"
+              && get(/databases/$(database)/documents/estagios/$(estagioId)).data.tutorId == request.auth.uid
+            )
           );
       }
     }

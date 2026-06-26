@@ -20,6 +20,7 @@ const ENTITY_TYPES: { value: string; label: string }[] = [
   { value: "user", label: "Utilizador" },
   { value: "course", label: "Curso" },
   { value: "school", label: "Escola" },
+  { value: "avaliacao", label: "Avaliação" },
 ];
 
 const ACTIONS: { value: string; label: string }[] = [
@@ -29,6 +30,9 @@ const ACTIONS: { value: string; label: string }[] = [
   { value: "archive", label: "Arquivo" },
   { value: "restore", label: "Restauro" },
   { value: "delete", label: "Eliminação" },
+  { value: "delete_request", label: "Pedido de eliminação" },
+  { value: "delete_approved", label: "Eliminação aprovada" },
+  { value: "delete_rejected", label: "Eliminação rejeitada" },
   { value: "approve", label: "Aprovação" },
   { value: "reject", label: "Rejeição" },
   { value: "status_change", label: "Alteração de estado" },
@@ -37,6 +41,8 @@ const ACTIONS: { value: string; label: string }[] = [
   { value: "disassociate", label: "Desassociação" },
   { value: "permission_change", label: "Alteração de cargo" },
   { value: "update_settings", label: "Configurações" },
+  { value: "sign_avaliacao", label: "Assinatura de avaliação" },
+  { value: "reset_avaliacao", label: "Reposição de avaliação" },
 ];
 
 function badgeVariant(action: string): "default" | "secondary" | "outline" | "destructive" {
@@ -45,7 +51,8 @@ function badgeVariant(action: string): "default" | "secondary" | "outline" | "de
     case "update":
     case "update_settings": return "secondary";
     case "archive":
-    case "delete": return "destructive";
+    case "delete":
+    case "delete_approved": return "destructive";
     case "restore":
     case "approve": return "default";
     case "permission_change": return "secondary";
@@ -153,7 +160,7 @@ export function AuditGlobalPage() {
         setPageHistory([]);
       }
     } catch {
-      setError("Não foi possível carregar o histórico.");
+      setError("Não foi possível carregar a auditoria.");
       setLogs([]);
     } finally {
       setLoading(false);
@@ -181,13 +188,13 @@ export function AuditGlobalPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Histórico</h1>
+        <h1 className="text-3xl font-bold text-foreground">Auditoria</h1>
         <p className="text-muted-foreground">Consulte ações críticas da plataforma.</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Histórico de atividade</CardTitle>
+          <CardTitle>Registo de auditoria</CardTitle>
           <CardDescription>
             Registo centralizado de empresas, estágios, tutores, utilizadores e escola.
           </CardDescription>

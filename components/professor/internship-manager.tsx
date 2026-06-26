@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus } from "lucide-react";
+import { Building2, Plus, X } from "lucide-react";
 import {
   calcularDataFimEstimada,
   DEFAULT_DIAS_SEMANA,
@@ -39,6 +39,7 @@ import {
 } from "@/lib/estagios/date-calc";
 import { EstagiosSection } from "@/components/professor/estagios-section";
 import { EditEstagioSheet } from "@/components/estagios/edit-estagio-sheet";
+import { AgendarPublicacaoNotas } from "@/components/professor/agendar-publicacao-notas";
 import type { EstagioListItem } from "@/components/professor/estagio-types";
 
 const DAY_LABEL: Record<keyof DiasSemana, string> = {
@@ -62,6 +63,11 @@ type SimpleUser = {
   photoURL: string;
 };
 
+type EmpresaLite = {
+  id: string;
+  nome: string;
+};
+
 type SchoolTutor = {
   id: string;
   nome: string;
@@ -76,6 +82,7 @@ export function InternshipManager() {
   const [estagios, setEstagios] = useState<Estagio[]>([]);
   const [students, setStudents] = useState<SimpleUser[]>([]);
   const [schoolTutors, setSchoolTutors] = useState<SchoolTutor[]>([]);
+  const [empresas, setEmpresas] = useState<EmpresaLite[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [schoolId, setSchoolId] = useState("");
@@ -87,6 +94,7 @@ export function InternshipManager() {
 
   const [titulo, setTitulo] = useState("");
   const [empresa, setEmpresa] = useState("");
+  const [empresaId, setEmpresaId] = useState("");
   const [alunoId, setAlunoId] = useState("");
   const [tutorId, setTutorId] = useState("");
   const [createDataInicio, setCreateDataInicio] = useState("");
@@ -99,9 +107,11 @@ export function InternshipManager() {
   const [studentSearch, setStudentSearch] = useState("");
   const [tutorSearch, setTutorSearch] = useState("");
   const [editTutorSearch, setEditTutorSearch] = useState("");
+  const [empresaSearch, setEmpresaSearch] = useState("");
 
   const [studentListOpen, setStudentListOpen] = useState(false);
   const [tutorListOpen, setTutorListOpen] = useState(false);
+  const [empresaListOpen, setEmpresaListOpen] = useState(false);
 
   const [editingEstagio, setEditingEstagio] = useState<Estagio | null>(null);
   const [editTutorId, setEditTutorId] = useState("");
@@ -137,6 +147,14 @@ export function InternshipManager() {
         tutor.empresa.toLowerCase().includes(term)
     );
   }, [schoolTutors, tutorSearch]);
+
+  const filteredEmpresas = useMemo(() => {
+    const term = empresaSearch.trim().toLowerCase();
+    if (!term) return empresas;
+    return empresas.filter((e) =>
+      e.nome.toLowerCase().includes(term)
+    );
+  }, [empresas, empresaSearch]);
 
   const filteredEditTutors = useMemo(() => {
     const term = editTutorSearch.trim().toLowerCase();
@@ -207,27 +225,27 @@ export function InternshipManager() {
       }
 
       // Load courses with director info for delete permission checks
+      let courseDirectorMapLocal: Record<string, { isDirector: boolean; canDelete: boolean }> = {};
       try {
         const coursesSnap = await getDocs(
           query(collection(db, "courses"), where("schoolId", "==", userData.schoolId))
         );
-        const map: Record<string, { isDirector: boolean; canDelete: boolean }> = {};
         coursesSnap.docs.forEach((c) => {
           const cData = c.data() as {
             courseDirectorId?: string;
             directorCanDeleteEstagio?: boolean;
           };
-          map[c.id] = {
+          courseDirectorMapLocal[c.id] = {
             isDirector: cData.courseDirectorId === user.uid,
             canDelete: cData.directorCanDeleteEstagio === true,
           };
         });
-        setCourseDirectorMap(map);
+        setCourseDirectorMap(courseDirectorMapLocal);
       } catch {
         // ignore
       }
 
-      const directorCourseIds = Object.entries(courseDirectorMap)
+      const directorCourseIds = Object.entries(courseDirectorMapLocal)
         .filter(([, v]) => v.isDirector)
         .map(([k]) => k);
 
@@ -340,6 +358,36 @@ export function InternshipManager() {
             createdAtMs: createdAtDate?.getTime() || 0,
           };
         });
+
+        // Resolve professor names for director's course internships
+        try {
+          const profIds = new Set<string>();
+          for (const item of list) {
+            if (item.professorId && item.professorId !== user.uid) {
+              profIds.add(item.professorId);
+            }
+          }
+          if (profIds.size > 0) {
+            const profSnaps = await Promise.all(
+              Array.from(profIds).map((id) => getDoc(doc(db, "users", id)))
+            );
+            const profNameById = new Map<string, string>();
+            for (const snap of profSnaps) {
+              if (snap.exists()) {
+                const d = snap.data() as { nome?: string; displayName?: string };
+                profNameById.set(snap.id, d.nome || d.displayName || snap.id);
+              }
+            }
+            for (const item of list) {
+              if (item.professorId && profNameById.has(item.professorId)) {
+                item.professorNome = profNameById.get(item.professorId);
+              }
+            }
+          }
+        } catch {
+          // ignore
+        }
+
         setEstagios(list);
 
         if (estagiosToNormalize.length > 0) {
@@ -411,6 +459,26 @@ export function InternshipManager() {
         // ignore
       }
 
+      // Load empresas for search in create dialog
+      try {
+        const empresasSnap = await getDocs(
+          query(
+            collection(db, "empresas"),
+            where("schoolId", "==", userData.schoolId),
+            where("ativa", "==", true)
+          )
+        );
+        const list: EmpresaLite[] = empresasSnap.docs
+          .map((docSnap) => {
+            const data = docSnap.data() as { nome?: string };
+            return { id: docSnap.id, nome: data.nome || "—" };
+          })
+          .sort((a, b) => a.nome.localeCompare(b.nome, "pt-PT"));
+        setEmpresas(list);
+      } catch {
+        // ignore
+      }
+
     } catch (error) {
       console.error("Erro ao carregar estágios:", error);
     } finally {
@@ -444,13 +512,16 @@ export function InternshipManager() {
   const resetCreateForm = () => {
     setTitulo("");
     setEmpresa("");
+    setEmpresaId("");
     setAlunoId("");
     setTutorId("");
     setCreateErrorMessage(null);
     setStudentSearch("");
     setTutorSearch("");
+    setEmpresaSearch("");
     setStudentListOpen(false);
     setTutorListOpen(false);
+    setEmpresaListOpen(false);
     setCreateDataInicio("");
     setCreateTotalHoras(600);
     setCreateHorasDiarias(7);
@@ -477,6 +548,7 @@ export function InternshipManager() {
           tutorId: selectedTutorById?.id || undefined,
           titulo: titulo.trim(),
           empresa: empresaTrim,
+          empresaId: empresaId || undefined,
           dataInicio: createDataInicio,
           totalHoras: createTotalHoras,
           horasDiarias: createHorasDiarias,
@@ -599,6 +671,9 @@ export function InternshipManager() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {userUid && schoolId && (
+            <AgendarPublicacaoNotas userId={userUid} schoolId={schoolId} />
+          )}
           <Dialog
             open={dialogOpen}
             onOpenChange={(open) => {
@@ -635,49 +710,68 @@ export function InternshipManager() {
 
                 <div className="space-y-2">
                   <Label>Aluno</Label>
-                  <Input
-                    placeholder="Pesquisar aluno por nome ou email..."
-                    value={studentSearch}
-                    onChange={(event) => setStudentSearch(event.target.value)}
-                    onFocus={() => setStudentListOpen(true)}
-                    onBlur={() => setTimeout(() => setStudentListOpen(false), 150)}
-                  />
-                  {(studentListOpen || studentSearch.trim()) && (
-                    <div className="max-h-52 space-y-1 overflow-y-auto rounded-md border border-border p-2">
-                      {filteredStudents.length === 0 ? (
-                        <p className="px-2 py-1 text-sm text-muted-foreground">Nenhum aluno encontrado.</p>
-                      ) : (
-                        filteredStudents.map((student) => (
-                          <button
-                            key={student.id}
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => {
-                              setAlunoId(student.id);
-                              setStudentListOpen(false);
-                            }}
-                            className={[
-                              "flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors",
-                              alunoId === student.id ? "bg-primary/10" : "hover:bg-muted",
-                            ].join(" ")}
-                          >
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={student.photoURL || undefined} alt={student.nome} />
-                              <AvatarFallback>{student.nome.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium">{student.nome}</p>
-                              <p className="truncate text-xs text-muted-foreground">{student.email}</p>
-                            </div>
-                          </button>
-                        ))
-                      )}
+                  {selectedStudent ? (
+                    <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+                      <Avatar className="h-6 w-6">
+                        <AvatarImage src={selectedStudent.photoURL || undefined} alt={selectedStudent.nome} />
+                        <AvatarFallback>{selectedStudent.nome.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{selectedStudent.nome}</p>
+                        <p className="truncate text-xs text-muted-foreground">{selectedStudent.email}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAlunoId("");
+                          setStudentSearch("");
+                        }}
+                        className="shrink-0 rounded-full p-0.5 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
+                        title="Remover aluno"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                     </div>
-                  )}
-                  {selectedStudent && (
-                    <p className="text-xs text-muted-foreground">
-                      Selecionado: <strong>{selectedStudent.nome}</strong> ({selectedStudent.email})
-                    </p>
+                  ) : (
+                    <>
+                      <Input
+                        placeholder="Pesquisar aluno por nome ou email..."
+                        value={studentSearch}
+                        onChange={(event) => setStudentSearch(event.target.value)}
+                        onFocus={() => setStudentListOpen(true)}
+                        onBlur={() => setTimeout(() => setStudentListOpen(false), 150)}
+                      />
+                      {(studentListOpen || studentSearch.trim()) && (
+                        <div className="max-h-52 space-y-1 overflow-y-auto rounded-md border border-border p-2">
+                          {filteredStudents.length === 0 ? (
+                            <p className="px-2 py-1 text-sm text-muted-foreground">Nenhum aluno encontrado.</p>
+                          ) : (
+                            filteredStudents.map((student) => (
+                              <button
+                                key={student.id}
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  setAlunoId(student.id);
+                                  setStudentSearch("");
+                                  setStudentListOpen(false);
+                                }}
+                                className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted"
+                              >
+                                <Avatar className="h-8 w-8">
+                                  <AvatarImage src={student.photoURL || undefined} alt={student.nome} />
+                                  <AvatarFallback>{student.nome.charAt(0)}</AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium">{student.nome}</p>
+                                  <p className="truncate text-xs text-muted-foreground">{student.email}</p>
+                                </div>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -729,12 +823,58 @@ export function InternshipManager() {
 
                 <div className="space-y-2">
                   <Label htmlFor="estagioEmpresa">Empresa</Label>
-                  <Input
-                    id="estagioEmpresa"
-                    placeholder="Nome da empresa"
-                    value={empresa}
-                    onChange={(event) => setEmpresa(event.target.value)}
-                  />
+                  {empresa ? (
+                    <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+                      <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="flex-1 truncate text-sm font-medium">{empresa}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEmpresa("");
+                          setEmpresaId("");
+                        }}
+                        className="shrink-0 rounded-full p-0.5 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
+                        title="Remover empresa"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <Input
+                        id="estagioEmpresa"
+                        placeholder="Pesquisar empresa por nome..."
+                        value={empresaSearch}
+                        onChange={(event) => {
+                          setEmpresaSearch(event.target.value);
+                          if (!empresaListOpen) setEmpresaListOpen(true);
+                        }}
+                        onFocus={() => setEmpresaListOpen(true)}
+                        onBlur={() => setTimeout(() => setEmpresaListOpen(false), 150)}
+                      />
+                      {empresaListOpen && filteredEmpresas.length > 0 && (
+                        <div className="max-h-52 space-y-1 overflow-y-auto rounded-md border border-border p-2">
+                          {filteredEmpresas.map((e) => (
+                            <button
+                              key={e.id}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setEmpresa(e.nome);
+                            setEmpresaId(e.id);
+                            setEmpresaSearch("");
+                            setEmpresaListOpen(false);
+                          }}
+                              className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted"
+                            >
+                              <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                              <span className="truncate text-sm">{e.nome}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-3">
@@ -880,6 +1020,7 @@ export function InternshipManager() {
         showOnlyMyEstagios={showOnlyMyEstagios}
         onToggleShowOnlyMy={() => setShowOnlyMyEstagios((v) => !v)}
         isDirector={isDirector}
+        currentUserId={userUid}
         onOpenChangeTutor={(estagio) => openEditTutorDialog(estagio)}
         onOpenEdit={(estagio) => {
           setEditingSheetEstagio(estagio);

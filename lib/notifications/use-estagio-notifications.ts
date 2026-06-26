@@ -40,7 +40,10 @@ export function useEstagioNotifications(params: {
       try {
         const res = await fetch("/api/notifications");
         if (!res.ok) {
-          console.error("[v0] estagio notifications fetch", res.status);
+          // 401/403 are normal during logout transitions — don't log as errors
+          if (res.status !== 401 && res.status !== 403) {
+            console.error("[v0] estagio notifications fetch", res.status);
+          }
           return;
         }
         const json = (await res.json()) as {

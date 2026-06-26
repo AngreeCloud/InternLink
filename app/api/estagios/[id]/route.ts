@@ -68,7 +68,7 @@ export async function DELETE(
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    writeAuditLog({ schoolId, entityType: "estagio", entityId: id, entityLabel: estagioTitulo, action: "delete", changedBy: session.uid, summary: buildSummary("estagio", "delete", estagioTitulo) });
+    await writeAuditLog({ schoolId, entityType: "estagio", entityId: id, entityLabel: estagioTitulo, action: "delete", changedBy: session.uid, summary: buildSummary("estagio", "delete", estagioTitulo) });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

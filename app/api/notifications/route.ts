@@ -45,52 +45,36 @@ export async function GET() {
     const { uid } = await requireSessionUid();
     const db = getFirebaseAdminDb();
 
-    const estagiosSnap = await db
-      .collection("estagios")
-      .where("professorId", "==", uid)
+    // Use collection group query — works for all roles (professor, tutor, aluno, director, school-admin)
+    const notifsSnap = await db
+      .collectionGroup("notifications")
+      .where("userId", "==", uid)
+      .orderBy("createdAt", "desc")
+      .limit(100)
       .get();
 
-    const estagioIds = estagiosSnap.docs.map((d) => d.id);
-    if (estagioIds.length === 0) {
-      return NextResponse.json({ ok: true, notifications: [] });
+    const notifications: ApiNotification[] = [];
+    for (const docSnap of notifsSnap.docs) {
+      const data = docSnap.data() as Record<string, unknown>;
+      // Derive estagioId from the parent document path: estagios/{id}/notifications/{notifId}
+      const pathParts = docSnap.ref.path.split("/");
+      const estagioId = pathParts[pathParts.indexOf("estagios") + 1] ?? "";
+
+      notifications.push({
+        id: docSnap.id,
+        userId: (data.userId as string) ?? "",
+        type: (data.type as string) ?? "",
+        title: (data.title as string) ?? "Notificação",
+        body: (data.body as string) ?? "",
+        readAt: data.readAt ?? null,
+        createdAtMs: toMillis(data.createdAt),
+        estagioId,
+        requestId: data.requestId as string | undefined,
+        requestType: data.requestType as string | undefined,
+        targetDate: data.targetDate as string | undefined,
+        docId: data.docId as string | undefined,
+      });
     }
-
-    const results = await Promise.all(
-      estagioIds.map(async (estagioId) => {
-        const snap = await db
-          .collection("estagios")
-          .doc(estagioId)
-          .collection("notifications")
-          .get();
-        return snap.docs
-          .filter((docSnap) => {
-            const data = docSnap.data() as Record<string, unknown>;
-            return data.userId === uid;
-          })
-          .map((docSnap) => {
-            const data = docSnap.data() as Record<string, unknown>;
-            return {
-              id: docSnap.id,
-              userId: (data.userId as string) ?? "",
-              type: (data.type as string) ?? "",
-              title: (data.title as string) ?? "Notificação",
-              body: (data.body as string) ?? "",
-              readAt: data.readAt ?? null,
-              createdAtMs: toMillis(data.createdAt),
-              estagioId: (data.estagioId as string) ?? estagioId,
-              requestId: data.requestId as string | undefined,
-              requestType: data.requestType as string | undefined,
-              targetDate: data.targetDate as string | undefined,
-              docId: data.docId as string | undefined,
-            } satisfies ApiNotification;
-          });
-      })
-    );
-
-    const notifications = results
-      .flat()
-      .sort((a, b) => b.createdAtMs - a.createdAtMs)
-      .slice(0, 100);
 
     return NextResponse.json({ ok: true, notifications });
   } catch (error) {

@@ -60,7 +60,7 @@ const gestaoGroup = {
 
 const bottomNav = [
   { name: "Chat", href: "/school-admin/chat", icon: MessageSquare },
-  { name: "Histórico", href: "/school-admin/historico", icon: History },
+  { name: "Auditoria", href: "/school-admin/historico", icon: History },
 ];
 
 type AuthState = {
@@ -227,7 +227,42 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
                     </li>
                   ))}
 
-                  {!collapsed && (
+                  {collapsed ? (
+                    <>
+                      {pessoalGroup.items.map((item) => (
+                        <li key={item.name}>
+                          <Link
+                            href={item.href}
+                            className={[
+                              "flex items-center gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 transition-colors justify-center",
+                              isActiveRoute(item.href)
+                                ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                            ].join(" ")}
+                            aria-current={isActiveRoute(item.href) ? "page" : undefined}
+                          >
+                            <item.icon className="h-4 w-4 shrink-0" />
+                          </Link>
+                        </li>
+                      ))}
+                      {gestaoGroup.items.map((item) => (
+                        <li key={item.name}>
+                          <Link
+                            href={item.href}
+                            className={[
+                              "flex items-center gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 transition-colors justify-center",
+                              isActiveRoute(item.href)
+                                ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                            ].join(" ")}
+                            aria-current={isActiveRoute(item.href) ? "page" : undefined}
+                          >
+                            <item.icon className="h-4 w-4 shrink-0" />
+                          </Link>
+                        </li>
+                      ))}
+                    </>
+                  ) : (
                     <>
                       <Collapsible open={pessoalOpen} onOpenChange={setPessoalOpen}>
                         <CollapsibleTrigger asChild>

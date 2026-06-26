@@ -14,7 +14,9 @@ export type AuditAction =
   | "update_settings"
   | "delete_request"
   | "delete_approved"
-  | "delete_rejected";
+  | "delete_rejected"
+  | "sign_avaliacao"
+  | "reset_avaliacao";
 
 export type AuditEntityType =
   | "empresa"
@@ -23,7 +25,8 @@ export type AuditEntityType =
   | "schedule_change_request"
   | "user"
   | "school"
-  | "course";
+  | "course"
+  | "avaliacao";
 
 export interface AuditLogEntry {
   schoolId: string;
