@@ -41,7 +41,7 @@ export function AdminEstagiosTable() {
       try {
         const db = await getDbRuntime();
         const snap = await getDocs(
-          query(collection(db, "estagios"), where("schoolId", "==", schoolId))
+          query(collection(db, "estagios"), where("schoolId", "==", schoolId), where("estado", "!=", "eliminado"))
         );
         if (cancelled) return;
         let list: (EstagioRow & { professorId?: string; tutorId?: string; courseId?: string })[] =

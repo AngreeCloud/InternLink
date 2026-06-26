@@ -254,7 +254,8 @@ export function InternshipManager() {
           query(
             collection(db, "estagios"),
             where("professorId", "==", user.uid),
-            where("schoolId", "==", userData.schoolId)
+            where("schoolId", "==", userData.schoolId),
+            where("estado", "!=", "eliminado")
           )
         );
 
@@ -267,12 +268,14 @@ export function InternshipManager() {
               getDocs(query(
                 collection(db, "estagios"),
                 where("courseId", "in", batch),
-                where("schoolId", "==", userData.schoolId)
+                where("schoolId", "==", userData.schoolId),
+                where("estado", "!=", "eliminado")
               )),
               getDocs(query(
                 collection(db, "estagios"),
                 where("alunoCourseId", "in", batch),
-                where("schoolId", "==", userData.schoolId)
+                where("schoolId", "==", userData.schoolId),
+                where("estado", "!=", "eliminado")
               )),
             ]);
             courseSnap.docs.forEach((d) => { allEstagiosDocs.push(d); });
