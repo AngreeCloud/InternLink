@@ -512,6 +512,16 @@ service cloud.firestore {
             && currentUserData().role == "encarregado"
             && currentUserData().educandoIds is list
             && currentUserData().educandoIds.hasAny([estagioData.alunoId]))
+          || isCourseDirectorOfEstagio(estagioData)
+        );
+    }
+
+    function isCourseDirectorOfEstagio(estagioData) {
+      return isSignedIn()
+        && isProfessor()
+        && (
+          (estagioData.alunoCourseId is string && isCourseDirectorOf(estagioData.alunoCourseId))
+          || (estagioData.courseId is string && isCourseDirectorOf(estagioData.courseId))
         );
     }
 
