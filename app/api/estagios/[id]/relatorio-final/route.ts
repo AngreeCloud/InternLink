@@ -279,6 +279,14 @@ export async function GET(
         updatedAt: updatedAt?.toDate?.()?.toISOString() ?? null,
         submittedAt: submittedAt?.toDate?.()?.toISOString() ?? null,
       };
+      // Check signature status
+      let allSigned = false;
+      try {
+        const sigsSnap = await existing.ref.collection("assinaturas").get();
+        allSigned = sigsSnap.size >= 2;
+      } catch { /* ignore */ }
+      report.submitted = true;
+      report.allSigned = allSigned;
       // Try to compute page count for PDF files (best-effort; will silently fail).
       try {
         const ext = (report.fileExtension as string | undefined) ?? "";

@@ -37,6 +37,7 @@ type Props = {
   estagio: Record<string, unknown>;
   currentUserId: string;
   currentUserRole: EstagioRole;
+  isArchived?: boolean;
 };
 
 type PresencaDoc = {

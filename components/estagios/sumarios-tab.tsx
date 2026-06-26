@@ -57,6 +57,7 @@ type Props = {
   currentUserId: string;
   currentUserRole: EstagioRole;
   participants?: Record<string, Participant>;
+  isArchived?: boolean;
 };
 
 type SumarioDoc = {
