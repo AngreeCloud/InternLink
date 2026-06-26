@@ -3,6 +3,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { requireSessionUid, EstagioAccessError, toApiErrorResponse } from "@/lib/estagios/estagio-access";
 import { writeAuditLog } from "@/lib/audit/write";
+import { validateConfig } from "@/lib/avaliacao/validations";
+import type { AvaliacaoConfig } from "@/lib/avaliacao/types";
 
 export const runtime = "nodejs";
 
@@ -23,21 +25,41 @@ export async function PATCH(request: Request) {
     const schoolId = callerData.schoolId;
     const body = (await request.json()) as Record<string, unknown>;
 
-    // Only allow eePageAccess updates
     const updates: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
+    const updatedFields: string[] = [];
 
     if (typeof body.eePageAccess === "string") {
       if (!["admin_only", "professors"].includes(body.eePageAccess as string)) {
         throw new EstagioAccessError(400, "invalid_value", "Valor inválido para eePageAccess.");
       }
       updates.eePageAccess = body.eePageAccess;
+      updatedFields.push("eePageAccess");
+    }
+
+    if (body.avaliacaoConfig !== undefined) {
+      const config = body.avaliacaoConfig as AvaliacaoConfig;
+      const validation = validateConfig(config);
+      if (!validation.valid) {
+        throw new EstagioAccessError(400, "invalid_avaliacao_config", validation.error ?? "Configuração de avaliação inválida.");
+      }
+      updates.avaliacaoConfig = config;
+      updatedFields.push("avaliacaoConfig");
     }
 
     await db.collection("schools").doc(schoolId).update(updates);
 
-    writeAuditLog({ schoolId, entityType: "school", entityId: schoolId, entityLabel: schoolId, action: "update_settings", changedBy: uid, summary: "Definições da escola atualizadas.", metadata: { updates: Object.keys(updates).filter(k => k !== "updatedAt") } });
+    writeAuditLog({
+      schoolId,
+      entityType: "school",
+      entityId: schoolId,
+      entityLabel: schoolId,
+      action: "update_settings",
+      changedBy: uid,
+      summary: "Definições da escola atualizadas.",
+      metadata: { updates: updatedFields },
+    });
 
-    return NextResponse.json({ ok: true, eePageAccess: updates.eePageAccess });
+    return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("[api/school-admin/settings]", error);
     const { body, status } = toApiErrorResponse(error);

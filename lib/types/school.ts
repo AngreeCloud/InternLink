@@ -1,3 +1,5 @@
+import type { AvaliacaoConfig } from "@/lib/avaliacao/types";
+
 export type School = {
   id: string;
   name: string;
@@ -31,6 +33,7 @@ export type School = {
     professores: "none" | "read" | "write";
     courseDirectors: "none" | "read" | "write";
   };
+  avaliacaoConfig?: AvaliacaoConfig;
   createdAt?: Date | { toDate: () => Date };
   updatedAt?: Date | { toDate: () => Date };
 };
