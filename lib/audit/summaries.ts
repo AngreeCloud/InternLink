@@ -40,6 +40,8 @@ export function buildSummary(
     "estagio:delete_request": `Pedido de eliminação de estágio: ${label}.`,
     "estagio:delete_approved": `Pedido de eliminação de estágio aprovado: ${label}.`,
     "estagio:delete_rejected": `Pedido de eliminação de estágio rejeitado: ${label}.`,
+    "avaliacao:sign_avaliacao": `Avaliação assinada: ${label}.`,
+    "avaliacao:reset_avaliacao": `Avaliação reposta: ${label}.`,
   };
 
   const key = `${entityType}:${action}`;
