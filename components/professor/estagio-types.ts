@@ -14,6 +14,7 @@ export type EstagioListItem = {
   courseId: string;
   courseNome: string;
   professorId: string;
+  professorNome?: string;
   dataInicio?: string;
   dataFimEstimada?: string;
   totalHoras?: number;

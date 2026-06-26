@@ -43,6 +43,7 @@ type Props = {
   showOnlyMyEstagios?: boolean;
   onToggleShowOnlyMy?: () => void;
   isDirector?: boolean;
+  currentUserId?: string;
   onOpenChangeTutor: (estagio: EstagioListItem) => void;
   onOpenEdit: (estagio: EstagioListItem) => void;
   onDelete?: (estagio: EstagioListItem) => void;
@@ -63,6 +64,7 @@ export function EstagiosSection({
   showOnlyMyEstagios = false,
   onToggleShowOnlyMy,
   isDirector = false,
+  currentUserId,
   onOpenChangeTutor,
   onOpenEdit,
   onDelete,
@@ -372,6 +374,9 @@ export function EstagiosSection({
                               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                                 {estagio.empresa && estagio.empresa !== "—" && (
                                   <span>Empresa: {estagio.empresa}</span>
+                                )}
+                                {isDirector && currentUserId && estagio.professorId !== currentUserId && estagio.professorNome && (
+                                  <span>Orientador: {estagio.professorNome}</span>
                                 )}
                                 {estagio.dataInicio ? (
                                   <span className="inline-flex items-center gap-1">
