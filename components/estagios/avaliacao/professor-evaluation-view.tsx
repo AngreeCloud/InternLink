@@ -214,12 +214,12 @@ export function ProfessorEvaluationView({
                 </div>
               ) : tutorData ? (
                 <div className="space-y-3">
-                  <div className="space-y-1">
+          <div className="space-y-1">
                     {config.parametros.map((param) => (
                       <div key={param.nome} className="flex justify-between text-sm">
                         <span className="text-muted-foreground">{param.nome}</span>
                         <span className="font-medium">
-                          {tutorData.parametros[param.nome] ?? "-"}
+                          {professorData?.parametros?.[param.nome] ?? "-"}
                           <span className="text-xs text-muted-foreground"> /{config.escala.max}</span>
                         </span>
                       </div>
