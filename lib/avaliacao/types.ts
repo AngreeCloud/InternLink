@@ -50,5 +50,6 @@ export type CursoDatasAvaliacao = {
   cursoId: string;
   schoolId: string;
   datas: DatasAvaliacao;
+  autoArquivarNaPublicacao?: boolean;
   overridesPorEstagio?: Record<string, { disponibilidadePreenchimento: string }>;
 };
