@@ -39,6 +39,7 @@ import {
 } from "@/lib/estagios/date-calc";
 import { EstagiosSection } from "@/components/professor/estagios-section";
 import { EditEstagioSheet } from "@/components/estagios/edit-estagio-sheet";
+import { AgendarPublicacaoNotas } from "@/components/professor/agendar-publicacao-notas";
 import type { EstagioListItem } from "@/components/professor/estagio-types";
 
 const DAY_LABEL: Record<keyof DiasSemana, string> = {
@@ -599,6 +600,9 @@ export function InternshipManager() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {userUid && schoolId && (
+            <AgendarPublicacaoNotas userId={userUid} schoolId={schoolId} />
+          )}
           <Dialog
             open={dialogOpen}
             onOpenChange={(open) => {
