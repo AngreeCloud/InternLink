@@ -27,6 +27,7 @@ export type SignatureData = {
 
 export type NotasTutor = {
   parametros: Record<string, number>;
+  comentarios?: string;
   assinaturaTutor?: SignatureData;
   assinaturaProfessor?: SignatureData;
   estado: "pendente" | "assinado";
@@ -35,6 +36,7 @@ export type NotasTutor = {
 };
 
 export type NotaFinalProfessor = {
+  parametros: Record<string, number>;
   notaFinal: number;
   assinaturaProfessor?: SignatureData;
   estado: "pendente" | "assinado";

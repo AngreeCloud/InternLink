@@ -5,8 +5,7 @@ import {
   EstagioAccessError,
   toApiErrorResponse,
 } from "@/lib/estagios/estagio-access";
-import { renderNotaFinalPDF } from "@/lib/avaliacao/avaliacao-pdf";
-import type { AvaliacaoPDFData } from "@/lib/avaliacao/avaliacao-pdf";
+import { renderNotaFinalPDF, type AvaliacaoPDFData } from "@/lib/avaliacao/avaliacao-pdf";
 import type {
   AvaliacaoConfig,
   NotasTutor,
@@ -86,6 +85,26 @@ export async function GET(
       session.estagio.professorId
     );
 
+    // Resolve course name
+    let courseName =
+      (session.estagio.courseNome as string) ||
+      (session.estagio.courseName as string) ||
+      "";
+    if (!courseName) {
+      const courseId =
+        (session.estagio.courseId as string) ||
+        (session.estagio.alunoCourseId as string);
+      if (courseId) {
+        try {
+          const courseSnap = await db.collection("courses").doc(courseId).get();
+          if (courseSnap.exists) {
+            const cd = courseSnap.data() as { nome?: string; name?: string };
+            courseName = cd.nome || cd.name || "";
+          }
+        } catch { /* ignore */ }
+      }
+    }
+
     const pdfData: AvaliacaoPDFData = {
       alunoName: names.alunoName,
       tutorName: names.tutorName,
@@ -94,16 +113,11 @@ export async function GET(
         (session.estagio.entidadeAcolhimento as string) ||
         (session.estagio.empresa as string) ||
         "",
-      courseName:
-        (session.estagio.courseNome as string) ||
-        (session.estagio.courseName as string) ||
-        "",
+      courseName,
       config,
-      parametros: tutorData?.parametros ?? {},
+      parametros: professorData?.parametros ?? tutorData?.parametros ?? {},
       assinaturaTutor: tutorData?.assinaturaTutor,
-      assinaturaProfessor:
-        professorData?.assinaturaProfessor ??
-        tutorData?.assinaturaProfessor,
+      assinaturaProfessor: professorData?.assinaturaProfessor,
       notaFinal: professorData?.notaFinal,
       generatedAt: new Date().toLocaleDateString("pt-PT"),
     };

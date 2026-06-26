@@ -14,6 +14,7 @@ export const runtime = "nodejs";
 
 type TutorSubmitBody = {
   parametros: Record<string, number>;
+  comentarios?: string;
   signatureDataUrl: string;
 };
 
@@ -86,6 +87,7 @@ export async function POST(
 
     const tutorDoc: NotasTutor = {
       parametros: body.parametros,
+      comentarios: body.comentarios?.trim() || undefined,
       assinaturaTutor: signature,
       estado: "assinado",
       assinadoEm: new Date().toISOString(),

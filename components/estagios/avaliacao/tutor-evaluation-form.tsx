@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SignaturePad, type SignaturePadHandle } from "@/components/estagios/signature-pad";
@@ -14,6 +15,7 @@ import {
   PenTool,
   Signature,
   Trash2,
+  FileText,
 } from "lucide-react";
 import type {
   AvaliacaoConfig,
@@ -21,6 +23,8 @@ import type {
   CursoDatasAvaliacao,
 } from "@/lib/avaliacao/types";
 import { calculateNotaFinal } from "@/lib/avaliacao/validations";
+import { AvaliacaoPreviewDialog } from "./avaliacao-preview-dialog";
+import { AvaliacaoFullscreenViewer } from "./avaliacao-fullscreen-viewer";
 
 type Props = {
   estagioId: string;
@@ -36,9 +40,12 @@ export function TutorEvaluationForm({
   datas,
 }: Props) {
   const [scores, setScores] = useState<Record<string, string>>({});
+  const [comentarios, setComentarios] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const padRef = useRef<SignaturePadHandle | null>(null);
 
   // Check availability date
@@ -56,6 +63,7 @@ export function TutorEvaluationForm({
         initial[param.nome] = String(tutorData.parametros[param.nome] ?? "");
       }
       setScores(initial);
+      setComentarios(tutorData.comentarios ?? "");
     } else {
       const empty: Record<string, string> = {};
       for (const param of config.parametros) {
@@ -132,6 +140,7 @@ export function TutorEvaluationForm({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             parametros: numericScores,
+            comentarios: comentarios.trim() || undefined,
             signatureDataUrl: sigDataUrl,
           }),
         }
@@ -233,9 +242,49 @@ export function TutorEvaluationForm({
                   )}
                 </span>
               </div>
+              {tutorData.comentarios && (
+                <div className="border-t pt-2">
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Comentários</p>
+                  <p className="text-sm whitespace-pre-wrap">{tutorData.comentarios}</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Documento</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Button
+              variant="outline"
+              onClick={() => setPreviewOpen(true)}
+            >
+              <FileText className="mr-2 h-4 w-4" />
+              Pré-visualizar avaliação
+            </Button>
+          </CardContent>
+        </Card>
+
+        <AvaliacaoPreviewDialog
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          estagioId={estagioId}
+          pdfType="tutor"
+          title="Ficha de Avaliação do Estágio"
+          onOpenFullscreen={() => {
+            setPreviewOpen(false);
+            setFullscreenOpen(true);
+          }}
+        />
+        <AvaliacaoFullscreenViewer
+          open={fullscreenOpen}
+          onClose={() => setFullscreenOpen(false)}
+          estagioId={estagioId}
+          pdfType="tutor"
+          title="Ficha de Avaliação do Estágio"
+        />
       </div>
     );
   }
@@ -277,6 +326,20 @@ export function TutorEvaluationForm({
               </span>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Comentários (opcional)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            placeholder="Comentários adicionais sobre o desempenho do estagiário..."
+            value={comentarios}
+            onChange={(e) => setComentarios(e.target.value)}
+            rows={4}
+          />
         </CardContent>
       </Card>
 

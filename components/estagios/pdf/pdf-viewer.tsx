@@ -508,7 +508,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
       {errorMessage ? (
         <p className="py-6 text-center text-sm text-destructive">{errorMessage}</p>
       ) : null}
-      {!loading && !errorMessage && pages.length === 0 ? (
+      {!loading && !errorMessage && pages.length === 0 && !fileUrl && !fileBlobUrl && !fileBytes ? (
         <p className="py-6 text-center text-sm text-muted-foreground">
           Nenhum ficheiro disponível para pré-visualização.
         </p>
