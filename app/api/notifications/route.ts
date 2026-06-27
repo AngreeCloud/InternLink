@@ -118,3 +118,38 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(body, { status });
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { uid } = await requireSessionUid();
+    const body = (await request.json()) as { estagioId?: string; notificationId?: string };
+
+    if (!body.estagioId || !body.notificationId) {
+      throw new EstagioAccessError(400, "missing_fields", "Faltam estagioId ou notificationId.");
+    }
+
+    const db = getFirebaseAdminDb();
+    const ref = db
+      .collection("estagios")
+      .doc(body.estagioId)
+      .collection("notifications")
+      .doc(body.notificationId);
+
+    const snap = await ref.get();
+    if (!snap.exists) {
+      throw new EstagioAccessError(404, "not_found", "Notificação não encontrada.");
+    }
+
+    const data = snap.data() as Record<string, unknown>;
+    if (data.userId !== uid) {
+      throw new EstagioAccessError(403, "not_owner", "Esta notificação não lhe pertence.");
+    }
+
+    await ref.delete();
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("[api/notifications/delete]", error);
+    const { body, status } = toApiErrorResponse(error);
+    return NextResponse.json(body, { status });
+  }
+}

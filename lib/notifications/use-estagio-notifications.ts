@@ -81,10 +81,44 @@ export function useEstagioNotifications(params: {
     }
   }, []);
 
+  const removeNotification = useCallback(async (estagioId: string, notificationId: string) => {
+    try {
+      await fetch("/api/notifications", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estagioId, notificationId }),
+      });
+    } catch (err) {
+      console.error("[v0] remove notification error", err);
+    }
+  }, []);
+
+  const markAllAsRead = useCallback(async () => {
+    try {
+      await fetch("/api/notifications/mark-all-read", { method: "POST" });
+    } catch (err) {
+      console.error("[v0] mark all read error", err);
+    }
+  }, []);
+
+  const clearAll = useCallback(async () => {
+    try {
+      for (const n of notifications) {
+        await fetch("/api/notifications", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ estagioId: n.estagioId, notificationId: n.id }),
+        });
+      }
+    } catch (err) {
+      console.error("[v0] clear inbox error", err);
+    }
+  }, [notifications]);
+
   const unreadCount = useMemo(
     () => notifications.filter((n) => n.readAt == null).length,
     [notifications]
   );
 
-  return { notifications, unreadCount, markAsRead };
+  return { notifications, unreadCount, markAsRead, removeNotification, markAllAsRead, clearAll };
 }

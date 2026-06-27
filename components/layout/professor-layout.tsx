@@ -75,6 +75,18 @@ function buildNotificationHref(notification: EstagioNotification): string | null
     return `/professor/estagios/${notification.estagioId}?tab=documents`;
   }
 
+  if (
+    (notification.type === "avaliacao_tutor_assinada" ||
+     notification.type === "avaliacao_professor_assinada") &&
+    notification.estagioId
+  ) {
+    return `/professor/estagios/${notification.estagioId}?tab=avaliacao`;
+  }
+
+  if (notification.type === "termino_antecipado" && notification.estagioId) {
+    return `/professor/estagios/${notification.estagioId}?tab=calendario`;
+  }
+
   return null;
 }
 
@@ -114,7 +126,14 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
     },
   });
 
-  const { notifications: systemNotifications, unreadCount: systemUnreadCount, markAsRead } = useEstagioNotifications({
+  const {
+    notifications: systemNotifications,
+    unreadCount: systemUnreadCount,
+    markAsRead,
+    removeNotification,
+    markAllAsRead,
+    clearAll,
+  } = useEstagioNotifications({
     userId: state.userId,
     enabled: Boolean(state.userId),
   });
@@ -128,6 +147,10 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
           item.requestType === "past_absence_justification" ? "Ver justificação" : "Ver pedido";
       } else if (item.type === "doc_signed" || item.type === "doc_awaits_signature") {
         actionLabel = "Ver documentos";
+      } else if (item.type === "avaliacao_tutor_assinada" || item.type === "avaliacao_professor_assinada") {
+        actionLabel = "Ver avaliação";
+      } else if (item.type === "termino_antecipado") {
+        actionLabel = "Ver calendário";
       }
 
       return {
@@ -137,10 +160,11 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
         avatarUrl: "",
         preview: item.body || "",
         lastMessageAt: item.createdAtMs || Date.now(),
-        kind: "system",
+        kind: "system" as const,
         href: href || undefined,
         actionLabel,
         read: item.readAt != null,
+        estagioId: item.estagioId,
       };
     });
 
@@ -318,6 +342,22 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
                     }
                   }
                 }}
+                onMarkRead={(notification) => {
+                  if (notification.kind === "system" && notification.id.startsWith("system-")) {
+                    const realId = notification.id.slice("system-".length);
+                    const notif = systemNotifications.find((n) => n.id === realId);
+                    if (notif) markAsRead(notif.estagioId, notif.id);
+                  }
+                }}
+                onRemove={(notification) => {
+                  if (notification.kind === "system" && notification.id.startsWith("system-")) {
+                    const realId = notification.id.slice("system-".length);
+                    const notif = systemNotifications.find((n) => n.id === realId);
+                    if (notif) removeNotification(notif.estagioId, notif.id);
+                  }
+                }}
+                onMarkAllRead={markAllAsRead}
+                onClearAll={clearAll}
               />
 
               <DropdownMenu>
