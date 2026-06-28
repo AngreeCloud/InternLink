@@ -129,7 +129,7 @@ export function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="min-h-screen bg-muted/20">
       <Sidebar
         collapsed={collapsed}
         onToggle={toggle}
@@ -222,38 +222,39 @@ export function SuperAdminLayout({ children }: { children: React.ReactNode }) {
       </Sheet>
 
       <div className={`transition-all duration-300 ${collapsed ? "lg:pl-[72px]" : "lg:pl-72"}`}>
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
-              <Menu className="h-5 w-5" />
-            </Button>
-            <Link href="/super-admin" className="flex items-center gap-2 font-semibold">
-              <Shield className="h-5 w-5 text-primary" />
-              <span>Super Admin</span>
-            </Link>
-          </div>
+        <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-border bg-card px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
+          <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
+            <Menu className="h-5 w-5" />
+          </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback>{user.displayName?.charAt(0) || "S"}</AvatarFallback>
-                </Avatar>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>
-                <p className="text-sm font-medium">{user.displayName}</p>
-                <p className="text-xs text-muted-foreground">{user.email}</p>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout} disabled={loggingOut}>
-                <LogOut className="mr-2 h-4 w-4" />
-                {loggingOut ? "A sair..." : "Logout"}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </header>
+          <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
+            <div className="flex flex-1"></div>
+            <div className="flex items-center gap-x-4 lg:gap-x-6">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback>{user.displayName?.charAt(0) || "S"}</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">{user.displayName}</p>
+                      <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout} disabled={loggingOut}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>{loggingOut ? "A sair..." : "Sair"}</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </div>
 
         <main className="p-6">{children}</main>
       </div>
