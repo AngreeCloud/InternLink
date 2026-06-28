@@ -33,6 +33,7 @@ const SECTIONS = [
   { id: "testimonials", label: "Testemunhos", fields: [] },
   { id: "cta", label: "CTA", fields: ["ctaTitle", "ctaSubtitle", "ctaDescription"] },
   { id: "footer", label: "Footer", fields: ["footerDescription", "footerEmail"] },
+  { id: "legal", label: "Legal", fields: ["termos", "privacidade", "licenca"] },
 ];
 
 export default function LandingPage() {
@@ -252,7 +253,29 @@ export default function LandingPage() {
                 <Label>Support Email</Label>
                 <Input value={(content.footer?.footerEmail as string) || ""} onChange={(e) => updateField("footer", "footerEmail", e.target.value)} />
               </div>
-              <Button onClick={() => handleSave("footer", content.footer || {})} disabled={saving}>Gravar Footer</Button>
+                <Button onClick={() => handleSave("footer", content.footer || {})} disabled={saving}>Gravar Footer</Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Legal */}
+        <TabsContent value="legal" className="pt-4">
+          <Card>
+            <CardHeader><CardTitle className="text-base">Páginas Legais</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2 rounded-md border p-3">
+                <Label>Termos</Label>
+                <Textarea value={(content.legal?.termos as string) || ""} onChange={(e) => updateField("legal", "termos", e.target.value)} rows={6} placeholder="Conteúdo da página /termos" />
+              </div>
+              <div className="space-y-2 rounded-md border p-3">
+                <Label>Privacidade</Label>
+                <Textarea value={(content.legal?.privacidade as string) || ""} onChange={(e) => updateField("legal", "privacidade", e.target.value)} rows={6} placeholder="Conteúdo da página /privacidade" />
+              </div>
+              <div className="space-y-2 rounded-md border p-3">
+                <Label>Licença</Label>
+                <Textarea value={(content.legal?.licenca as string) || ""} onChange={(e) => updateField("legal", "licenca", e.target.value)} rows={6} placeholder="Conteúdo da página /licenca" />
+              </div>
+              <Button onClick={() => handleSave("legal", content.legal || {})} disabled={saving}>Gravar Legal</Button>
             </CardContent>
           </Card>
         </TabsContent>

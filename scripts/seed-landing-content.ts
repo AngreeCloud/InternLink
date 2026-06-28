@@ -98,6 +98,14 @@ async function run() {
     updatedAt: new Date(),
   }, { merge: true });
 
+  // Legal
+  await db.collection("landingContent").doc("legal").set({
+    termos: "Conteúdo de termos em preparação. Estes termos irão descrever as regras de utilização da InternLink.",
+    privacidade: "Política de privacidade em preparação. Aqui será explicado como tratamos e protegemos os dados.",
+    licenca: "A InternLink é um projeto académico. Informação de licença em preparação.",
+    updatedAt: new Date(),
+  }, { merge: true });
+
   console.log("[seed-landing] Conteúdo da landing page semeado com sucesso.");
 }
 
