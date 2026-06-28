@@ -5,8 +5,8 @@ export const SESSION_COOKIE_NAME = "internlink_session";
 export const SESSION_VERIFY_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 export const SESSION_EXPIRES_IN_MS = 5 * 24 * 60 * 60 * 1000; // 5 days
 
-export type AppUserRole = "aluno" | "professor" | "tutor" | "admin_escolar" | "encarregado";
-export const APP_USER_ROLES = ["aluno", "professor", "tutor", "admin_escolar", "encarregado"] as const;
+export type AppUserRole = "aluno" | "professor" | "tutor" | "admin_escolar" | "encarregado" | "super_admin" | "support";
+export const APP_USER_ROLES = ["aluno", "professor", "tutor", "admin_escolar", "encarregado", "super_admin", "support"] as const;
 
 export type AppUserEstado = "ativo" | "pendente" | "recusado" | "removido" | "inativo";
 export const APP_USER_ESTADOS = ["ativo", "pendente", "recusado", "removido", "inativo"] as const;
@@ -31,6 +31,8 @@ export const PROTECTED_ROUTE_PREFIXES = [
   "/tutor",
   "/school-admin",
   "/encarregado",
+  "/super-admin",
+  "/support",
 ] as const;
 
 export const PUBLIC_ROUTE_PREFIXES = ["/login", "/register", "/public"] as const;
@@ -65,6 +67,14 @@ export function isRoleAllowedForPath(pathname: string, profile: SessionUserProfi
 
   if (pathname === "/school-admin" || pathname.startsWith("/school-admin/")) {
     return role === "admin_escolar";
+  }
+
+  if (pathname === "/super-admin" || pathname.startsWith("/super-admin/")) {
+    return role === "super_admin";
+  }
+
+  if (pathname === "/support" || pathname.startsWith("/support/")) {
+    return role === "support";
   }
 
   if (pathname === "/encarregado" || pathname.startsWith("/encarregado/")) {
