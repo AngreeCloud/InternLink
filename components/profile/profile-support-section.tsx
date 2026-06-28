@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { getDatabase, ref, onValue, push, set, serverTimestamp } from "firebase/database";
+import { useEffect, useRef, useState } from "react";
+import { getDatabase, ref, onValue, push, set } from "firebase/database";
 import { getAuthRuntime } from "@/lib/firebase-runtime";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, MessageSquare, Send, Clock } from "lucide-react";
+import { Loader2, Send, Clock, MessageSquare } from "lucide-react";
 
 type Props = {
   role?: string;
@@ -20,7 +19,6 @@ type ChatMessage = {
 };
 
 export function ProfileSupportSection({ role }: Props) {
-  const [active, setActive] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -28,12 +26,12 @@ export function ProfileSupportSection({ role }: Props) {
   const [uid, setUid] = useState<string | null>(null);
   const [hasAgent, setHasAgent] = useState(false);
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const isHidden = !role || role === "super_admin" || role === "support";
   if (isHidden) return null;
 
-  // Get current user
   useEffect(() => {
     (async () => {
       const auth = await getAuthRuntime();
@@ -41,7 +39,7 @@ export function ProfileSupportSection({ role }: Props) {
     })();
   }, []);
 
-  // Subscribe to messages when conversationId is set
+  // Subscribe to messages
   useEffect(() => {
     if (!conversationId) return;
     const db = getDatabase();
@@ -61,7 +59,7 @@ export function ProfileSupportSection({ role }: Props) {
 
   // Subscribe to conversation to detect agent
   useEffect(() => {
-    if (!conversationId) return;
+    if (!conversationId || !uid) return;
     const db = getDatabase();
     const convRef = ref(db, `conversations/${conversationId}`);
     const unsub = onValue(convRef, (snap) => {
@@ -74,50 +72,73 @@ export function ProfileSupportSection({ role }: Props) {
     return () => unsub();
   }, [conversationId, uid]);
 
-  // Auto-scroll
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleStart = async () => {
-    setCreating(true);
-    try {
-      const res = await fetch("/api/support/chat", { method: "POST" });
-      const data = (await res.json()) as { ok?: boolean; conversationId?: string };
-      if (!res.ok || !data.conversationId) throw new Error("Falha ao criar chat.");
-      setConversationId(data.conversationId);
-
-      // Write conversation to RTDB
-      const db = getDatabase();
-      const ts = Date.now();
-      await Promise.all([
-        set(ref(db, `conversations/${data.conversationId}`), {
-          type: "support",
-          participants: { [uid!]: true },
-          createdAt: ts,
-          updatedAt: ts,
-          lastMessage: { text: null, senderId: null, createdAt: ts, hasAttachments: false },
-        }),
-        set(ref(db, `userConversations/${uid}/${data.conversationId}`), {
-          lastMessageText: null,
-          lastMessageAt: ts,
-          unreadCount: 0,
-          isMuted: false,
-        }),
-      ]);
-
-      setActive(true);
-    } catch {
-      // ignore
-    } finally {
-      setCreating(false);
-    }
-  };
-
   const handleSend = async () => {
-    if (!text.trim() || !conversationId || !uid) return;
+    if (!text.trim() || !uid) return;
     setSending(true);
+    setError(null);
+
     try {
+      // Create conversation on first message
+      if (!conversationId) {
+        setCreating(true);
+        const res = await fetch("/api/support/chat", { method: "POST" });
+        const data = (await res.json()) as { ok?: boolean; conversationId?: string; autoReply?: string; error?: string };
+        if (!res.ok || !data.conversationId) throw new Error(data.error || "Falha ao criar chat.");
+        setConversationId(data.conversationId);
+        setCreating(false);
+
+        // Send user's first message
+        const db = getDatabase();
+        const convId = data.conversationId;
+        const msgRef = ref(db, `messages/${convId}`);
+        const newMsgRef = push(msgRef);
+        const userTs = Date.now();
+        await set(newMsgRef, {
+          senderId: uid,
+          text: text.trim(),
+          createdAt: userTs,
+          deleted: false,
+        });
+        await Promise.all([
+          set(ref(db, `conversations/${convId}/lastMessage`), {
+            text: text.trim(),
+            senderId: uid,
+            createdAt: userTs,
+            hasAttachments: false,
+          }),
+          set(ref(db, `conversations/${convId}/updatedAt`), userTs),
+        ]);
+
+        // Send auto-reply AFTER user's message
+        if (data.autoReply) {
+          const autoRef = push(msgRef);
+          const autoTs = Date.now();
+          await set(autoRef, {
+            senderId: "__support__",
+            senderName: "Suporte InternLink",
+            text: data.autoReply,
+            createdAt: autoTs,
+            deleted: false,
+          });
+          await set(ref(db, `conversations/${convId}/lastMessage`), {
+            text: data.autoReply,
+            senderId: "__support__",
+            createdAt: autoTs,
+            hasAttachments: false,
+          });
+          await set(ref(db, `conversations/${convId}/updatedAt`), autoTs);
+        }
+
+        setText("");
+        setSending(false);
+        return;
+      }
+
+      // Send subsequent messages
       const db = getDatabase();
       const msgRef = ref(db, `messages/${conversationId}`);
       const newMsgRef = push(msgRef);
@@ -128,15 +149,19 @@ export function ProfileSupportSection({ role }: Props) {
         createdAt: ts,
         deleted: false,
       });
-      await set(ref(db, `conversations/${conversationId}/lastMessage`), {
-        text: text.trim(),
-        senderId: uid,
-        createdAt: ts,
-        hasAttachments: false,
-      });
-      await set(ref(db, `conversations/${conversationId}/updatedAt`), ts);
+      await Promise.all([
+        set(ref(db, `conversations/${conversationId}/lastMessage`), {
+          text: text.trim(),
+          senderId: uid,
+          createdAt: ts,
+          hasAttachments: false,
+        }),
+        set(ref(db, `conversations/${conversationId}/updatedAt`), ts),
+      ]);
       setText("");
-    } catch { /* ignore */ } finally {
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao enviar.");
+    } finally {
       setSending(false);
     }
   };
@@ -149,72 +174,71 @@ export function ProfileSupportSection({ role }: Props) {
   };
 
   return (
-    <Card className="flex flex-col">
-      <CardHeader>
+    <div className="flex flex-col" style={{ minHeight: 380 }}>
+      <div className="mb-2 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
-          <MessageSquare className="h-5 w-5 text-primary" />
-          <CardTitle className="text-base">Suporte InternLink</CardTitle>
+          <MessageSquare className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold">Suporte InternLink</h3>
         </div>
-        <CardDescription>
-          {!active
-            ? "Fale diretamente com a nossa equipa de suporte técnico."
-            : hasAgent
-              ? "Está a falar com um agente de suporte."
-              : "Esperando agente do suporte — um membro da equipa entrará em breve."}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex-1">
-        {!active ? (
-          <Button onClick={handleStart} disabled={creating} className="w-full">
-            {creating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> A criar...</> : <><MessageSquare className="mr-2 h-4 w-4" /> Abrir Chat de Suporte</>}
-          </Button>
-        ) : (
-          <div className="flex flex-col" style={{ minHeight: 320 }}>
-            {/* Messages area */}
-            <div className="flex-1 space-y-2 mb-3 max-h-72 overflow-y-auto rounded-md border bg-muted/20 p-3">
-              {messages.length === 0 && (
-                <div className="flex items-center gap-2 py-8 text-center text-sm text-muted-foreground">
-                  <Clock className="mx-auto h-5 w-5" />
-                  <span>Esperando agente do suporte...</span>
-                </div>
-              )}
-              {messages.map((msg, i) => (
-                <div
-                  key={i}
-                  className={[
-                    "flex flex-col max-w-[80%] rounded-lg px-3 py-2 text-sm",
-                    msg.senderId === uid
-                      ? "ml-auto bg-primary text-primary-foreground"
-                      : "mr-auto bg-muted",
-                  ].join(" ")}
-                >
-                  <span className="whitespace-pre-wrap break-words">{msg.text}</span>
-                  <span className="mt-0.5 text-[10px] opacity-60 text-right">
-                    {formatTime(msg.createdAt)}
-                  </span>
-                </div>
-              ))}
-              <div ref={bottomRef} />
-            </div>
+        {conversationId && (
+          <span className="text-xs text-muted-foreground">
+            {hasAgent ? "Agente conectado" : "Esperando agente..."}
+          </span>
+        )}
+      </div>
 
-            {/* Input */}
-            <div className="flex gap-2">
-              <Input
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Escreva a sua mensagem..."
-                disabled={sending}
-                className="flex-1"
-              />
-              <Button size="icon" onClick={handleSend} disabled={sending || !text.trim()}>
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
+      {error && <p className="mb-2 text-xs text-destructive">{error}</p>}
+
+      {/* Messages area — fills remaining space */}
+      <div className="flex-1 min-h-0 mb-2 overflow-y-auto rounded-md border bg-muted/20 p-3">
+        {!conversationId && (
+          <div className="flex flex-col items-center gap-2 py-12 text-center text-sm text-muted-foreground">
+            <MessageSquare className="h-8 w-8" />
+            <p>Envie a primeira mensagem para iniciar o chat de suporte.</p>
+            <p className="text-xs">Um membro da equipa responderá assim que possível.</p>
           </div>
         )}
-      </CardContent>
-    </Card>
+        {conversationId && messages.length === 0 && (
+          <div className="flex flex-col items-center gap-2 py-12 text-center text-sm text-muted-foreground">
+            <Clock className="h-6 w-6" />
+            <p>Esperando agente do suporte...</p>
+            <p className="text-xs">Um membro da equipa entrará em breve.</p>
+          </div>
+        )}
+        {messages.map((msg, i) => (
+          <div
+            key={i}
+            className={[
+              "flex flex-col max-w-[80%] rounded-lg px-3 py-2 text-sm mb-2",
+              msg.senderId === uid
+                ? "ml-auto bg-primary text-primary-foreground"
+                : "mr-auto bg-muted",
+            ].join(" ")}
+          >
+            <span className="whitespace-pre-wrap break-words">{msg.text}</span>
+            <span className="mt-0.5 text-[10px] opacity-60 text-right">
+              {formatTime(msg.createdAt)}
+            </span>
+          </div>
+        ))}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input — fixed at bottom */}
+      <div className="flex gap-2 shrink-0">
+        <Input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Escreva a sua mensagem..."
+          disabled={creating || sending}
+          className="flex-1"
+        />
+        <Button size="icon" onClick={handleSend} disabled={creating || sending || !text.trim()}>
+          {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </Button>
+      </div>
+    </div>
   );
 }
 

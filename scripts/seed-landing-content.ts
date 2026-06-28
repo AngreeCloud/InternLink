@@ -106,6 +106,12 @@ async function run() {
     updatedAt: new Date(),
   }, { merge: true });
 
+  // Support auto-reply
+  await db.collection("landingContent").doc("support").set({
+    autoReply: "Olá! Obrigado por contactar a equipa de suporte da InternLink. Um agente irá responder-lhe em breve.",
+    updatedAt: new Date(),
+  }, { merge: true });
+
   console.log("[seed-landing] Conteúdo da landing page semeado com sucesso.");
 }
 
