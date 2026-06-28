@@ -12,7 +12,6 @@ import { LogoutOverlay } from "@/components/layout/logout-overlay"
 import { TRANSITION_PORTAL_MS } from "@/components/layout/access-validation-overlay";
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
 import { NotificationsInbox } from "@/components/chat/notifications-inbox";
-import { SupportButton } from "@/components/chat/support-button";
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications";
 import { SchoolAdminApprovalsBadge } from "@/components/school-admin/school-admin-approvals-badge";
 import { Button } from "@/components/ui/button";
@@ -389,7 +388,6 @@ export function SchoolAdminLayout({ children }: { children: React.ReactNode }) {
               <Menu className="h-5 w-5" />
             </Button>
             <div className="flex flex-1 items-center justify-end gap-3">
-              <SupportButton userId={state.userId} userName={state.name} userEmail={state.email} />
               <NotificationsInbox notifications={notifications} onOpenChat={handleOpenConversation} />
 
               <DropdownMenu>
