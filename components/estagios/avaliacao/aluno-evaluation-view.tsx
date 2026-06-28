@@ -4,14 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Lock, Star, EyeOff } from "lucide-react";
 import type {
   AvaliacaoConfig,
-  NotasTutor,
   NotaFinalProfessor,
   CursoDatasAvaliacao,
 } from "@/lib/avaliacao/types";
 
 type Props = {
   config: AvaliacaoConfig;
-  tutorData: NotasTutor | null;
   professorData: NotaFinalProfessor | null;
   notaFinalCalculada: number | null;
   datas: CursoDatasAvaliacao | null;
@@ -19,7 +17,6 @@ type Props = {
 
 export function AlunoEvaluationView({
   config,
-  tutorData,
   professorData,
   notaFinalCalculada,
   datas,
@@ -80,7 +77,7 @@ export function AlunoEvaluationView({
       </Card>
 
       {/* Parameter details visible to student */}
-      {tutorData?.parametros && (
+      {professorData?.parametros && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
@@ -97,7 +94,7 @@ export function AlunoEvaluationView({
                   {param.nome}
                 </span>
                 <span className="font-medium">
-                  {tutorData.parametros[param.nome] ?? "-"}
+                  {professorData.parametros[param.nome] ?? "-"}
                   <span className="text-xs text-muted-foreground">
                     {" "}
                     /{config.escala.max}

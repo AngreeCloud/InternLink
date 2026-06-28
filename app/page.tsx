@@ -148,7 +148,7 @@ function mergeItems(apiItems: unknown, hardcoded: unknown[]): unknown[] {
 export default function HomePage() {
 	const [lc, setLc] = useState<Record<string, Record<string, unknown>>>({} as Record<string, Record<string, unknown>>);
 	useEffect(() => {
-		fetch("/api/landing-content")
+		fetch("/api/landing-content", { cache: "no-store" })
 			.then((r) => r.ok ? r.json() : Promise.reject())
 			.then((d: { content?: Record<string, Record<string, unknown>> }) => setLc(d.content || {}))
 			.catch(() => {});

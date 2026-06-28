@@ -8,7 +8,7 @@ export default function PrivacidadePage() {
   const [content, setContent] = useState("");
 
   useEffect(() => {
-    fetch("/api/landing-content")
+    fetch("/api/landing-content", { cache: "no-store" })
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((d: { content?: { legal?: { privacidade?: string } } }) => setContent(d.content?.legal?.privacidade || ""))
       .catch(() => {});
