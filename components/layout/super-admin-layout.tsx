@@ -27,8 +27,6 @@ import {
   LogOut,
   Menu,
   Shield,
-  Users,
-  PanelLeftClose,
 } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 
@@ -138,22 +136,14 @@ export function SuperAdminLayout({ children }: { children: React.ReactNode }) {
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
       >
-        <div className="flex items-center gap-x-2">
-          <Shield className="h-6 w-6 text-primary shrink-0" />
+        <div className="flex h-16 shrink-0 items-center transition-all duration-300 gap-x-3">
+          <Shield className="h-7 w-7 text-primary shrink-0" />
           {!collapsed && (
             <div className="leading-tight">
               <p className="text-sm font-semibold">InternLink</p>
               <p className="text-xs text-muted-foreground">Super Admin</p>
             </div>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className={["ml-auto hidden lg:flex", collapsed ? "" : ""].join(" ")}
-            onClick={toggle}
-          >
-            <PanelLeftClose className={["h-4 w-4 transition-transform", collapsed ? "rotate-180" : ""].join(" ")} />
-          </Button>
         </div>
 
         <nav className="flex flex-1 flex-col">

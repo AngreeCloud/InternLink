@@ -24,7 +24,6 @@ import {
   LogOut,
   Menu,
   Headset,
-  PanelLeftClose,
 } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 
@@ -93,12 +92,9 @@ export function SupportLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar collapsed={collapsed} onToggle={toggle} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}>
-        <div className="flex items-center gap-x-2">
-          <Headset className="h-6 w-6 text-primary shrink-0" />
+        <div className="flex h-16 shrink-0 items-center transition-all duration-300 gap-x-3">
+          <Headset className="h-7 w-7 text-primary shrink-0" />
           {!collapsed && <div className="leading-tight"><p className="text-sm font-semibold">InternLink</p><p className="text-xs text-muted-foreground">Support</p></div>}
-          <Button variant="ghost" size="icon" className="ml-auto hidden lg:flex" onClick={toggle}>
-            <PanelLeftClose className={["h-4 w-4 transition-transform", collapsed ? "rotate-180" : ""].join(" ")} />
-          </Button>
         </div>
         <nav className="flex flex-1 flex-col">
           <ul role="list" className="-mx-2 space-y-1">
