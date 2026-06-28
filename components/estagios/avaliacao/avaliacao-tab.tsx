@@ -176,9 +176,14 @@ export function AvaliacaoTab({
     );
   }
 
-  const notaFinalCalculada =
+  const notaFinalCalculadaTutor =
     tutorData?.parametros
       ? calculateNotaFinal(tutorData.parametros, config)
+      : null;
+
+  const notaFinalCalculadaProfessor =
+    professorData?.parametros
+      ? calculateNotaFinal(professorData.parametros, config)
       : null;
 
   return (
@@ -198,7 +203,7 @@ export function AvaliacaoTab({
           config={config}
           tutorData={tutorData}
           professorData={professorData}
-          notaFinalCalculada={notaFinalCalculada}
+          notaFinalCalculada={notaFinalCalculadaTutor}
           datas={datas}
           courseId={courseId}
           isDirector={currentUserRole === "diretor"}
@@ -208,9 +213,8 @@ export function AvaliacaoTab({
       {currentUserRole === "aluno" && (
         <AlunoEvaluationView
           config={config}
-          tutorData={tutorData}
           professorData={professorData}
-          notaFinalCalculada={notaFinalCalculada}
+          notaFinalCalculada={notaFinalCalculadaProfessor}
           datas={datas}
         />
       )}
