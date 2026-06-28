@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type UIEventHandler } from "react";
-import { Inbox } from "lucide-react";
+import { Inbox, CheckCheck, Trash2, X } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,12 +12,17 @@ export type InboxNotification = ChatToastNotification & {
   href?: string;
   actionLabel?: string;
   read?: boolean;
+  estagioId?: string;
 };
 
 type NotificationsInboxProps = {
   notifications: InboxNotification[];
   onOpenChat: (conversationId: string, id: string) => void;
   onOpenNotification?: (notification: InboxNotification) => void;
+  onMarkRead?: (notification: InboxNotification) => void;
+  onRemove?: (notification: InboxNotification) => void;
+  onMarkAllRead?: () => void;
+  onClearAll?: () => void;
 };
 
 const INITIAL_RENDER_COUNT = 25;
@@ -45,9 +50,14 @@ export function NotificationsInbox({
   notifications,
   onOpenChat,
   onOpenNotification,
+  onMarkRead,
+  onRemove,
+  onMarkAllRead,
+  onClearAll,
 }: NotificationsInboxProps) {
   const [open, setOpen] = useState(false);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(INITIAL_RENDER_COUNT);
 
   const orderedNotifications = useMemo(
@@ -72,12 +82,10 @@ export function NotificationsInbox({
 
   useEffect(() => {
     if (!open) return;
-    if (orderedNotifications.length === 0) return;
-
     setReadIds((prev) => {
       const next = new Set(prev);
-      for (const notification of orderedNotifications) {
-        next.add(notification.id);
+      for (const n of orderedNotifications) {
+        if (n.read !== true && n.read !== false) next.add(n.id);
       }
       return next;
     });
@@ -88,20 +96,14 @@ export function NotificationsInbox({
   }, [orderedNotifications.length]);
 
   const count = orderedNotifications.length;
+  const hasActions = onMarkAllRead || onClearAll;
 
   const handleListScroll: UIEventHandler<HTMLDivElement> = (event) => {
     const target = event.currentTarget;
     const remaining = target.scrollHeight - target.scrollTop - target.clientHeight;
     if (remaining > 120) return;
-
-    setVisibleCount((prev) => Math.min(prev + LOAD_MORE_STEP, orderedNotifications.length));
+    setVisibleCount((prev) => Math.min(prev + LOAD_MORE_STEP, count));
   };
-
-  const bubbleLabel = useMemo(() => {
-    if (unreadCount <= 0) return "";
-    if (unreadCount === 1) return "1 nova notificação";
-    return `${unreadCount} novas notificações`;
-  }, [unreadCount]);
 
   return (
     <div className="relative">
@@ -121,25 +123,46 @@ export function NotificationsInbox({
         ) : null}
       </Button>
 
-      {unreadCount > 0 && !open ? (
-        <div className="pointer-events-none absolute right-0 top-10 z-40">
-          <div className="relative rounded-md border border-border bg-card px-2 py-1 text-[11px] text-card-foreground shadow-md">
-            {bubbleLabel}
-            <div className="absolute -top-1 right-3 h-2 w-2 rotate-45 border-l border-t border-border bg-card" />
-          </div>
-        </div>
-      ) : null}
-
       {open ? (
         <Card className="absolute right-0 top-10 z-50 w-[22rem] shadow-lg">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Caixa de notificações</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm">Caixa de notificações</CardTitle>
+              {hasActions && (
+                <div className="flex items-center gap-1">
+                  {onMarkAllRead && unreadCount > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => { onMarkAllRead(); setReadIds(new Set(orderedNotifications.map(n => n.id))); }}
+                      title="Marcar todas como lidas"
+                    >
+                      <CheckCheck className="mr-1 h-3 w-3" />
+                      Tudo lido
+                    </Button>
+                  )}
+                  {onClearAll && count > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                      onClick={() => { if (confirm("Limpar todas as notificações?")) onClearAll(); }}
+                      title="Limpar caixa de entrada"
+                    >
+                      <Trash2 className="mr-1 h-3 w-3" />
+                      Limpar
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             <div className="max-h-80 overflow-y-auto" onScroll={handleListScroll}>
               <div className="space-y-2 p-3">
                 {count === 0 ? (
-                  <p className="text-xs text-muted-foreground">Sem notificações.</p>
+                  <p className="py-4 text-center text-xs text-muted-foreground">Sem notificações.</p>
                 ) : (
                   visibleNotifications.map((notification) => {
                     const isSystem = notification.kind === "system" || Boolean(notification.href);
@@ -153,24 +176,75 @@ export function NotificationsInbox({
                       data-testid="notification-item"
                       data-read={read ? "true" : "false"}
                       className={[
-                        "rounded-md border border-border p-2 transition-colors",
-                        read ? "bg-muted/35 opacity-75" : "bg-card",
+                        "group relative rounded-md border p-2 transition-colors",
+                        read
+                          ? "border-border bg-muted/20"
+                          : "border-border bg-card shadow-sm",
                       ].join(" ")}
+                      onMouseEnter={() => setHoveredId(notification.id)}
+                      onMouseLeave={() => setHoveredId(null)}
                     >
-                      <div className="flex items-start gap-2">
-                        <Avatar className="h-8 w-8">
+                      {/* Unread dot */}
+                      {!read && (
+                        <span className="absolute left-1.5 top-3 h-2 w-2 rounded-full bg-primary" />
+                      )}
+
+                      <div className="flex items-start gap-2 pl-3">
+                        <Avatar className="h-8 w-8 shrink-0">
                           <AvatarImage src={notification.avatarUrl || undefined} alt={notification.title} />
                           <AvatarFallback>{avatarFallback(notification.title)}</AvatarFallback>
                         </Avatar>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="truncate text-xs font-semibold">{notification.title}</p>
+                            <p className={[
+                              "truncate text-xs font-semibold",
+                              read ? "text-muted-foreground" : "text-foreground",
+                            ].join(" ")}>{notification.title}</p>
                             <span className="shrink-0 text-[10px] text-muted-foreground">
                               {formatTime(notification.lastMessageAt)}
                             </span>
                           </div>
-                          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{notification.preview}</p>
-                          <div className="mt-2 flex items-center justify-end gap-2">
+                          <p className={[
+                            "mt-0.5 line-clamp-2 text-xs",
+                            read ? "text-muted-foreground/70" : "text-muted-foreground",
+                          ].join(" ")}>{notification.preview}</p>
+
+                          {/* Action buttons row */}
+                          <div className="mt-2 flex items-center justify-end gap-1">
+                            {/* Hover actions */}
+                            {hoveredId === notification.id && (
+                              <>
+                                {onMarkRead && !read && isSystem && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setReadIds(prev => new Set(prev).add(notification.id));
+                                      onMarkRead(notification);
+                                    }}
+                                    title="Marcar como lida"
+                                  >
+                                    <CheckCheck className="h-3 w-3" />
+                                  </Button>
+                                )}
+                                {onRemove && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-destructive"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onRemove(notification);
+                                    }}
+                                    title="Remover"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </>
+                            )}
                             <Button
                               size="sm"
                               className="h-7 px-2 text-xs"

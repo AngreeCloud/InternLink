@@ -65,6 +65,16 @@ service cloud.firestore {
         && currentUserData().role == "admin_escolar";
     }
 
+    function isSuperAdmin() {
+      return currentUserExists()
+        && currentUserData().role == "super_admin";
+    }
+
+    function isSupport() {
+      return currentUserExists()
+        && currentUserData().role == "support";
+    }
+
     function isSchoolAdminFor(schoolId) {
       return isSchoolAdmin()
         && currentUserData().schoolId == schoolId;
@@ -277,7 +287,8 @@ service cloud.firestore {
             || resource.data.schoolId == currentUserData().escolaId
             || resource.data.escolaId == currentUserData().schoolId
             || resource.data.escolaId == currentUserData().escolaId))
-        || (isStudent() && resource.data.role == "tutor");
+        || (isStudent() && resource.data.role == "tutor")
+        || isSuperAdmin();
 
       // Criação final de utilizadores vindos de pendingRegistrations (aluno/professor).
       allow create: if (
@@ -352,7 +363,8 @@ service cloud.firestore {
     // SCHOOLS + FOLDERS + PENDING TEACHERS
     match /schools/{schoolId} {
       allow read: if true;
-      allow write: if isSchoolAdminFor(schoolId);
+      allow write: if isSchoolAdminFor(schoolId)
+        || isSuperAdmin();
 
       match /folders/{folderId} {
         allow read, write: if isSchoolAdminFor(schoolId);
@@ -730,6 +742,30 @@ service cloud.firestore {
         && currentUserExists()
         && currentUserData().role == "professor"
         && resource.data.professorId == request.auth.uid;
+    }
+
+    // SUPER ADMIN — new collections
+
+    match /schoolLeads/{leadId} {
+      allow read, update, delete: if isSuperAdmin()
+        || isSupport();
+      allow create: if isSignedIn();
+    }
+
+    match /landingContent/{docId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    match /supportTickets/{ticketId} {
+      allow read: if isSuperAdmin()
+        || (isSupport() && resource.data.assignedTo == request.auth.uid)
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow update: if isSuperAdmin()
+        || (isSupport() && resource.data.assignedTo == request.auth.uid);
+      allow delete: if isSuperAdmin();
     }
   }
 }

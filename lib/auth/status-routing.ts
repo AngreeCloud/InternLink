@@ -1,5 +1,7 @@
 export function getDashboardRouteForRole(role: string): string {
   if (role === "admin_escolar") return "/school-admin";
+  if (role === "super_admin") return "/super-admin";
+  if (role === "support") return "/support";
   if (role === "professor") return "/professor";
   if (role === "tutor") return "/tutor";
   if (role === "encarregado") return "/encarregado";
@@ -7,6 +9,14 @@ export function getDashboardRouteForRole(role: string): string {
 }
 
 export function getLoginRedirectRoute(role: string, estado: string): string {
+  if (role === "super_admin") {
+    return "/super-admin";
+  }
+
+  if (role === "support") {
+    return "/support";
+  }
+
   if (role === "admin_escolar") {
     return "/school-admin";
   }

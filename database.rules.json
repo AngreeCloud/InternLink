@@ -6,9 +6,9 @@
     "conversations": {
       "$conversationId": {
         ".read": "auth != null && data.child('participants').child(auth.uid).val() === true",
-        ".write": "auth != null && ((!data.exists() && newData.child('participants').child(auth.uid).val() === true && (newData.child('type').val() === 'direct' || newData.child('type').val() === 'group')) || (data.exists() && data.child('participants').child(auth.uid).val() === true))",
+        ".write": "auth != null && ((!data.exists() && newData.child('participants').child(auth.uid).val() === true && (newData.child('type').val() === 'direct' || newData.child('type').val() === 'group' || newData.child('type').val() === 'support')) || (data.exists() && (data.child('participants').child(auth.uid).val() === true || data.child('type').val() === 'support')))",
         "type": {
-          ".validate": "newData.val() === 'direct' || newData.val() === 'group'"
+          ".validate": "newData.val() === 'direct' || newData.val() === 'group' || newData.val() === 'support'"
         },
         "orgId": {
           ".validate": "newData.val() === null || newData.isString()"
@@ -145,7 +145,7 @@
             ".validate": "newData.isString()"
           },
           "role": {
-            ".validate": "newData.val() === 'student' || newData.val() === 'teacher' || newData.val() === 'tutor' || newData.val() === 'admin' || newData.val() === 'encarregado'"
+            ".validate": "newData.val() === 'student' || newData.val() === 'teacher' || newData.val() === 'tutor' || newData.val() === 'admin' || newData.val() === 'encarregado' || newData.val() === 'support' || newData.val() === 'super_admin'"
           }
         }
       }

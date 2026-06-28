@@ -92,8 +92,12 @@ export function AvaliacaoTab({
           setLoading(false);
         },
         (err) => {
-          console.error("[avaliacao] tutor snapshot error", err);
-          if (!cancelled) setLoading(false);
+          if (cancelled) return;
+          const code = (err as { code?: string })?.code;
+          if (code !== "permission-denied") {
+            console.error("[avaliacao] tutor snapshot error", err);
+          }
+          setLoading(false);
         }
       );
       unsubs.push(unsubTutor);
@@ -110,7 +114,11 @@ export function AvaliacaoTab({
           }
         },
         (err) => {
-          console.error("[avaliacao] professor snapshot error", err);
+          if (cancelled) return;
+          const code = (err as { code?: string })?.code;
+          if (code !== "permission-denied") {
+            console.error("[avaliacao] professor snapshot error", err);
+          }
         }
       );
       unsubs.push(unsubProf);

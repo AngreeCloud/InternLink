@@ -2,6 +2,7 @@ import { getApps, initializeApp, cert, applicationDefault, type App } from "fire
 import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { getStorage, type Storage } from "firebase-admin/storage";
+import { getDatabase, type Database } from "firebase-admin/database";
 
 type ServiceAccountShape = {
   project_id?: string;
@@ -82,4 +83,8 @@ export function getFirebaseAdminDb(): Firestore {
 
 export function getFirebaseAdminStorage(): Storage {
   return getStorage(getFirebaseAdminApp());
+}
+
+export function getFirebaseAdminDatabase(): Database {
+  return getDatabase(getFirebaseAdminApp());
 }

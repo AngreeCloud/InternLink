@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -129,7 +130,47 @@ const testimonials = [
 	},
 ]
 
+function mergeItems(apiItems: unknown, hardcoded: unknown[]): unknown[] {
+	const arr = Array.isArray(apiItems) ? (apiItems as Record<string, unknown>[]) : [];
+	if (arr.length === 0) return hardcoded;
+	const merged: Record<string, unknown>[] = [];
+	const maxLen = Math.max(arr.length, hardcoded.length);
+	for (let i = 0; i < maxLen; i++) {
+		if (arr[i]) {
+			merged.push({ ...(arr[i] as Record<string, unknown>), icon: (hardcoded[i] as { icon?: unknown })?.icon });
+		} else {
+			merged.push(hardcoded[i]! as Record<string, unknown>);
+		}
+	}
+	return merged;
+}
+
 export default function HomePage() {
+	const [lc, setLc] = useState<Record<string, Record<string, unknown>>>({} as Record<string, Record<string, unknown>>);
+	useEffect(() => {
+		fetch("/api/landing-content")
+			.then((r) => r.ok ? r.json() : Promise.reject())
+			.then((d: { content?: Record<string, Record<string, unknown>> }) => setLc(d.content || {}))
+			.catch(() => {});
+	}, []);
+
+	const heroTitle = (lc.hero?.heroTitle as string) || "A plataforma completa para gerir estágios curriculares";
+	const heroDesc = (lc.hero?.heroDescription as string) || "A InternLink centraliza comunicação, documentação e aprovações entre escolas, alunos e empresas.";
+	const heroCta1 = (lc.hero?.heroCtaPrimary as string) || "Criar Conta";
+	const heroCta2 = (lc.hero?.heroCtaSecondary as string) || "Solicitar Acesso";
+
+	const dynAudience = mergeItems(lc.audience?.items, audience) as typeof audience;
+	const dynFeatures = mergeItems(lc.features?.items, features) as typeof features;
+	const dynSteps = mergeItems(lc.steps?.items, steps) as typeof steps;
+	const dynFaqs = mergeItems(lc.faqs?.items, faqs) as typeof faqs;
+	const dynTestimonials = mergeItems(lc.testimonials?.items, testimonials) as typeof testimonials;
+
+	const ctaTitle = (lc.cta?.ctaTitle as string) || "Pronto para começar?";
+	const ctaSubtitle = (lc.cta?.ctaSubtitle as string) || "Crie a sua conta ou solicite acesso para a sua escola.";
+	const ctaDesc = (lc.cta?.ctaDescription as string) || "Respostas rápidas e acompanhamento contínuo durante todo o processo.";
+	const footerDesc = (lc.footer?.footerDescription as string) || "Plataforma de gestão de estágios curriculares para escolas, alunos e empresas.";
+	const footerEmail = (lc.footer?.footerEmail as string) || "support@internlink.com";
+
 	return (
 		<div className="min-h-screen bg-gradient-to-b from-background to-background/60 text-foreground">
 			<SeedSchoolAdmin />
@@ -180,17 +221,17 @@ export default function HomePage() {
 							<Sparkles className="h-4 w-4" /> Gestão integrada de estágios
 						</div>
 						<h1 className="text-4xl font-bold leading-tight sm:text-5xl">
-							A plataforma completa para gerir estágios curriculares
+							{heroTitle}
 						</h1>
 						<p className="text-lg text-muted-foreground">
-							A InternLink centraliza comunicação, documentação e aprovações entre escolas, alunos e empresas.
+							{heroDesc}
 						</p>
 						<div className="flex flex-wrap gap-3">
 							<Button size="lg" asChild>
-								<Link href="/register">Criar Conta</Link>
+								<Link href="/register">{heroCta1}</Link>
 							</Button>
 							<Button size="lg" variant="outline" asChild>
-								<Link href="/solicitar-acesso">Solicitar Acesso</Link>
+								<Link href="/solicitar-acesso">{heroCta2}</Link>
 							</Button>
 							<Button size="lg" variant="ghost" asChild>
 								<Link href="/login">Entrar</Link>
@@ -242,7 +283,7 @@ export default function HomePage() {
 						</p>
 					</div>
 					<div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-						{audience.map((item) => (
+						{dynAudience.map((item) => (
 							<Card key={item.title} className="animate-fade-in">
 								<CardHeader className="space-y-3">
 									<div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -262,7 +303,7 @@ export default function HomePage() {
 						<h2 className="text-3xl font-semibold">Tudo o que precisa para gerir estágios</h2>
 					</div>
 					<div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-						{features.map((feature) => (
+						{dynFeatures.map((feature) => (
 							<Card key={feature.title} className="animate-fade-in">
 								<CardHeader className="space-y-3">
 									<div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -290,7 +331,7 @@ export default function HomePage() {
 						</Button>
 					</div>
 					<div className="space-y-4">
-						{steps.map((step, index) => (
+						{dynSteps.map((step, index) => (
 							<Card key={step.title}>
 								<CardContent className="flex items-start gap-4 py-6">
 									<Badge variant="secondary" className="rounded-full px-3 py-1 text-sm">
@@ -310,7 +351,7 @@ export default function HomePage() {
 				</section>
 
 				<section className="grid gap-6 md:grid-cols-3">
-					{testimonials.map((item) => (
+					{dynTestimonials.map((item) => (
 						<Card key={item.name} className="animate-fade-in">
 							<CardHeader>
 								<CardTitle>{item.name}</CardTitle>
@@ -327,7 +368,7 @@ export default function HomePage() {
 						<h2 className="text-3xl font-semibold">Perguntas frequentes</h2>
 					</div>
 					<div className="grid gap-4 md:grid-cols-2">
-						{faqs.map((item) => (
+						{dynFaqs.map((item) => (
 							<Card key={item.question}>
 								<CardHeader>
 									<CardTitle className="text-base">{item.question}</CardTitle>
@@ -341,10 +382,10 @@ export default function HomePage() {
 				<section className="rounded-2xl border border-border bg-card/80 p-8 shadow-lg animate-slide-up">
 					<div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 						<div>
-							<p className="text-sm uppercase tracking-wide text-primary">Pronto para começar?</p>
-							<h2 className="text-2xl font-semibold">Crie a sua conta ou solicite acesso para a sua escola.</h2>
+							<p className="text-sm uppercase tracking-wide text-primary">{ctaTitle}</p>
+							<h2 className="text-2xl font-semibold">{ctaSubtitle}</h2>
 							<p className="text-muted-foreground">
-								Respostas rápidas e acompanhamento contínuo durante todo o processo.
+								{ctaDesc}
 							</p>
 						</div>
 						<div className="flex flex-wrap gap-3">
@@ -373,9 +414,9 @@ export default function HomePage() {
 								<span>InternLink</span>
 							</div>
 							<p className="text-sm text-muted-foreground">
-								Plataforma de gestão de estágios curriculares para escolas, alunos e empresas.
+{footerDesc}
 							</p>
-							<p className="text-sm text-muted-foreground">support@internlink.com</p>
+							<p className="text-sm text-muted-foreground">{footerEmail}</p>
 						</div>
 						<div className="space-y-2 text-sm">
 							<p className="font-semibold">Acesso</p>

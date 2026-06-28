@@ -122,6 +122,10 @@ vi.mock("lucide-react", () => {
     UserCheck: Icon,
     ChevronDown: Icon,
     Briefcase: Icon,
+    CheckCircle: Icon,
+    Loader2: Icon,
+    X: Icon,
+    XIcon: Icon,
     User: Icon,
   };
 });
