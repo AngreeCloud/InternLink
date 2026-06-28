@@ -37,6 +37,7 @@ next-env.d.ts
 
 # local scripts
 *.log
+scripts/create-super-admin.*
 
 # agents
 SKILL.md
