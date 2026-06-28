@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getFirebaseAdminAuth, getFirebaseAdminDb } from "@/lib/firebase-admin";
+import { getFirebaseAdminAuth, getFirebaseAdminDb, getFirebaseAdminDatabase } from "@/lib/firebase-admin";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { randomUUID } from "crypto";
 
@@ -24,15 +24,19 @@ export async function POST() {
       } catch { /* proceed without user */ }
     }
 
+    if (!userId) {
+      return NextResponse.json({ error: "Autenticação necessária." }, { status: 401 });
+    }
+
     const db = getFirebaseAdminDb();
     const conversationId = randomUUID();
     const ticketId = randomUUID();
+    const ts = Date.now();
 
-    // Create support ticket
     await db.collection("supportTickets").doc(ticketId).set({
       title: "Chat de suporte",
       description: "",
-      userId: userId || null,
+      userId,
       userName: userName || null,
       userEmail: userEmail || null,
       status: "open",
@@ -43,7 +47,31 @@ export async function POST() {
       updatedAt: new Date(),
     });
 
-    return NextResponse.json({ ok: true, conversationId, ticketId });
+    // Read auto-reply config (return to client, don't write here)
+    const landingSnap = await db.collection("landingContent").doc("support").get();
+    const autoReply = landingSnap.exists
+      ? ((landingSnap.data() as { autoReply?: string })?.autoReply || "")
+      : "";
+
+    // Write RTDB conversation (no auto-reply — client sends it after user message)
+    const rtdb = getFirebaseAdminDatabase();
+    await rtdb.ref().update({
+      [`conversations/${conversationId}`]: {
+        type: "support",
+        participants: { [userId]: true },
+        createdAt: ts,
+        updatedAt: ts,
+        lastMessage: { text: null, senderId: null, createdAt: ts, hasAttachments: false },
+      },
+      [`userConversations/${userId}/${conversationId}`]: {
+        lastMessageText: null,
+        lastMessageAt: ts,
+        unreadCount: 0,
+        isMuted: false,
+      },
+    });
+
+    return NextResponse.json({ ok: true, conversationId, ticketId, autoReply });
   } catch (error) {
     console.error("[api/support/chat]", error);
     return NextResponse.json({ error: "Erro interno." }, { status: 500 });
