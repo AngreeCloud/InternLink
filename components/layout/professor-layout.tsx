@@ -10,6 +10,7 @@ import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { logoutWithServerSession, waitForLogoutTransition } from "@/lib/auth/client-session";
 import { ChatNavUnreadBadge } from "@/components/chat/chat-nav-unread-badge";
 import { NotificationsInbox, type InboxNotification } from "@/components/chat/notifications-inbox";
+import { SupportButton } from "@/components/chat/support-button";
 import { useChatNotifications } from "@/lib/chat/use-chat-notifications";
 import { useEstagioNotifications, type EstagioNotification } from "@/lib/notifications/use-estagio-notifications";
 import { Button } from "@/components/ui/button";
@@ -327,6 +328,7 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
             <div className="flex flex-1"></div>
             <div className="flex items-center gap-x-4 lg:gap-x-6">
+              <SupportButton userId={state.userId} userName={state.name} userEmail={state.email} />
               <NotificationsInbox
                 notifications={inboxNotifications}
                 onOpenChat={handleOpenConversation}
