@@ -11,10 +11,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ArrowLeft, Save, Camera, Mail, User, ShieldCheck, PenLine } from "lucide-react";
+import { ArrowLeft, Save, Camera, Mail, User, ShieldCheck, PenLine, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { SignatureSettings } from "@/components/profile/signature-settings";
 import { SecuritySection } from "@/components/profile/security-section";
+import { ProfileSupportSection } from "@/components/profile/profile-support-section";
 
 type ProfileData = {
   nome: string;
@@ -27,12 +28,13 @@ type ProfileData = {
   funcaoEmpresa: string;
 };
 
-type Tab = "info" | "security" | "signature";
+type Tab = "info" | "security" | "signature" | "support";
 
 const tabs: { id: Tab; label: string; icon: typeof User }[] = [
   { id: "info", label: "Informações Pessoais", icon: User },
   { id: "security", label: "Segurança", icon: ShieldCheck },
   { id: "signature", label: "Assinatura Digital", icon: PenLine },
+  { id: "support", label: "Suporte InternLink", icon: MessageSquare },
 ];
 
 export function ProfileEditor() {
@@ -506,6 +508,8 @@ export function ProfileEditor() {
           {activeTab === "security" && <SecuritySection />}
 
           {activeTab === "signature" && <SignatureSettings />}
+
+          {activeTab === "support" && <ProfileSupportSection role={profile.role} />}
         </div>
       </div>
     </div>

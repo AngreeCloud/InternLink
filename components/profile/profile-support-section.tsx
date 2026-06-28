@@ -1,68 +1,59 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
-import { doc, getDoc } from "firebase/firestore";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { SupportButton } from "@/components/chat/support-button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Headset } from "lucide-react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Loader2, MessageSquare } from "lucide-react";
 
-const HIDDEN_ROLES = ["super_admin", "support"];
+const CHAT_ROUTES: Record<string, string> = {
+  aluno: "/dashboard/chat",
+  professor: "/professor/chat",
+  tutor: "/tutor/chat",
+  admin_escolar: "/school-admin/chat",
+  encarregado: "/encarregado/chat",
+};
 
-export function ProfileSupportSection() {
-  const [loading, setLoading] = useState(true);
-  const [show, setShow] = useState(false);
-  const [userData, setUserData] = useState<{ uid: string; email: string; name: string } | null>(null);
+type Props = {
+  role?: string;
+};
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const auth = await getAuthRuntime();
-        const user = auth.currentUser;
-        if (!user) { setLoading(false); return; }
+export function ProfileSupportSection({ role }: Props) {
+  const [opening, setOpening] = useState(false);
+  const router = useRouter();
 
-        const db = await getDbRuntime();
-        const snap = await getDoc(doc(db, "users", user.uid));
-        if (!snap.exists()) { setLoading(false); return; }
+  const isHidden = !role || role === "super_admin" || role === "support";
+  if (isHidden) return null;
 
-        const data = snap.data() as { role?: string; nome?: string; email?: string };
-        const role = data.role || "";
+  const handleOpenSupport = async () => {
+    setOpening(true);
+    try {
+      await fetch("/api/support/tickets/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "Pedido de suporte via chat" }),
+      });
+    } catch { /* ignore */ }
 
-        if (!cancelled) {
-          setShow(!HIDDEN_ROLES.includes(role));
-          setUserData({ uid: user.uid, email: user.email || "", name: data.nome || "" });
-          setLoading(false);
-        }
-      } catch {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  if (loading) return <Skeleton className="h-32 rounded-lg" />;
-  if (!show) return null;
+    const route = CHAT_ROUTES[role] || "/dashboard/chat";
+    router.push(route);
+  };
 
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-          <Headset className="h-5 w-5 text-primary" />
-          <CardTitle className="text-base">Suporte Técnico</CardTitle>
+          <MessageSquare className="h-5 w-5 text-primary" />
+          <CardTitle className="text-base">Suporte InternLink</CardTitle>
         </div>
         <CardDescription>
-          Precisa de ajuda? Abra um ticket e a nossa equipa de suporte entrará em contacto.
+          Fale diretamente com a nossa equipa de suporte técnico. Um ticket será criado automaticamente.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <SupportButton
-          variant="outline"
-          userId={userData?.uid}
-          userName={userData?.name}
-          userEmail={userData?.email}
-        />
+        <Button onClick={handleOpenSupport} disabled={opening} className="w-full">
+          {opening ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> A abrir...</> : <><MessageSquare className="mr-2 h-4 w-4" /> Abrir Chat de Suporte</>}
+        </Button>
       </CardContent>
     </Card>
   );
