@@ -12,13 +12,6 @@ export default function TutorSolicitacoesHorarioPage() {
   return (
     <TutorLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Solicitações de mudança de horário</h1>
-          <p className="text-muted-foreground">
-            Pedidos de faltas futuras e término antecipado dos seus formandos.
-          </p>
-        </div>
-
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="faltas">Faltas / alterações</TabsTrigger>
