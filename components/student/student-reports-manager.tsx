@@ -39,10 +39,7 @@ import {
   Pin,
   Upload,
 } from "lucide-react";
-import { PdfViewer } from "@/components/estagios/pdf/pdf-viewer";
 import { FullscreenDocumentViewer } from "@/components/estagios/documentos/fullscreen-document-viewer";
-import { SignatureBoxEditor } from "@/components/estagios/pdf/signature-box-editor";
-import type { SignatureBoxModel } from "@/components/estagios/pdf/signature-boxes-overlay";
 import { ReportSignDialog } from "@/components/estagios/documentos/report-sign-dialog";
 import type { EstagioRole } from "@/lib/estagios/permissions";
 
@@ -138,31 +135,17 @@ export function StudentReportsManager() {
   const [file, setFile] = useState<File | null>(null);
   const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null);
   const [fileKind, setFileKind] = useState<FileKind | null>(null);
-  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [fullscreenPreview, setFullscreenPreview] = useState<"submitted" | "upload" | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const [showSigBoxes, setShowSigBoxes] = useState(false);
-  const [sigBoxes, setSigBoxes] = useState<SignatureBoxModel[]>([]);
-  const [sigSelectedBoxId, setSigSelectedBoxId] = useState<string | null>(null);
-  const [sigActiveRole, setSigActiveRole] = useState<EstagioRole>("aluno");
-  const [sigDrawing, setSigDrawing] = useState(false);
-
   const [sigRoles, setSigRoles] = useState<EstagioRole[]>(["aluno", "professor", "tutor"]);
   const [encarregadoInfo, setEncarregadoInfo] = useState<{ id: string; nome?: string } | null>(null);
   const [pendingSignDoc, setPendingSignDoc] = useState<{ docId: string; docNome: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  // Cleanup blob URL when file changes/unmounts.
-  useEffect(() => {
-    return () => {
-      if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
-    };
-  }, [pdfBlobUrl]);
 
   const refreshEligibility = async (estagioId: string) => {
     try {
@@ -350,14 +333,8 @@ export function StudentReportsManager() {
     setFileBytes(buffer);
     setFileKind(kind);
 
-    if (pdfBlobUrl) {
-      URL.revokeObjectURL(pdfBlobUrl);
-    }
-    if (kind === "pdf") {
-      const url = URL.createObjectURL(new Blob([buffer], { type: MIME_PDF }));
-      setPdfBlobUrl(url);
-    } else {
-      setPdfBlobUrl(null);
+    if (kind !== "pdf") {
+      return;
     }
   };
 
@@ -365,17 +342,7 @@ export function StudentReportsManager() {
     setFile(null);
     setFileBytes(null);
     setFileKind(null);
-    if (pdfBlobUrl) {
-      URL.revokeObjectURL(pdfBlobUrl);
-      setPdfBlobUrl(null);
-    }
     if (fileInputRef.current) fileInputRef.current.value = "";
-    setShowSigBoxes(false);
-    setSigBoxes([]);
-    setSigSelectedBoxId(null);
-    setSigActiveRole("aluno");
-    setSigDrawing(false);
-    setSigRoles(["aluno", "professor", "tutor"]);
   };
 
   const handleSubmit = async () => {
@@ -414,7 +381,7 @@ export function StudentReportsManager() {
         titulo: titulo.trim(),
         resumo: resumo.trim(),
         signatureRoles: sigRoles,
-        signatureBoxes: sigBoxes,
+        signatureBoxes: [],
         signatureUserIds: encarregadoInfo ? [encarregadoInfo.id] : [],
         encarregadoId: encarregadoInfo?.id ?? null,
       };
@@ -613,8 +580,7 @@ export function StudentReportsManager() {
       {/* Fullscreen Document Viewer for upload preview */}
       {fullscreenPreview === "upload" && file && fileKind && (
         <FullscreenDocumentViewer
-          fileBytes={fileKind === "pdf" ? undefined : fileBytes ?? undefined}
-          fileUrl={fileKind === "pdf" && pdfBlobUrl ? pdfBlobUrl : undefined}
+          fileBytes={fileBytes ?? undefined}
           fileName={file.name}
           fileType={fileKind}
           onClose={() => setFullscreenPreview(null)}
@@ -700,153 +666,48 @@ export function StudentReportsManager() {
 
               {fileKind === "pdf" && (
                 <div className="space-y-2 rounded-md border border-border p-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm font-semibold">Posicionar assinaturas</Label>
-                    <Button
-                      type="button"
-                      variant={showSigBoxes ? "secondary" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        if (showSigBoxes) {
-                          setSigDrawing(false);
-                          setSigSelectedBoxId(null);
-                          setSigActiveRole("aluno");
-                        }
-                        setShowSigBoxes(!showSigBoxes);
-                      }}
-                    >
-                      {showSigBoxes ? "Ocultar editor" : "Posicionar caixas"}
-                    </Button>
+                  <p className="text-xs font-semibold text-muted-foreground">Quem assina</p>
+                  <div className="mt-1 space-y-1.5">
+                    <label className="flex items-center gap-2 text-xs">
+                      <input type="checkbox" checked disabled className="opacity-50" />
+                      <span className="text-muted-foreground">Aluno (você)</span>
+                    </label>
+                    {(["professor", "tutor"] as EstagioRole[]).map((role) => (
+                      <label key={role} className="flex items-center gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={sigRoles.includes(role)}
+                          onChange={(e) => {
+                            setSigRoles((prev) =>
+                              e.target.checked
+                                ? [...prev, role]
+                                : prev.filter((r) => r !== role)
+                            );
+                          }}
+                        />
+                        <span>{roleMap[role]}</span>
+                      </label>
+                    ))}
+                    {encarregadoInfo && (
+                      <label className="flex items-center gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={sigRoles.includes("aluno") && encarregadoInfo.id.length > 0}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSigRoles((prev) => {
+                                const r = [...prev];
+                                if (!r.includes("aluno")) r.push("aluno");
+                                return r;
+                              });
+                            }
+                            setEncarregadoInfo(e.target.checked ? encarregadoInfo : null);
+                          }}
+                        />
+                        <span>Encarregado ({encarregadoInfo.nome ?? "associado"})</span>
+                      </label>
+                    )}
                   </div>
-
-                  {showSigBoxes && (
-                    <div className="flex min-h-0 gap-3 rounded-lg bg-muted/20 p-2">
-                      <div className="min-h-0 min-w-0 flex-1 overflow-auto rounded bg-muted/30 p-1" style={{ maxHeight: "55vh" }}>
-                        {pdfBlobUrl ? (
-                          <PdfViewer
-                            fileUrl={pdfBlobUrl}
-                            scale={1.0}
-                            renderPageOverlay={(info) => (
-                              <SignatureBoxEditor
-                                boxes={sigBoxes}
-                                onChange={setSigBoxes}
-                                selectedBoxId={sigSelectedBoxId}
-                                onSelectBox={setSigSelectedBoxId}
-                                pageNumber={info.pageNumber}
-                                pageWidth={info.width}
-                                pageHeight={info.height}
-                                activeRole={sigActiveRole}
-                                drawingEnabled={sigDrawing}
-                              />
-                            )}
-                          />
-                        ) : null}
-                      </div>
-                      <div className="w-48 shrink-0 space-y-3">
-                        <div>
-                          <p className="text-xs font-semibold text-muted-foreground">Desenhar caixa para</p>
-                          <div className="mt-1 flex flex-col gap-1">
-                            {(["aluno", "professor", "tutor"] as EstagioRole[]).map((role) => (
-                              <Button
-                                key={role}
-                                type="button"
-                                size="sm"
-                                variant={sigActiveRole === role ? "default" : "outline"}
-                                onClick={() => {
-                                  setSigActiveRole(role);
-                                  setSigDrawing(false);
-                                  setSigSelectedBoxId(null);
-                                }}
-                              >
-                                {roleMap[role]}
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
-                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <input
-                            type="checkbox"
-                            checked={sigDrawing}
-                            onChange={(e) => {
-                              setSigDrawing(e.target.checked);
-                              setSigSelectedBoxId(null);
-                            }}
-                          />
-                          Modo desenho
-                        </label>
-
-                        <div className="border-t pt-3">
-                          <p className="text-xs font-semibold text-muted-foreground">Quem assina</p>
-                          <div className="mt-2 space-y-1.5">
-                            <label className="flex items-center gap-2 text-xs">
-                              <input type="checkbox" checked disabled className="opacity-50" />
-                              <span className="text-muted-foreground">Aluno (você)</span>
-                            </label>
-                            {(["professor", "tutor"] as EstagioRole[]).map((role) => (
-                              <label key={role} className="flex items-center gap-2 text-xs">
-                                <input
-                                  type="checkbox"
-                                  checked={sigRoles.includes(role)}
-                                  onChange={(e) => {
-                                    setSigRoles((prev) =>
-                                      e.target.checked
-                                        ? [...prev, role]
-                                        : prev.filter((r) => r !== role)
-                                    );
-                                  }}
-                                />
-                                <span>{roleMap[role]}</span>
-                              </label>
-                            ))}
-                            {encarregadoInfo && (
-                              <label className="flex items-center gap-2 text-xs">
-                                <input
-                                  type="checkbox"
-                                  checked={sigRoles.includes("aluno") && encarregadoInfo.id.length > 0}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setSigRoles((prev) => {
-                                        const r = [...prev];
-                                        if (!r.includes("aluno")) r.push("aluno");
-                                        return r;
-                                      });
-                                    }
-                                    setEncarregadoInfo(e.target.checked ? encarregadoInfo : null);
-                                  }}
-                                />
-                                <span>Encarregado ({encarregadoInfo.nome ?? "associado"})</span>
-                              </label>
-                            )}
-                          </div>
-                        </div>
-
-                        {sigBoxes.length > 0 && (
-                          <div className="space-y-1">
-                            <p className="text-xs font-semibold text-muted-foreground">Caixas ({sigBoxes.length})</p>
-                            {sigBoxes.map((box) => (
-                              <div
-                                key={box.id}
-                                className="flex items-center justify-between rounded border border-border px-2 py-1 text-xs"
-                              >
-                                <span>
-                                  Pág. {box.page} — {box.label ?? box.role ?? "—"}
-                                </span>
-                                <button
-                                  type="button"
-                                  className="ml-1 text-destructive hover:underline"
-                                  onClick={() =>
-                                    setSigBoxes((prev) => prev.filter((b) => b.id !== box.id))
-                                  }
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
             </div>

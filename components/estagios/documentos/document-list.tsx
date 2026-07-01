@@ -528,7 +528,7 @@ export function DocumentList({
       )}
       {fullscreenDoc?.currentFileUrl && (
         <FullscreenDocumentViewer
-          fileUrl={`/api/estagios/${estagioId}/documentos/${fullscreenDoc.id}?raw=true&inline=true`}
+          fileUrl={`/api/estagios/${estagioId}/documentos/${fullscreenDoc.id}?inline=true`}
           fileName={fullscreenDoc.nome}
           fileType="pdf"
           onClose={() => setFullscreenDoc(null)}
