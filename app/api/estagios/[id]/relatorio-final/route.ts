@@ -229,6 +229,27 @@ export async function POST(
           : "Nova versão do relatório final submetida pelo aluno.",
     });
 
+    const membersSet = new Set<string>();
+    if (session.estagio.professorId) membersSet.add(session.estagio.professorId);
+    if (session.estagio.tutorId) membersSet.add(session.estagio.tutorId);
+    if (session.course?.courseDirectorId) membersSet.add(session.course.courseDirectorId);
+    membersSet.delete(session.uid);
+
+    const notifBatch = db.batch();
+    for (const userId of membersSet) {
+      const nRef = db.collection("estagios").doc(id).collection("notifications").doc();
+      notifBatch.set(nRef, {
+        userId,
+        type: "relatorio_submitted",
+        docId: docRef.id,
+        title: newVersion === 1 ? "Relatório final submetido" : "Relatório final atualizado",
+        body: `${session.displayName || "O aluno"} submeteu o relatório final.`,
+        readAt: null,
+        createdAt: now,
+      });
+    }
+    await notifBatch.commit();
+
     return NextResponse.json({
       ok: true,
       docId: docRef.id,

@@ -8,13 +8,18 @@ import { getAuthRuntime, getDbRuntime } from "@/lib/firebase-runtime";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, FileUp } from "lucide-react";
+import { ArrowLeft, Download, FileText } from "lucide-react";
 
 type ReportItem = {
   id: string;
   title: string;
   summary: string;
   updatedAtLabel: string;
+  updatedAtSort: number;
+  fileUrl: string;
+  fileName: string;
+  version: number;
+  estado: string;
 };
 
 type ReportsState = {
@@ -24,6 +29,16 @@ type ReportsState = {
   studentName: string;
   reports: ReportItem[];
 };
+
+function toDate(raw: unknown): Date | null {
+  if (!raw) return null;
+  if (raw instanceof Date) return raw;
+  if (typeof raw === "object") {
+    const obj = raw as { toDate?: () => Date };
+    if (typeof obj.toDate === "function") return obj.toDate();
+  }
+  return null;
+}
 
 export function TutorInternshipReportsView({ schoolId, estagioId }: { schoolId: string; estagioId: string }) {
   const router = useRouter();
@@ -74,33 +89,47 @@ export function TutorInternshipReportsView({ schoolId, estagioId }: { schoolId: 
         let reports: ReportItem[] = [];
 
         try {
-          const byTutorId = await getDocs(query(collection(db, "internshipReports"), where("tutorId", "==", user.uid)));
-          reports = byTutorId.docs
+          const docsCol = collection(db, "estagios", estagioId, "documentos");
+          const q = query(docsCol, where("templateCode", "==", "RELATORIO_FINAL"));
+          const snap = await getDocs(q);
+
+          reports = snap.docs
             .map((docSnap) => {
               const data = docSnap.data() as {
-                studentId?: string;
-                title?: string;
-                summary?: string;
-                updatedAt?: { toDate?: () => Date };
-                createdAt?: { toDate?: () => Date };
+                nome?: string;
+                descricao?: string;
+                currentFileUrl?: string;
+                currentFilePath?: string;
+                fileMimeType?: string;
+                fileExtension?: string;
+                currentVersion?: number;
+                estado?: string;
+                updatedAt?: unknown;
+                submittedAt?: unknown;
+                createdAt?: unknown;
               };
 
-              if ((data.studentId || "") !== (estagio.alunoId || "")) {
-                return null;
-              }
+              const updatedAt =
+                toDate(data.updatedAt) ||
+                toDate(data.submittedAt) ||
+                toDate(data.createdAt) ||
+                null;
 
-              const updatedAt = data.updatedAt?.toDate?.() || data.createdAt?.toDate?.() || null;
+              const version = Number(data.currentVersion ?? 1);
+
               return {
                 id: docSnap.id,
-                title: data.title || "Relatório",
-                summary: data.summary || "",
-                updatedAtLabel: updatedAt ? updatedAt.toLocaleString("pt-PT") : "—",
+                title: data.nome || "Relatório final de estágio",
+                summary: data.descricao || "",
+                updatedAtLabel: updatedAt ? updatedAt.toLocaleString("pt-PT") : "\u2014",
                 updatedAtSort: updatedAt?.getTime() || 0,
+                fileUrl: data.currentFileUrl || "",
+                fileName: data.currentFilePath?.split("/").pop() || `relatorio-final-v${version}.${data.fileExtension || "pdf"}`,
+                version,
+                estado: data.estado || "pendente",
               };
             })
-            .filter((item): item is ReportItem & { updatedAtSort: number } => Boolean(item))
-            .sort((a, b) => b.updatedAtSort - a.updatedAtSort)
-            .map(({ updatedAtSort, ...item }) => item);
+            .sort((a, b) => b.updatedAtSort - a.updatedAtSort);
         } catch {
           reports = [];
         }
@@ -134,7 +163,7 @@ export function TutorInternshipReportsView({ schoolId, estagioId }: { schoolId: 
       <Card>
         <CardHeader>
           <CardTitle>{state.stageTitle || "Estágio"}</CardTitle>
-          <CardDescription>Área interna semelhante ao dashboard do aluno para leitura de relatórios.</CardDescription>
+          <CardDescription>Relatórios submetidos pelo aluno.</CardDescription>
         </CardHeader>
         <CardContent>
           {state.loading ? (
@@ -146,16 +175,25 @@ export function TutorInternshipReportsView({ schoolId, estagioId }: { schoolId: 
           ) : (
             <div className="space-y-3">
               {state.reports.map((report) => (
-                <div key={report.id} className="rounded-md border border-border p-3">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
+                <div key={report.id} className="rounded-md border border-border p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <FileUp className="h-4 w-4 text-muted-foreground" />
-                        <p className="text-sm font-medium text-foreground">{report.title}</p>
-                        <Badge variant="secondary">Submetido</Badge>
+                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <p className="text-sm font-medium text-foreground truncate">{report.title}</p>
+                        <Badge variant="secondary">v{report.version}</Badge>
+                        <Badge variant={report.estado === "assinado" ? "default" : "secondary"}>
+                          {report.estado === "assinado" ? "Assinado" : "Submetido"}
+                        </Badge>
                       </div>
-                      <p className="text-xs text-muted-foreground">Última atualização: {report.updatedAtLabel}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Última atualização: {report.updatedAtLabel}</p>
                     </div>
+                    {report.fileUrl && (
+                      <Button variant="outline" size="sm" onClick={() => window.open(report.fileUrl, "_blank")}>
+                        <Download className="mr-1 h-3.5 w-3.5" />
+                        Descarregar
+                      </Button>
+                    )}
                   </div>
                   {report.summary ? <p className="mt-2 text-sm text-muted-foreground">{report.summary}</p> : null}
                 </div>
