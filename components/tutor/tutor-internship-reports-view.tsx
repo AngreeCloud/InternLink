@@ -77,9 +77,23 @@ export function TutorInternshipReportsView({ schoolId, estagioId }: { schoolId: 
           titulo?: string;
         };
 
-        const allowed =
-          estagio.schoolId === schoolId &&
-          estagio.tutorId === user.uid;
+        let allowed = false;
+        let IsSchoolAdmin = false;
+
+        if (estagio.schoolId === schoolId && estagio.tutorId === user.uid) {
+          allowed = true;
+        } else {
+          const userSnap = await getDoc(doc(db, "users", user.uid));
+          const userData = userSnap.data() as { role?: string; schoolId?: string } | undefined;
+          if (
+            userData?.role === "admin_escolar" &&
+            estagio.schoolId &&
+            userData.schoolId === estagio.schoolId
+          ) {
+            allowed = true;
+            IsSchoolAdmin = true;
+          }
+        }
 
         if (!allowed) {
           setState((prev) => ({ ...prev, loading: false, allowed: false }));

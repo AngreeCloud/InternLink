@@ -39,6 +39,9 @@ import {
 } from "lucide-react";
 import { PdfViewer } from "@/components/estagios/pdf/pdf-viewer";
 import { FullscreenDocumentViewer } from "@/components/estagios/documentos/fullscreen-document-viewer";
+import { SignatureBoxEditor } from "@/components/estagios/pdf/signature-box-editor";
+import type { SignatureBoxModel } from "@/components/estagios/pdf/signature-boxes-overlay";
+import type { EstagioRole } from "@/lib/estagios/permissions";
 
 const MIME_PDF = "application/pdf";
 const MIME_DOCX =
@@ -81,6 +84,13 @@ type ManagerState = {
 };
 
 const DEFAULT_TITLE = "Relatório final de estágio";
+
+const roleMap: Record<EstagioRole, string> = {
+  diretor: "Diretor",
+  professor: "Orientador",
+  tutor: "Tutor",
+  aluno: "Aluno",
+};
 
 function detectKind(file: File): FileKind | null {
   const name = file.name.toLowerCase();
@@ -132,7 +142,15 @@ export function StudentReportsManager() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const [showSigBoxes, setShowSigBoxes] = useState(false);
+  const [sigBoxes, setSigBoxes] = useState<SignatureBoxModel[]>([]);
+  const [sigSelectedBoxId, setSigSelectedBoxId] = useState<string | null>(null);
+  const [sigActiveRole, setSigActiveRole] = useState<EstagioRole>("aluno");
+  const [sigDrawing, setSigDrawing] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const SIG_ROLES: EstagioRole[] = ["aluno", "professor", "tutor"];
 
   // Cleanup blob URL when file changes/unmounts.
   useEffect(() => {
@@ -334,6 +352,11 @@ export function StudentReportsManager() {
       setPdfBlobUrl(null);
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
+    setShowSigBoxes(false);
+    setSigBoxes([]);
+    setSigSelectedBoxId(null);
+    setSigActiveRole("aluno");
+    setSigDrawing(false);
   };
 
   const handleSubmit = async () => {
@@ -374,6 +397,8 @@ export function StudentReportsManager() {
           fileExtension: extension,
           titulo: titulo.trim(),
           resumo: resumo.trim(),
+          signatureRoles: SIG_ROLES,
+          signatureBoxes: sigBoxes,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
@@ -639,6 +664,113 @@ export function StudentReportsManager() {
                 <p><strong>{file.name}</strong> ({Math.round(file.size / 1024)} KB)</p>
                 <p className="mt-1 text-xs">Clique em "Visualizar em ecrã completo" para pré-visualizar o documento com opções de zoom.</p>
               </div>
+
+              {fileKind === "pdf" && (
+                <div className="space-y-2 rounded-md border border-border p-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold">Posicionar assinaturas</Label>
+                    <Button
+                      type="button"
+                      variant={showSigBoxes ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        if (showSigBoxes) {
+                          setSigDrawing(false);
+                          setSigSelectedBoxId(null);
+                          setSigActiveRole("aluno");
+                        }
+                        setShowSigBoxes(!showSigBoxes);
+                      }}
+                    >
+                      {showSigBoxes ? "Ocultar editor" : "Posicionar caixas"}
+                    </Button>
+                  </div>
+
+                  {showSigBoxes && (
+                    <div className="flex min-h-0 gap-3 rounded-lg bg-muted/20 p-2">
+                      <div className="min-h-0 min-w-0 flex-1 overflow-auto rounded bg-muted/30 p-1" style={{ maxHeight: "55vh" }}>
+                        {pdfBlobUrl ? (
+                          <PdfViewer
+                            fileUrl={pdfBlobUrl}
+                            scale={1.0}
+                            renderPageOverlay={(info) => (
+                              <SignatureBoxEditor
+                                boxes={sigBoxes}
+                                onChange={setSigBoxes}
+                                selectedBoxId={sigSelectedBoxId}
+                                onSelectBox={setSigSelectedBoxId}
+                                pageNumber={info.pageNumber}
+                                pageWidth={info.width}
+                                pageHeight={info.height}
+                                activeRole={sigActiveRole}
+                                drawingEnabled={sigDrawing}
+                              />
+                            )}
+                          />
+                        ) : null}
+                      </div>
+                      <div className="w-44 shrink-0 space-y-3">
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground">Papel</p>
+                          <div className="mt-1 flex flex-col gap-1">
+                            {SIG_ROLES.map((role) => (
+                              <Button
+                                key={role}
+                                type="button"
+                                size="sm"
+                                variant={sigActiveRole === role ? "default" : "outline"}
+                                onClick={() => {
+                                  setSigActiveRole(role);
+                                  setSigDrawing(false);
+                                  setSigSelectedBoxId(null);
+                                }}
+                              >
+                                {roleMap[role]}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            checked={sigDrawing}
+                            onChange={(e) => {
+                              setSigDrawing(e.target.checked);
+                              setSigSelectedBoxId(null);
+                            }}
+                          />
+                          Modo desenho
+                        </label>
+
+                        {sigBoxes.length > 0 && (
+                          <div className="space-y-1">
+                            <p className="text-xs font-semibold text-muted-foreground">Caixas ({sigBoxes.length})</p>
+                            {sigBoxes.map((box) => (
+                              <div
+                                key={box.id}
+                                className="flex items-center justify-between rounded border border-border px-2 py-1 text-xs"
+                              >
+                                <span>
+                                  Pág. {box.page} — {box.label ?? box.role ?? "—"}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="ml-1 text-destructive hover:underline"
+                                  onClick={() =>
+                                    setSigBoxes((prev) => prev.filter((b) => b.id !== box.id))
+                                  }
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ) : null}
 

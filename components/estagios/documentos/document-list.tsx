@@ -35,6 +35,7 @@ import { UploadWizard, type UploadWizardDoc } from "./upload-wizard";
 import { DocumentPreviewDialog } from "./document-preview-dialog";
 import { FullscreenDocumentViewer } from "./fullscreen-document-viewer";
 import { SignDialog } from "./sign-dialog";
+import { ReportSignDialog } from "./report-sign-dialog";
 import { VersionHistoryDialog } from "./version-history-dialog";
 import { cn } from "@/lib/utils";
 import {
@@ -453,7 +454,7 @@ export function DocumentList({
                                   </DropdownMenuItem>
                                 </>
                               )}
-                              {canManage && (
+                          {canManage && d.estado !== "assinado" && (
                                 <>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem onClick={() => togglePin(d)}>
@@ -533,7 +534,17 @@ export function DocumentList({
           onClose={() => setFullscreenDoc(null)}
         />
       )}
-      {signDoc && (
+      {signDoc && signDoc.templateCode === "RELATORIO_FINAL" ? (
+        <ReportSignDialog
+          estagioId={estagioId}
+          docId={signDoc.id}
+          docNome={signDoc.nome}
+          currentUserRole={currentUserRole}
+          open={!!signDoc}
+          onOpenChange={(o) => !o && setSignDoc(null)}
+          onSigned={() => setSignDoc(null)}
+        />
+      ) : signDoc ? (
         <SignDialog
           estagioId={estagioId}
           docId={signDoc.id}
@@ -542,7 +553,7 @@ export function DocumentList({
           onOpenChange={(o) => !o && setSignDoc(null)}
           onSigned={() => setSignDoc(null)}
         />
-      )}
+      ) : null}
       {historyDoc && (
         <VersionHistoryDialog
           estagioId={estagioId}

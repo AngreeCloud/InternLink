@@ -7,16 +7,64 @@ import {
   EstagioAccessError,
   toApiErrorResponse,
 } from "@/lib/estagios/estagio-access";
+import type { EstagioRole } from "@/lib/estagios/permissions";
 
 export const runtime = "nodejs";
 
 const TEMPLATE_CODE = "RELATORIO_FINAL";
 const DEFAULT_MIN_HOURS = 80;
+const REPORT_SIGNATURE_ROLES: EstagioRole[] = ["aluno", "professor", "tutor"];
+const ALLOWED_ROLES: EstagioRole[] = ["diretor", "professor", "tutor", "aluno"];
 
 const MIME_TO_EXT: Record<string, "pdf" | "docx"> = {
   "application/pdf": "pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
 };
+
+type SignatureBox = {
+  id: string;
+  role?: EstagioRole;
+  userId?: string;
+  page: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color?: string;
+  label?: string;
+};
+
+function sanitizeRoles(roles?: EstagioRole[]): EstagioRole[] {
+  if (!Array.isArray(roles)) return [];
+  return roles.filter((r) => ALLOWED_ROLES.includes(r));
+}
+
+function sanitizeBoxes(boxes?: SignatureBox[]): SignatureBox[] {
+  if (!Array.isArray(boxes)) return [];
+  return boxes
+    .filter((box) => {
+      if (!box || typeof box !== "object") return false;
+      if (!Number.isFinite(box.page) || box.page < 1) return false;
+      if (!Number.isFinite(box.x) || !Number.isFinite(box.y)) return false;
+      if (!Number.isFinite(box.width) || !Number.isFinite(box.height)) return false;
+      return true;
+    })
+    .map((box) => {
+      const r: Record<string, unknown> = {
+        id: String(box.id ?? ""),
+        page: Math.floor(box.page),
+        x: Math.max(0, Math.min(1, box.x)),
+        y: Math.max(0, Math.min(1, box.y)),
+        width: Math.max(0, Math.min(1, box.width)),
+        height: Math.max(0, Math.min(1, box.height)),
+      };
+      if (box.role && ALLOWED_ROLES.includes(box.role)) r.role = box.role;
+      if (typeof box.userId === "string") r.userId = box.userId;
+      if (typeof box.color === "string") r.color = box.color;
+      if (typeof box.label === "string") r.label = box.label;
+      return r as unknown as SignatureBox;
+    });
+}
 
 type SubmitBody = {
   fileUrl?: string;
@@ -26,6 +74,8 @@ type SubmitBody = {
   fileExtension?: string;
   titulo?: string;
   resumo?: string;
+  signatureBoxes?: SignatureBox[];
+  signatureRoles?: EstagioRole[];
 };
 
 function parseDate(value?: unknown): Date | null {
@@ -155,19 +205,38 @@ export async function POST(
     let docRef: FirebaseFirestore.DocumentReference;
     let newVersion = 1;
 
-    if (existing) {
-      docRef = existing.ref;
-      const data = existing.data() as { currentVersion?: number };
-      newVersion = Number(data.currentVersion ?? 0) + 1;
+    const signatureRoles = sanitizeRoles(body.signatureRoles);
+    const effectiveSignatureRoles =
+      signatureRoles.length > 0 ? signatureRoles : REPORT_SIGNATURE_ROLES;
+    const signatureBoxes = sanitizeBoxes(body.signatureBoxes);
+    const hasSignatureFlow = effectiveSignatureRoles.length > 0;
+    const initialEstado = hasSignatureFlow ? "aguarda_assinatura" : "pendente";
 
-      await docRef.update({
+    if (existing) {
+      const existingData = existing.data() as {
+        estado?: string;
+        currentVersion?: number;
+      };
+
+      if (existingData.estado === "assinado") {
+        throw new EstagioAccessError(
+          400,
+          "already_signed",
+          "O relatório já foi assinado por todas as partes. Não pode ser alterado.",
+        );
+      }
+
+      docRef = existing.ref;
+      newVersion = Number(existingData.currentVersion ?? 0) + 1;
+
+      const updateData: Record<string, unknown> = {
         nome: titulo,
         descricao: resumo,
         categoria: "relatorio_final",
         templateCode: TEMPLATE_CODE,
         pinned: true,
         pinnedAt: now,
-        estado: "pendente",
+        estado: initialEstado,
         accessRoles: ["diretor", "professor", "tutor", "aluno"],
         currentVersion: newVersion,
         currentFileUrl: fileUrl,
@@ -177,7 +246,17 @@ export async function POST(
         updatedAt: now,
         submittedBy: session.uid,
         submittedAt: now,
-      });
+      };
+
+      if (hasSignatureFlow) {
+        updateData.signatureRoles = effectiveSignatureRoles;
+        updateData.signatureUserIds = [];
+        updateData.signatureBoxes = signatureBoxes;
+        updateData.signedBy = [];
+        updateData.signedByRoles = [];
+      }
+
+      await docRef.update(updateData);
     } else {
       const allDocsSnap = await docsCol.get();
       let maxOrdem = 0;
@@ -187,7 +266,7 @@ export async function POST(
       });
 
       docRef = docsCol.doc();
-      await docRef.set({
+      const setData: Record<string, unknown> = {
         nome: titulo,
         descricao: resumo,
         categoria: "relatorio_final",
@@ -195,13 +274,13 @@ export async function POST(
         ordem: maxOrdem + 1,
         pinned: true,
         pinnedAt: now,
-        estado: "pendente",
+        estado: initialEstado,
         prazoAssinatura: null,
         accessRoles: ["diretor", "professor", "tutor", "aluno"],
         accessUserIds: [],
-        signatureRoles: [],
+        signatureRoles: hasSignatureFlow ? effectiveSignatureRoles : [],
         signatureUserIds: [],
-        signatureBoxes: [],
+        signatureBoxes: hasSignatureFlow ? signatureBoxes : [],
         currentVersion: 1,
         currentFileUrl: fileUrl,
         currentFilePath: filePath,
@@ -212,7 +291,8 @@ export async function POST(
         createdBy: session.uid,
         submittedBy: session.uid,
         submittedAt: now,
-      });
+      };
+      await docRef.set(setData);
     }
 
     await docRef.collection("versoes").doc(`v${newVersion}`).set({
@@ -288,6 +368,8 @@ export async function GET(
       const data = existing.data() as Record<string, unknown>;
       const updatedAt = data.updatedAt as { toDate?: () => Date } | undefined;
       const submittedAt = data.submittedAt as { toDate?: () => Date } | undefined;
+      const boxes = (data.signatureBoxes as SignatureBox[] | undefined) ?? [];
+      const estado = (data.estado as string | undefined) ?? "pendente";
       report = {
         id: existing.id,
         nome: data.nome ?? "",
@@ -299,12 +381,14 @@ export async function GET(
         currentVersion: data.currentVersion ?? 0,
         updatedAt: updatedAt?.toDate?.()?.toISOString() ?? null,
         submittedAt: submittedAt?.toDate?.()?.toISOString() ?? null,
+        estado,
+        signatureBoxes: boxes,
+        signatureRoles: (data.signatureRoles as EstagioRole[] | undefined) ?? [],
       };
-      // Check signature status
       let allSigned = false;
       try {
         const sigsSnap = await existing.ref.collection("assinaturas").get();
-        allSigned = sigsSnap.size >= 2;
+        allSigned = boxes.length > 0 && sigsSnap.size >= boxes.length;
       } catch { /* ignore */ }
       report.submitted = true;
       report.allSigned = allSigned;
