@@ -73,7 +73,7 @@ export function DocumentPreviewDialog({
 }: Props) {
   const [downloading, setDownloading] = useState<"signed" | "raw" | null>(null);
   const signedByUsers = doc.signedBy ?? [];
-  const totalSigners = doc.signatureUserIds.length || doc.signatureRoles.length;
+  const totalSigners = (doc.signatureRoles.length || 0) + (doc.signatureUserIds.length || 0);
   const signedCount = signedByUsers.length;
   const canRenderPdf = isPdfDocument(doc);
 
@@ -104,7 +104,10 @@ export function DocumentPreviewDialog({
   }
   for (const role of doc.signatureRoles) {
     // Adicionar participantes com esta role, se ainda não listados por userId.
-    const members = Object.entries(participants).filter(([, p]) => p.role === role);
+    // "diretor" também conta como "professor" para efeitos de assinatura.
+    const members = Object.entries(participants).filter(
+      ([, p]) => p.role === role || (role === "professor" && p.role === "diretor")
+    );
     for (const [uid, p] of members) {
       if (seen.has(uid)) continue;
       signersList.push({

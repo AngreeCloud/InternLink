@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
+  doc,
+  getDoc,
   getDocs,
   limit,
   query,
@@ -41,6 +43,7 @@ import { PdfViewer } from "@/components/estagios/pdf/pdf-viewer";
 import { FullscreenDocumentViewer } from "@/components/estagios/documentos/fullscreen-document-viewer";
 import { SignatureBoxEditor } from "@/components/estagios/pdf/signature-box-editor";
 import type { SignatureBoxModel } from "@/components/estagios/pdf/signature-boxes-overlay";
+import { ReportSignDialog } from "@/components/estagios/documentos/report-sign-dialog";
 import type { EstagioRole } from "@/lib/estagios/permissions";
 
 const MIME_PDF = "application/pdf";
@@ -148,9 +151,11 @@ export function StudentReportsManager() {
   const [sigActiveRole, setSigActiveRole] = useState<EstagioRole>("aluno");
   const [sigDrawing, setSigDrawing] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [sigRoles, setSigRoles] = useState<EstagioRole[]>(["aluno", "professor", "tutor"]);
+  const [encarregadoInfo, setEncarregadoInfo] = useState<{ id: string; nome?: string } | null>(null);
+  const [pendingSignDoc, setPendingSignDoc] = useState<{ docId: string; docNome: string } | null>(null);
 
-  const SIG_ROLES: EstagioRole[] = ["aluno", "professor", "tutor"];
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Cleanup blob URL when file changes/unmounts.
   useEffect(() => {
@@ -256,6 +261,19 @@ export function StudentReportsManager() {
             estagioId: estagioDoc.id,
           }));
           await refreshEligibility(estagioDoc.id);
+
+          try {
+            const userSnap = await getDoc(doc(db, "users", user.uid));
+            const userData = userSnap.data() as { encarregadoId?: string } | undefined;
+            const encId = userData?.encarregadoId;
+            if (encId) {
+              const encSnap = await getDoc(doc(db, "users", encId));
+              const encData = encSnap.data() as { nome?: string } | undefined;
+              setEncarregadoInfo({ id: encId, nome: encData?.nome });
+            } else {
+              setEncarregadoInfo(null);
+            }
+          } catch { setEncarregadoInfo(null); }
         } catch (err) {
           console.error("[v0] estagio lookup failed", err);
           setState({
@@ -357,6 +375,7 @@ export function StudentReportsManager() {
     setSigSelectedBoxId(null);
     setSigActiveRole("aluno");
     setSigDrawing(false);
+    setSigRoles(["aluno", "professor", "tutor"]);
   };
 
   const handleSubmit = async () => {
@@ -386,30 +405,44 @@ export function StudentReportsManager() {
       await uploadBytes(sRef, fileBytes, { contentType: mimeType });
       const downloadUrl = await getDownloadURL(sRef);
 
+      const body: Record<string, unknown> = {
+        fileUrl: downloadUrl,
+        filePath: storagePath,
+        fileName: file.name,
+        fileMimeType: mimeType,
+        fileExtension: extension,
+        titulo: titulo.trim(),
+        resumo: resumo.trim(),
+        signatureRoles: sigRoles,
+        signatureBoxes: sigBoxes,
+        signatureUserIds: encarregadoInfo ? [encarregadoInfo.id] : [],
+        encarregadoId: encarregadoInfo?.id ?? null,
+      };
+
       const res = await fetch(`/api/estagios/${state.estagioId}/relatorio-final`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileUrl: downloadUrl,
-          filePath: storagePath,
-          fileName: file.name,
-          fileMimeType: mimeType,
-          fileExtension: extension,
-          titulo: titulo.trim(),
-          resumo: resumo.trim(),
-          signatureRoles: SIG_ROLES,
-          signatureBoxes: sigBoxes,
-        }),
+        body: JSON.stringify(body),
       });
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        docId?: string;
+      };
       if (!res.ok || !data.ok) {
         setError(data.error || "Não foi possível registar o relatório.");
         return;
       }
 
-      setSuccess("Relatório submetido. Foi fixado nos documentos do estágio.");
       clearFile();
       await refreshEligibility(state.estagioId);
+
+      if (data.docId) {
+        setPendingSignDoc({ docId: data.docId, docNome: titulo.trim() });
+        setSuccess("Relatório submetido. Assine agora para concluir.");
+      } else {
+        setSuccess("Relatório submetido. Foi fixado nos documentos do estágio.");
+      }
     } catch (err) {
       console.error("[v0] submit relatorio failed", err);
       setError(err instanceof Error ? err.message : "Erro inesperado ao submeter o relatório.");
@@ -709,11 +742,11 @@ export function StudentReportsManager() {
                           />
                         ) : null}
                       </div>
-                      <div className="w-44 shrink-0 space-y-3">
+                      <div className="w-48 shrink-0 space-y-3">
                         <div>
-                          <p className="text-xs font-semibold text-muted-foreground">Papel</p>
+                          <p className="text-xs font-semibold text-muted-foreground">Desenhar caixa para</p>
                           <div className="mt-1 flex flex-col gap-1">
-                            {SIG_ROLES.map((role) => (
+                            {(["aluno", "professor", "tutor"] as EstagioRole[]).map((role) => (
                               <Button
                                 key={role}
                                 type="button"
@@ -741,6 +774,51 @@ export function StudentReportsManager() {
                           />
                           Modo desenho
                         </label>
+
+                        <div className="border-t pt-3">
+                          <p className="text-xs font-semibold text-muted-foreground">Quem assina</p>
+                          <div className="mt-2 space-y-1.5">
+                            <label className="flex items-center gap-2 text-xs">
+                              <input type="checkbox" checked disabled className="opacity-50" />
+                              <span className="text-muted-foreground">Aluno (você)</span>
+                            </label>
+                            {(["professor", "tutor"] as EstagioRole[]).map((role) => (
+                              <label key={role} className="flex items-center gap-2 text-xs">
+                                <input
+                                  type="checkbox"
+                                  checked={sigRoles.includes(role)}
+                                  onChange={(e) => {
+                                    setSigRoles((prev) =>
+                                      e.target.checked
+                                        ? [...prev, role]
+                                        : prev.filter((r) => r !== role)
+                                    );
+                                  }}
+                                />
+                                <span>{roleMap[role]}</span>
+                              </label>
+                            ))}
+                            {encarregadoInfo && (
+                              <label className="flex items-center gap-2 text-xs">
+                                <input
+                                  type="checkbox"
+                                  checked={sigRoles.includes("aluno") && encarregadoInfo.id.length > 0}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSigRoles((prev) => {
+                                        const r = [...prev];
+                                        if (!r.includes("aluno")) r.push("aluno");
+                                        return r;
+                                      });
+                                    }
+                                    setEncarregadoInfo(e.target.checked ? encarregadoInfo : null);
+                                  }}
+                                />
+                                <span>Encarregado ({encarregadoInfo.nome ?? "associado"})</span>
+                              </label>
+                            )}
+                          </div>
+                        </div>
 
                         {sigBoxes.length > 0 && (
                           <div className="space-y-1">
@@ -813,6 +891,25 @@ export function StudentReportsManager() {
           </div>
         </CardContent>
       </Card>
+
+      {pendingSignDoc && state.estagioId && (
+        <ReportSignDialog
+          estagioId={state.estagioId}
+          docId={pendingSignDoc.docId}
+          docNome={pendingSignDoc.docNome}
+          currentUserRole="aluno"
+          open={!!pendingSignDoc}
+          onOpenChange={(o) => {
+            if (!o) {
+              setPendingSignDoc(null);
+            }
+          }}
+          onSigned={() => {
+            setPendingSignDoc(null);
+            setSuccess("Relatório submetido e assinado.");
+          }}
+        />
+      )}
     </div>
   );
 }

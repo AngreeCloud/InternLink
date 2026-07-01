@@ -333,7 +333,7 @@ export function DocumentList({
               {filtered.map((d) => {
                 const mustSign = signerRequirementMet(d) && !!d.currentFileUrl;
                 const signedCount = d.signedBy?.length ?? 0;
-                const totalSigners = d.signatureUserIds.length || d.signatureRoles.length || 0;
+                const totalSigners = (d.signatureRoles.length || 0) + (d.signatureUserIds.length || 0);
                 const noSignatures = totalSigners === 0;
                 const hasFile = !!d.currentFileUrl;
                 const isDeleting = deletingDocId === d.id;

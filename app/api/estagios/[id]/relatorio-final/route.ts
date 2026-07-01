@@ -76,6 +76,8 @@ type SubmitBody = {
   resumo?: string;
   signatureBoxes?: SignatureBox[];
   signatureRoles?: EstagioRole[];
+  signatureUserIds?: string[];
+  encarregadoId?: string | null;
 };
 
 function parseDate(value?: unknown): Date | null {
@@ -211,6 +213,15 @@ export async function POST(
     const signatureBoxes = sanitizeBoxes(body.signatureBoxes);
     const hasSignatureFlow = effectiveSignatureRoles.length > 0;
     const initialEstado = hasSignatureFlow ? "aguarda_assinatura" : "pendente";
+    const signatureUserIds =
+      Array.isArray(body.signatureUserIds) && body.signatureUserIds.every((v) => typeof v === "string")
+        ? body.signatureUserIds
+        : [];
+    const encarregadoId =
+      typeof body.encarregadoId === "string" && body.encarregadoId.length > 0
+        ? body.encarregadoId
+        : null;
+    const accessUserIds = encarregadoId ? [encarregadoId] : [];
 
     if (existing) {
       const existingData = existing.data() as {
@@ -238,6 +249,7 @@ export async function POST(
         pinnedAt: now,
         estado: initialEstado,
         accessRoles: ["diretor", "professor", "tutor", "aluno"],
+        accessUserIds,
         currentVersion: newVersion,
         currentFileUrl: fileUrl,
         currentFilePath: filePath,
@@ -250,7 +262,7 @@ export async function POST(
 
       if (hasSignatureFlow) {
         updateData.signatureRoles = effectiveSignatureRoles;
-        updateData.signatureUserIds = [];
+        updateData.signatureUserIds = signatureUserIds;
         updateData.signatureBoxes = signatureBoxes;
         updateData.signedBy = [];
         updateData.signedByRoles = [];
@@ -277,9 +289,9 @@ export async function POST(
         estado: initialEstado,
         prazoAssinatura: null,
         accessRoles: ["diretor", "professor", "tutor", "aluno"],
-        accessUserIds: [],
+        accessUserIds,
         signatureRoles: hasSignatureFlow ? effectiveSignatureRoles : [],
-        signatureUserIds: [],
+        signatureUserIds: hasSignatureFlow ? signatureUserIds : [],
         signatureBoxes: hasSignatureFlow ? signatureBoxes : [],
         currentVersion: 1,
         currentFileUrl: fileUrl,
