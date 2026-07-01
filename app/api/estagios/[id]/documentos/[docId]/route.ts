@@ -29,7 +29,10 @@ type SignatureRecord = {
 function extractPathFromDownloadUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
-    if (!parsed.hostname.endsWith("storage.googleapis.com")) return null;
+    if (
+      !parsed.hostname.endsWith("storage.googleapis.com") &&
+      !parsed.hostname.endsWith("firebasestorage.app")
+    ) return null;
     const match = parsed.pathname.match(/\/v0\/b\/[^/]+\/o\/(.+)/);
     if (!match) return null;
     return decodeURIComponent(match[1]);

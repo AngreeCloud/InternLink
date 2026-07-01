@@ -329,6 +329,12 @@ export function StudentReportsManager() {
     }
 
     const buffer = new Uint8Array(await selected.arrayBuffer());
+    console.log(`[StudentReports] fileBytes.length = ${buffer.length}, file.size = ${selected.size}`);
+    if (buffer.length === 0) {
+      setError("O ficheiro parece estar vazio. Tente novamente.");
+      event.target.value = "";
+      return;
+    }
     setFile(selected);
     setFileBytes(buffer);
     setFileKind(kind);
