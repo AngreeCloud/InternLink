@@ -29,7 +29,10 @@ type SignatureRecord = {
 function extractPathFromDownloadUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
-    if (!parsed.hostname.endsWith("storage.googleapis.com")) return null;
+    if (
+      !parsed.hostname.endsWith("storage.googleapis.com") &&
+      !parsed.hostname.endsWith("firebasestorage.app")
+    ) return null;
     const match = parsed.pathname.match(/\/v0\/b\/[^/]+\/o\/(.+)/);
     if (!match) return null;
     return decodeURIComponent(match[1]);
@@ -147,19 +150,22 @@ function sanitizeBoxes(boxes?: SignatureBox[]): SignatureBox[] | undefined {
       if (!Number.isFinite(box.width) || !Number.isFinite(box.height)) return false;
       return true;
     })
-    .map((box) => ({
-      id: String(box.id ?? ""),
-      role: box.role && ALLOWED_ROLES.includes(box.role) ? box.role : undefined,
-      userId: typeof box.userId === "string" ? box.userId : undefined,
-      page: Math.floor(box.page),
-      x: Math.max(0, Math.min(1, box.x)),
-      y: Math.max(0, Math.min(1, box.y)),
-      width: Math.max(0, Math.min(1, box.width)),
-      height: Math.max(0, Math.min(1, box.height)),
-      color: typeof box.color === "string" ? box.color : undefined,
-      label: typeof box.label === "string" ? box.label : undefined,
-    }));
-}
+    .map((box) => {
+      const r: Record<string, unknown> = {
+        id: String(box.id ?? ""),
+        page: Math.floor(box.page),
+        x: Math.max(0, Math.min(1, box.x)),
+        y: Math.max(0, Math.min(1, box.y)),
+        width: Math.max(0, Math.min(1, box.width)),
+        height: Math.max(0, Math.min(1, box.height)),
+      };
+      if (box.role && ALLOWED_ROLES.includes(box.role)) r.role = box.role;
+      if (typeof box.userId === "string") r.userId = box.userId;
+      if (typeof box.color === "string") r.color = box.color;
+      if (typeof box.label === "string") r.label = box.label;
+      return r as unknown as SignatureBox;
+    });
+  }
 
 /**
  * GET /api/estagios/[id]/documentos/[docId]?raw=true|false&inline=true|false
@@ -475,6 +481,14 @@ export async function PATCH(
     if (body.bumpVersion) {
       const snap = await docRef.get();
       const data = snap.exists ? snap.data() : null;
+      const estado = (data as { estado?: string })?.estado ?? "";
+      if (estado === "assinado") {
+        throw new EstagioAccessError(
+          400,
+          "doc_archived",
+          "Documento assinado por todas as partes. Não pode ser alterado.",
+        );
+      }
       const currentVersion = Number((data as { currentVersion?: number })?.currentVersion ?? 0);
       newVersion = currentVersion + 1;
       updates.currentVersion = newVersion;

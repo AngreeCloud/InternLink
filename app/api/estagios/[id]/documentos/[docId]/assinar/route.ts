@@ -15,17 +15,6 @@ type SignBody = {
   signatureDataUrl?: string;
 };
 
-type SignatureBox = {
-  id: string;
-  role?: EstagioRole;
-  userId?: string;
-  page: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
 function getClientIp(request: Request): string {
   const xff = request.headers.get("x-forwarded-for");
   if (xff) return xff.split(",")[0]?.trim() || "";
@@ -54,7 +43,6 @@ export async function POST(
     const docData = docSnap.data() as {
       signatureRoles?: EstagioRole[];
       signatureUserIds?: string[];
-      signatureBoxes?: SignatureBox[];
       currentFileUrl?: string;
       currentVersion?: number;
       nome?: string;
@@ -96,11 +84,10 @@ export async function POST(
     const signatureHash = crypto.createHash("sha256").update(sigBytes).digest("hex");
 
     const now = FieldValue.serverTimestamp();
-    const boxes: SignatureBox[] = Array.isArray(docData.signatureBoxes) ? docData.signatureBoxes : [];
-    const allSignatureBoxes = boxes.length;
     const existingSigsSnap = await docRef.collection("assinaturas").get();
+    const totalRequired = (docData.signatureRoles?.length ?? 0) + (docData.signatureUserIds?.length ?? 0);
     const signaturesAfter = existingSigsSnap.size + 1;
-    const allSigned = allSignatureBoxes > 0 && signaturesAfter >= allSignatureBoxes;
+    const allSigned = totalRequired > 0 && signaturesAfter >= totalRequired;
 
     // Guardar assinatura na subcoleção — o PDF é gerado apenas no descarregamento.
     await docRef.collection("assinaturas").doc(session.uid).set({
@@ -150,7 +137,7 @@ export async function POST(
       ok: true,
       allSigned,
       signaturesCount: signaturesAfter,
-      totalRequired: allSignatureBoxes,
+      totalRequired,
     });
   } catch (error) {
     const { body, status } = toApiErrorResponse(error);

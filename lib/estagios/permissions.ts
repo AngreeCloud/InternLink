@@ -89,7 +89,10 @@ export function canSignDoc(
   doc: DocumentoEstagio
 ): boolean {
   if (!role) return false;
-  const rolesOk = Array.isArray(doc.signatureRoles) && doc.signatureRoles.includes(role);
+  const rolesOk = Array.isArray(doc.signatureRoles) && (
+    doc.signatureRoles.includes(role) ||
+    (role === "diretor" && doc.signatureRoles.includes("professor"))
+  );
   const uidOk = Array.isArray(doc.signatureUserIds) && doc.signatureUserIds.includes(uid);
   return Boolean(rolesOk || uidOk);
 }

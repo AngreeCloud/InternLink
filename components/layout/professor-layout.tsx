@@ -71,7 +71,7 @@ function buildNotificationHref(notification: EstagioNotification): string | null
     return "/professor/justificacoes?tab=mudancas";
   }
 
-  if ((notification.type === "doc_signed" || notification.type === "doc_awaits_signature") && notification.estagioId) {
+  if ((notification.type === "doc_signed" || notification.type === "doc_awaits_signature" || notification.type === "relatorio_submitted") && notification.estagioId) {
     return `/professor/estagios/${notification.estagioId}?tab=documents`;
   }
 
@@ -145,7 +145,7 @@ export function ProfessorLayout({ children }: { children: React.ReactNode }) {
       if (item.type === "schedule_change_request") {
         actionLabel =
           item.requestType === "past_absence_justification" ? "Ver justificação" : "Ver pedido";
-      } else if (item.type === "doc_signed" || item.type === "doc_awaits_signature") {
+      } else if (item.type === "doc_signed" || item.type === "doc_awaits_signature" || item.type === "relatorio_submitted") {
         actionLabel = "Ver documentos";
       } else if (item.type === "avaliacao_tutor_assinada" || item.type === "avaliacao_professor_assinada") {
         actionLabel = "Ver avaliação";

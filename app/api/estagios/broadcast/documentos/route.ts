@@ -58,18 +58,21 @@ function sanitizeBoxes(boxes?: SignatureBox[]): SignatureBox[] {
       if (!Number.isFinite(box.width) || !Number.isFinite(box.height)) return false;
       return true;
     })
-    .map((box) => ({
-      id: String(box.id ?? ""),
-      role: box.role && ALLOWED_ROLES.includes(box.role) ? box.role : undefined,
-      userId: typeof box.userId === "string" ? box.userId : undefined,
-      page: Math.floor(box.page),
-      x: Math.max(0, Math.min(1, box.x)),
-      y: Math.max(0, Math.min(1, box.y)),
-      width: Math.max(0, Math.min(1, box.width)),
-      height: Math.max(0, Math.min(1, box.height)),
-      color: typeof box.color === "string" ? box.color : undefined,
-      label: typeof box.label === "string" ? box.label : undefined,
-    }));
+    .map((box) => {
+      const r: Record<string, unknown> = {
+        id: String(box.id ?? ""),
+        page: Math.floor(box.page),
+        x: Math.max(0, Math.min(1, box.x)),
+        y: Math.max(0, Math.min(1, box.y)),
+        width: Math.max(0, Math.min(1, box.width)),
+        height: Math.max(0, Math.min(1, box.height)),
+      };
+      if (box.role && ALLOWED_ROLES.includes(box.role)) r.role = box.role;
+      if (typeof box.userId === "string") r.userId = box.userId;
+      if (typeof box.color === "string") r.color = box.color;
+      if (typeof box.label === "string") r.label = box.label;
+      return r as unknown as SignatureBox;
+    });
 }
 
 /**

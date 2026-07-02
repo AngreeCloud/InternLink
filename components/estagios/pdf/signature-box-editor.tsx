@@ -47,7 +47,7 @@ export function SignatureBoxEditor({
   activeRole,
   drawingEnabled,
 }: SignatureBoxEditorProps) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const fabricCanvasRef = useRef<import("fabric").Canvas | null>(null);
   const boxesRef = useRef<SignatureBoxModel[]>(boxes);
   const onChangeRef = useRef(onChange);
@@ -80,13 +80,24 @@ export function SignatureBoxEditor({
     let fabricMod: FabricModule | null = null;
     let fabricCanvas: import("fabric").Canvas | null = null;
     let cleanupHandlers: (() => void) | null = null;
+    let ownCanvas: HTMLCanvasElement | null = null;
 
     (async () => {
-      if (!canvasRef.current) return;
+      const container = containerRef.current;
+      if (!container) return;
       fabricMod = (await import("fabric")) as FabricModule;
-      if (!active || !canvasRef.current) return;
+      if (!active || !container) return;
 
-      fabricCanvas = new fabricMod.Canvas(canvasRef.current, {
+      ownCanvas = document.createElement("canvas");
+      ownCanvas.style.position = "absolute";
+      ownCanvas.style.inset = "0";
+      ownCanvas.style.pointerEvents = "auto";
+      ownCanvas.style.zIndex = "3";
+      ownCanvas.width = pageWidth;
+      ownCanvas.height = pageHeight;
+      container.appendChild(ownCanvas);
+
+      fabricCanvas = new fabricMod.Canvas(ownCanvas, {
         width: pageWidth,
         height: pageHeight,
         selection: true,
@@ -95,6 +106,11 @@ export function SignatureBoxEditor({
         backgroundColor: undefined,
       });
       fabricCanvasRef.current = fabricCanvas;
+
+      const wrapper = fabricCanvas.getElement().parentElement;
+      if (wrapper) {
+        wrapper.style.pointerEvents = "auto";
+      }
 
       const rehydrate = () => {
         if (!fabricCanvas || !fabricMod) return;
@@ -280,9 +296,16 @@ export function SignatureBoxEditor({
 
     return () => {
       active = false;
-      cleanupHandlers?.();
       fabricCanvasRef.current = null;
-      fabricCanvas?.dispose();
+      if (cleanupHandlers) {
+        try { cleanupHandlers(); } catch { /* ignore */ }
+      }
+      if (fabricCanvas) {
+        try { fabricCanvas.dispose(); } catch { /* ignore */ }
+      }
+      if (ownCanvas?.parentElement) {
+        try { ownCanvas.parentElement.removeChild(ownCanvas); } catch { /* ignore */ }
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageNumber, pageWidth, pageHeight]);
@@ -291,65 +314,73 @@ export function SignatureBoxEditor({
   useEffect(() => {
     const fabricCanvas = fabricCanvasRef.current;
     if (!fabricCanvas) return;
-    const currentIds = new Set(
-      fabricCanvas.getObjects().map((o) => {
-        // @ts-expect-error custom prop
-        return o.data?.boxId as string | undefined;
-      })
-    );
-    const nextIds = new Set(boxes.filter((b) => b.page === pageNumber).map((b) => b.id));
-    const needsRehydrate =
-      currentIds.size !== nextIds.size ||
-      [...nextIds].some((id) => !currentIds.has(id));
-
-    if (!needsRehydrate) return;
-
-    // Remove objetos extra
-    for (const obj of fabricCanvas.getObjects()) {
-      // @ts-expect-error custom prop
-      const id: string | undefined = obj.data?.boxId;
-      if (!id || !nextIds.has(id)) {
-        fabricCanvas.remove(obj);
-      }
-    }
-    // Carrega fabric dinamicamente para adicionar novos objetos
-    void (async () => {
-      const fabricMod = (await import("fabric")) as FabricModule;
-      const existing = new Set(
+    try {
+      const currentIds = new Set(
         fabricCanvas.getObjects().map((o) => {
           // @ts-expect-error custom prop
           return o.data?.boxId as string | undefined;
         })
       );
-      for (const box of boxes.filter((b) => b.page === pageNumber)) {
-        if (existing.has(box.id)) continue;
-        const color = box.color || (box.role ? COLOR_BY_ROLE[box.role] : "#64748b");
-        const rect = new fabricMod.Rect({
-          left: box.x * pageWidth,
-          top: box.y * pageHeight,
-          width: box.width * pageWidth,
-          height: box.height * pageHeight,
-          fill: `${color}1a`,
-          stroke: color,
-          strokeWidth: 2,
-          strokeDashArray: [6, 4],
-          cornerColor: color,
-          borderColor: color,
-          transparentCorners: false,
-          hasRotatingPoint: false,
-          lockRotation: true,
-        });
+      const nextIds = new Set(boxes.filter((b) => b.page === pageNumber).map((b) => b.id));
+      const needsRehydrate =
+        currentIds.size !== nextIds.size ||
+        [...nextIds].some((id) => !currentIds.has(id));
+
+      if (!needsRehydrate) return;
+
+      for (const obj of fabricCanvas.getObjects()) {
         // @ts-expect-error custom prop
-        rect.data = { boxId: box.id };
-        fabricCanvas.add(rect);
+        const id: string | undefined = obj.data?.boxId;
+        if (!id || !nextIds.has(id)) {
+          fabricCanvas.remove(obj);
+        }
       }
-      fabricCanvas.requestRenderAll();
+    } catch {
+      return;
+    }
+    void (async () => {
+      try {
+        const fabricMod = (await import("fabric")) as FabricModule;
+        if (!fabricCanvasRef.current) return;
+        const fabricCanvas = fabricCanvasRef.current;
+        const existing = new Set(
+          fabricCanvas.getObjects().map((o) => {
+            // @ts-expect-error custom prop
+            return o.data?.boxId as string | undefined;
+          })
+        );
+        for (const box of boxes.filter((b) => b.page === pageNumber)) {
+          if (existing.has(box.id)) continue;
+          const color = box.color || (box.role ? COLOR_BY_ROLE[box.role] : "#64748b");
+          const rect = new fabricMod.Rect({
+            left: box.x * pageWidth,
+            top: box.y * pageHeight,
+            width: box.width * pageWidth,
+            height: box.height * pageHeight,
+            fill: `${color}1a`,
+            stroke: color,
+            strokeWidth: 2,
+            strokeDashArray: [6, 4],
+            cornerColor: color,
+            borderColor: color,
+            transparentCorners: false,
+            hasRotatingPoint: false,
+            lockRotation: true,
+          });
+          // @ts-expect-error custom prop
+          rect.data = { boxId: box.id };
+          fabricCanvas.add(rect);
+        }
+        fabricCanvas.requestRenderAll();
+      } catch {
+        /* canvas disposed */
+      }
     })();
   }, [boxes, pageNumber, pageWidth, pageHeight]);
 
   return (
-    <canvas
-      ref={canvasRef}
+    <div
+      ref={containerRef}
       style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}
     />
   );

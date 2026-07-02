@@ -15,7 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Archive, AlertCircle } from "lucide-react";
-import { checkCanArchive, isPastEndDate } from "@/lib/estagios/archive-validations";
+import { checkCanArchive, checkForceArchive, isPastEndDate } from "@/lib/estagios/archive-validations";
 import type { ArchiveCheckInput } from "@/lib/estagios/archive-validations";
 
 type Props = {
@@ -23,6 +23,7 @@ type Props = {
   schoolId: string;
   estado: string;
   dataFimEstimada?: string;
+  isSchoolAdmin?: boolean;
   onArchived?: () => void;
 };
 
@@ -31,13 +32,15 @@ type ReportInfo = {
   allSigned: boolean;
 };
 
-export function ArchiveEstagioButton({ estagioId, schoolId, estado, dataFimEstimada, onArchived }: Props) {
+export function ArchiveEstagioButton({ estagioId, schoolId, estado, dataFimEstimada, isSchoolAdmin, onArchived }: Props) {
   const [report, setReport] = useState<ReportInfo>({ submitted: false, allSigned: false });
   const [allSumariosOk, setAllSumariosOk] = useState(false);
   const [avaliacaoOk, setAvaliacaoOk] = useState(false);
   const [checking, setChecking] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [forceOpen, setForceOpen] = useState(false);
+  const [forceArchiving, setForceArchiving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -132,9 +135,35 @@ export function ArchiveEstagioButton({ estagioId, schoolId, estado, dataFimEstim
     }
   };
 
+  const handleForceArchive = async () => {
+    setForceArchiving(true);
+    try {
+      const res = await fetch(`/api/estagios/${estagioId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estadoEstagio: "arquivado", forceArchive: true }),
+      });
+      if (!res.ok) {
+        const err = (await res.json()) as { error?: string };
+        console.error("Erro ao forçar arquivo:", err.error);
+        return;
+      }
+      setForceOpen(false);
+      onArchived?.();
+    } catch (error) {
+      console.error("Erro ao forçar arquivo:", error);
+    } finally {
+      setForceArchiving(false);
+    }
+  };
+
   if (estado === "arquivado" || estado === "eliminado") return null;
 
+  const forceCheck = checkForceArchive({ estado });
+  const canForceArchive = isSchoolAdmin && !archiveCheck.canArchive && forceCheck.canArchive;
+
   return (
+    <div className="flex items-center gap-2">
     <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
       <DialogTrigger asChild>
         <Button
@@ -179,5 +208,39 @@ export function ArchiveEstagioButton({ estagioId, schoolId, estado, dataFimEstim
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {canForceArchive && (
+      <Dialog open={forceOpen} onOpenChange={setForceOpen}>
+        <DialogTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="border-red-500/40 text-red-700 hover:bg-red-50 dark:text-red-400"
+            title="Forçar arquivamento (admin)"
+          >
+            <Archive className="mr-2 h-4 w-4" />
+            Forçar arquivo
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Forçar arquivamento?</DialogTitle>
+            <DialogDescription>
+              Como administrador escolar, pode forçar o arquivamento ignorando as condições em falta (relatório não assinado, sumários pendentes, avaliações incompletas). Esta ação é irreversível e fica registada.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline" disabled={forceArchiving}>Cancelar</Button>
+            </DialogClose>
+            <Button type="button" variant="destructive" onClick={handleForceArchive} disabled={forceArchiving}>
+              {forceArchiving ? "A arquivar..." : "Forçar arquivamento"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )}
+    </div>
   );
 }

@@ -66,3 +66,24 @@ export function isPastEndDate(dataFimEstimada?: string | null): boolean {
   if (!dataFimEstimada) return false;
   return new Date(dataFimEstimada) < new Date();
 }
+
+export type ForceArchiveCheckInput = {
+  estado: string;
+};
+
+export function checkForceArchive(input: ForceArchiveCheckInput): ArchiveCheckResult {
+  const reasons: string[] = [];
+
+  if (input.estado === "arquivado") {
+    reasons.push("Estágio já arquivado");
+  }
+
+  if (input.estado === "eliminado") {
+    reasons.push("Estágio eliminado não pode ser arquivado");
+  }
+
+  return {
+    canArchive: reasons.length === 0,
+    reasons,
+  };
+}

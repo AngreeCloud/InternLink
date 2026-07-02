@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
+  doc,
+  getDoc,
   getDocs,
   limit,
   query,
@@ -37,8 +39,9 @@ import {
   Pin,
   Upload,
 } from "lucide-react";
-import { PdfViewer } from "@/components/estagios/pdf/pdf-viewer";
 import { FullscreenDocumentViewer } from "@/components/estagios/documentos/fullscreen-document-viewer";
+import { ReportSignDialog } from "@/components/estagios/documentos/report-sign-dialog";
+import type { EstagioRole } from "@/lib/estagios/permissions";
 
 const MIME_PDF = "application/pdf";
 const MIME_DOCX =
@@ -81,6 +84,13 @@ type ManagerState = {
 };
 
 const DEFAULT_TITLE = "Relatório final de estágio";
+
+const roleMap: Record<EstagioRole, string> = {
+  diretor: "Diretor",
+  professor: "Orientador",
+  tutor: "Tutor",
+  aluno: "Aluno",
+};
 
 function detectKind(file: File): FileKind | null {
   const name = file.name.toLowerCase();
@@ -125,21 +135,17 @@ export function StudentReportsManager() {
   const [file, setFile] = useState<File | null>(null);
   const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null);
   const [fileKind, setFileKind] = useState<FileKind | null>(null);
-  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [fullscreenPreview, setFullscreenPreview] = useState<"submitted" | "upload" | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [sigRoles, setSigRoles] = useState<EstagioRole[]>(["aluno", "professor", "tutor"]);
+  const [encarregadoInfo, setEncarregadoInfo] = useState<{ id: string; nome?: string } | null>(null);
+  const [pendingSignDoc, setPendingSignDoc] = useState<{ docId: string; docNome: string } | null>(null);
 
-  // Cleanup blob URL when file changes/unmounts.
-  useEffect(() => {
-    return () => {
-      if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
-    };
-  }, [pdfBlobUrl]);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const refreshEligibility = async (estagioId: string) => {
     try {
@@ -238,6 +244,19 @@ export function StudentReportsManager() {
             estagioId: estagioDoc.id,
           }));
           await refreshEligibility(estagioDoc.id);
+
+          try {
+            const userSnap = await getDoc(doc(db, "users", user.uid));
+            const userData = userSnap.data() as { encarregadoId?: string } | undefined;
+            const encId = userData?.encarregadoId;
+            if (encId) {
+              const encSnap = await getDoc(doc(db, "users", encId));
+              const encData = encSnap.data() as { nome?: string } | undefined;
+              setEncarregadoInfo({ id: encId, nome: encData?.nome });
+            } else {
+              setEncarregadoInfo(null);
+            }
+          } catch { setEncarregadoInfo(null); }
         } catch (err) {
           console.error("[v0] estagio lookup failed", err);
           setState({
@@ -310,18 +329,18 @@ export function StudentReportsManager() {
     }
 
     const buffer = new Uint8Array(await selected.arrayBuffer());
+    console.log(`[StudentReports] fileBytes.length = ${buffer.length}, file.size = ${selected.size}`);
+    if (buffer.length === 0) {
+      setError("O ficheiro parece estar vazio. Tente novamente.");
+      event.target.value = "";
+      return;
+    }
     setFile(selected);
     setFileBytes(buffer);
     setFileKind(kind);
 
-    if (pdfBlobUrl) {
-      URL.revokeObjectURL(pdfBlobUrl);
-    }
-    if (kind === "pdf") {
-      const url = URL.createObjectURL(new Blob([buffer], { type: MIME_PDF }));
-      setPdfBlobUrl(url);
-    } else {
-      setPdfBlobUrl(null);
+    if (kind !== "pdf") {
+      return;
     }
   };
 
@@ -329,10 +348,6 @@ export function StudentReportsManager() {
     setFile(null);
     setFileBytes(null);
     setFileKind(null);
-    if (pdfBlobUrl) {
-      URL.revokeObjectURL(pdfBlobUrl);
-      setPdfBlobUrl(null);
-    }
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -363,28 +378,44 @@ export function StudentReportsManager() {
       await uploadBytes(sRef, fileBytes, { contentType: mimeType });
       const downloadUrl = await getDownloadURL(sRef);
 
+      const body: Record<string, unknown> = {
+        fileUrl: downloadUrl,
+        filePath: storagePath,
+        fileName: file.name,
+        fileMimeType: mimeType,
+        fileExtension: extension,
+        titulo: titulo.trim(),
+        resumo: resumo.trim(),
+        signatureRoles: sigRoles,
+        signatureBoxes: [],
+        signatureUserIds: encarregadoInfo ? [encarregadoInfo.id] : [],
+        encarregadoId: encarregadoInfo?.id ?? null,
+      };
+
       const res = await fetch(`/api/estagios/${state.estagioId}/relatorio-final`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileUrl: downloadUrl,
-          filePath: storagePath,
-          fileName: file.name,
-          fileMimeType: mimeType,
-          fileExtension: extension,
-          titulo: titulo.trim(),
-          resumo: resumo.trim(),
-        }),
+        body: JSON.stringify(body),
       });
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        docId?: string;
+      };
       if (!res.ok || !data.ok) {
         setError(data.error || "Não foi possível registar o relatório.");
         return;
       }
 
-      setSuccess("Relatório submetido. Foi fixado nos documentos do estágio.");
       clearFile();
       await refreshEligibility(state.estagioId);
+
+      if (data.docId) {
+        setPendingSignDoc({ docId: data.docId, docNome: titulo.trim() });
+        setSuccess("Relatório submetido. Assine agora para concluir.");
+      } else {
+        setSuccess("Relatório submetido. Foi fixado nos documentos do estágio.");
+      }
     } catch (err) {
       console.error("[v0] submit relatorio failed", err);
       setError(err instanceof Error ? err.message : "Erro inesperado ao submeter o relatório.");
@@ -555,8 +586,7 @@ export function StudentReportsManager() {
       {/* Fullscreen Document Viewer for upload preview */}
       {fullscreenPreview === "upload" && file && fileKind && (
         <FullscreenDocumentViewer
-          fileBytes={fileKind === "pdf" ? undefined : fileBytes ?? undefined}
-          fileUrl={fileKind === "pdf" && pdfBlobUrl ? pdfBlobUrl : undefined}
+          fileBytes={fileBytes ?? undefined}
           fileName={file.name}
           fileType={fileKind}
           onClose={() => setFullscreenPreview(null)}
@@ -639,6 +669,53 @@ export function StudentReportsManager() {
                 <p><strong>{file.name}</strong> ({Math.round(file.size / 1024)} KB)</p>
                 <p className="mt-1 text-xs">Clique em "Visualizar em ecrã completo" para pré-visualizar o documento com opções de zoom.</p>
               </div>
+
+              {fileKind === "pdf" && (
+                <div className="space-y-2 rounded-md border border-border p-3">
+                  <p className="text-xs font-semibold text-muted-foreground">Quem assina</p>
+                  <div className="mt-1 space-y-1.5">
+                    <label className="flex items-center gap-2 text-xs">
+                      <input type="checkbox" checked disabled className="opacity-50" />
+                      <span className="text-muted-foreground">Aluno (você)</span>
+                    </label>
+                    {(["professor", "tutor"] as EstagioRole[]).map((role) => (
+                      <label key={role} className="flex items-center gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={sigRoles.includes(role)}
+                          onChange={(e) => {
+                            setSigRoles((prev) =>
+                              e.target.checked
+                                ? [...prev, role]
+                                : prev.filter((r) => r !== role)
+                            );
+                          }}
+                        />
+                        <span>{roleMap[role]}</span>
+                      </label>
+                    ))}
+                    {encarregadoInfo && (
+                      <label className="flex items-center gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={sigRoles.includes("aluno") && encarregadoInfo.id.length > 0}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSigRoles((prev) => {
+                                const r = [...prev];
+                                if (!r.includes("aluno")) r.push("aluno");
+                                return r;
+                              });
+                            }
+                            setEncarregadoInfo(e.target.checked ? encarregadoInfo : null);
+                          }}
+                        />
+                        <span>Encarregado ({encarregadoInfo.nome ?? "associado"})</span>
+                      </label>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           ) : null}
 
@@ -681,6 +758,25 @@ export function StudentReportsManager() {
           </div>
         </CardContent>
       </Card>
+
+      {pendingSignDoc && state.estagioId && (
+        <ReportSignDialog
+          estagioId={state.estagioId}
+          docId={pendingSignDoc.docId}
+          docNome={pendingSignDoc.docNome}
+          currentUserRole="aluno"
+          open={!!pendingSignDoc}
+          onOpenChange={(o) => {
+            if (!o) {
+              setPendingSignDoc(null);
+            }
+          }}
+          onSigned={() => {
+            setPendingSignDoc(null);
+            setSuccess("Relatório submetido e assinado.");
+          }}
+        />
+      )}
     </div>
   );
 }

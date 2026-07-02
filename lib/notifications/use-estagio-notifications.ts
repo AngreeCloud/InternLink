@@ -76,6 +76,11 @@ export function useEstagioNotifications(params: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ estagioId, notificationId }),
       });
+      setNotifications((prev) =>
+        prev.map((n) =>
+          n.id === notificationId ? { ...n, readAt: Date.now() } : n
+        )
+      );
     } catch (err) {
       console.error("[v0] mark notification read error", err);
     }

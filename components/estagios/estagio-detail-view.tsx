@@ -285,6 +285,7 @@ export function EstagioDetailView({
               schoolId={estagio.schoolId ?? ""}
               estado={(raw.estadoEstagio as string) ?? (raw.estado as string) ?? ""}
               dataFimEstimada={estagio.dataFimEstimada as string | undefined}
+              isSchoolAdmin={currentUserRole === "admin_escolar"}
             />
           )}
         </div>
