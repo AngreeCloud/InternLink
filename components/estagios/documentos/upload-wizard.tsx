@@ -140,6 +140,7 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const readingFile = useRef(false);
+  const lastFileKey = useRef("");
 
   useEffect(() => {
     if (!open) {
@@ -153,6 +154,8 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
       setSignatureRoles(doc.signatureRoles);
       setError(null);
       setSubmitting(false);
+      readingFile.current = false;
+      lastFileKey.current = "";
     }
   }, [open, doc]);
 
@@ -160,11 +163,13 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
   const shouldConfigureSignatures = isPdfFile && enableSignatureFlow;
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = event.target.files?.[0];
+    if (!selected) return;
+    const key = `${selected.name}:${selected.size}:${selected.lastModified}`;
+    if (key === lastFileKey.current && readingFile.current) return;
     if (readingFile.current) return;
     readingFile.current = true;
     try {
-      const selected = event.target.files?.[0];
-      if (!selected) return;
       const meta = resolveFileMeta(selected);
       if (!meta) {
         setError("Apenas ficheiros PDF, DOCX ou XLSX são aceites.");
@@ -180,6 +185,7 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
         setError("O ficheiro parece estar vazio. Tente novamente.");
         return;
       }
+      lastFileKey.current = key;
       setFile(selected);
       setFileBytes(buffer);
       setFileMimeType(meta.mimeType);
@@ -191,6 +197,7 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
       }
 
       setError(null);
+      event.target.value = "";
     } finally {
       readingFile.current = false;
     }

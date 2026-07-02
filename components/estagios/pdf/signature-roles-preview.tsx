@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import React, { useState } from "react";
 import {
   PdfViewer,
   type PdfPageInfo,
@@ -13,40 +13,34 @@ type SignatureRolesPreviewProps = {
 };
 
 const PREVIEW_SCALE = 0.6;
-
 const COLOR_BY_ROLE: Record<EstagioRole, string> = {
   diretor: "#0ea5e9",
   professor: "#16a34a",
   tutor: "#ea580c",
   aluno: "#7c3aed",
 };
-
 const ROLE_LABEL: Record<EstagioRole, string> = {
   diretor: "Diretor",
   professor: "Orientador",
   tutor: "Tutor",
   aluno: "Aluno",
 };
+const ROLE_LABEL_PT: Record<EstagioRole, string> = {
+  diretor: "Diretor de Curso",
+  professor: "Orientador",
+  tutor: "Tutor",
+  aluno: "Aluno",
+};
 
-function generateBoxes(roles: EstagioRole[], pageNumber: number) {
-  const boxW = 0.44;
-  const boxH = 0.057;
-  const x = (1 - boxW) / 2;
-  const startY = 1 - (roles.length * (boxH + 0.015) + 0.05);
-  return roles.map((role, i) => {
-    const y = Math.max(startY + i * (boxH + 0.015), 0.025);
-    return {
-      id: `auto-${role}`,
-      role,
-      page: pageNumber,
-      x,
-      y,
-      width: boxW,
-      height: boxH,
-      label: ROLE_LABEL[role],
-    };
-  });
-}
+const MARGIN = 56;
+const BRAND = "#1a3a5c";
+const MUTED = "#737373";
+const LINE = "#e0e0e0";
+
+const S = (pt: number) => pt * PREVIEW_SCALE;
+
+const CSS_W = 595.28 * PREVIEW_SCALE;
+const CSS_H = 841.89 * PREVIEW_SCALE;
 
 export function SignatureRolesPreview({
   fileBytes,
@@ -58,23 +52,19 @@ export function SignatureRolesPreview({
     setPdfPages(pages);
   };
 
-  const virtualPageNumber = pdfPages.length + 1;
-
-  const boxes = useMemo(() => {
-    if (signatureRoles.length === 0) return [];
-    return generateBoxes(signatureRoles, virtualPageNumber);
-  }, [signatureRoles, virtualPageNumber]);
-
-  const CSS_W = 595.28 * PREVIEW_SCALE;
-  const CSS_H = 841.89 * PREVIEW_SCALE;
+  const topFrom = (pt: number) => S(pt);
 
   return (
     <div className="space-y-3">
       <div className="space-y-2">
         <p className="text-xs font-semibold text-muted-foreground">
-          Documento original ({pdfPages.length} página{pdfPages.length !== 1 ? "s" : ""})
+          Documento original ({pdfPages.length} página
+          {pdfPages.length !== 1 ? "s" : ""})
         </p>
-        <div className="overflow-y-auto rounded-lg border border-border bg-muted/10" style={{ maxHeight: 420 }}>
+        <div
+          className="overflow-y-auto rounded-lg border border-border bg-muted/10"
+          style={{ maxHeight: 420 }}
+        >
           <PdfViewer
             fileBytes={fileBytes}
             scale={PREVIEW_SCALE}
@@ -93,38 +83,166 @@ export function SignatureRolesPreview({
             style={{ width: CSS_W, height: CSS_H }}
           >
             <div
-              className="flex items-center justify-center border-b border-border px-6 py-4"
-              style={{ height: 56 }}
+              className="absolute"
+              style={{
+                left: S(MARGIN),
+                top: topFrom(MARGIN + 14),
+                fontSize: S(18),
+                fontWeight: 700,
+                color: BRAND,
+              }}
             >
-              <span className="text-sm font-bold tracking-wide text-foreground">
-                InternLink
-              </span>
+              InternLink
             </div>
 
             <div
-              className="absolute inset-x-0 mx-auto flex items-center justify-center font-semibold text-foreground"
-              style={{ top: 72, height: 28 }}
+              className="absolute"
+              style={{
+                left: S(MARGIN),
+                right: S(MARGIN),
+                top: topFrom(MARGIN + 30),
+                height: S(0.75),
+                backgroundColor: LINE,
+              }}
+            />
+
+            <div
+              className="absolute"
+              style={{
+                left: S(MARGIN),
+                top: topFrom(MARGIN + 30 + 24),
+                fontSize: S(13),
+                fontWeight: 700,
+                color: BRAND,
+              }}
             >
               Página de Assinaturas
             </div>
 
-            {boxes.map((box) => (
-              <div
-                key={box.id}
-                className="flex items-center justify-center rounded-md border-2 border-dashed bg-white/80 text-xs font-medium"
-                style={{
-                  position: "absolute",
-                  left: `${box.x * CSS_W}px`,
-                  top: `${box.y * CSS_H}px`,
-                  width: `${box.width * CSS_W}px`,
-                  height: `${box.height * CSS_H}px`,
-                  borderColor: COLOR_BY_ROLE[box.role],
-                  color: COLOR_BY_ROLE[box.role],
-                }}
-              >
-                {ROLE_LABEL[box.role]}
-              </div>
-            ))}
+            <div
+              className="absolute"
+              style={{
+                left: S(MARGIN),
+                top: topFrom(MARGIN + 30 + 24 + 10),
+                fontSize: S(9),
+                color: MUTED,
+              }}
+            >
+              Documento: —
+            </div>
+
+            <div
+              className="absolute"
+              style={{
+                left: S(MARGIN),
+                top: topFrom(MARGIN + 30 + 24 + 10 + 14),
+                fontSize: S(8),
+                color: MUTED,
+              }}
+            >
+              Gerado em: —
+            </div>
+
+            {signatureRoles.map((role, i) => {
+              const blockTop = MARGIN + 30 + 24 + 10 + 14 + 22 + i * 90;
+              return (
+                <React.Fragment key={role}>
+                  <div
+                    className="absolute"
+                    style={{
+                      left: S(MARGIN),
+                      right: S(MARGIN),
+                      top: topFrom(blockTop),
+                      height: S(0.5),
+                      backgroundColor: LINE,
+                    }}
+                  />
+                  <div
+                    className="absolute"
+                    style={{
+                      left: S(MARGIN),
+                      top: topFrom(blockTop + 14),
+                      fontSize: S(11),
+                      fontWeight: 700,
+                      color: BRAND,
+                    }}
+                  >
+                    {ROLE_LABEL_PT[role]}
+                  </div>
+                  <div
+                    className="absolute"
+                    style={{
+                      left: S(MARGIN),
+                      top: topFrom(blockTop + 14 + 14),
+                      fontSize: S(9),
+                      color: MUTED,
+                    }}
+                  >
+                    {ROLE_LABEL[role]}
+                  </div>
+                  <div
+                    className="absolute"
+                    style={{
+                      left: S(MARGIN),
+                      top: topFrom(blockTop + 14 + 14 + 13),
+                      fontSize: S(8),
+                      color: MUTED,
+                    }}
+                  >
+                    Assinado em: —
+                  </div>
+                  <div
+                    className="rounded border-2 border-dashed flex items-center justify-center bg-white/60"
+                    style={{
+                      position: "absolute",
+                      right: S(MARGIN),
+                      top: topFrom(blockTop + 14),
+                      width: S(160),
+                      height: S(56),
+                      borderColor: COLOR_BY_ROLE[role],
+                      color: COLOR_BY_ROLE[role],
+                      fontSize: S(9),
+                    }}
+                  >
+                    A aguardar
+                  </div>
+                </React.Fragment>
+              );
+            })}
+
+            <div
+              className="absolute"
+              style={{
+                left: S(MARGIN),
+                right: S(MARGIN),
+                top: topFrom(841.89 - MARGIN - 20 - 12),
+                height: S(0.5),
+                backgroundColor: LINE,
+              }}
+            />
+            <div
+              className="absolute"
+              style={{
+                left: S(MARGIN),
+                top: topFrom(841.89 - MARGIN - 20),
+                fontSize: S(7),
+                color: MUTED,
+              }}
+            >
+              Este documento foi gerado e assinado digitalmente pela plataforma
+              InternLink.
+            </div>
+            <div
+              className="absolute"
+              style={{
+                left: S(MARGIN),
+                top: topFrom(841.89 - MARGIN - 20 + 10),
+                fontSize: S(7),
+                color: MUTED,
+              }}
+            >
+              internlink.app — —
+            </div>
           </div>
         </div>
       ) : null}

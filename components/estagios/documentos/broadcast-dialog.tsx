@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getStorageRuntime } from "@/lib/firebase-runtime";
 import {
@@ -125,6 +125,8 @@ export function BroadcastDialog({
   const [signatureRoles, setSignatureRoles] = useState<EstagioRole[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const readingFile = useRef(false);
+  const lastFileKey = useRef("");
 
   // Carrega cursos em que o professor está associado + conta estágios por curso.
   useEffect(() => {
@@ -174,6 +176,8 @@ export function BroadcastDialog({
       setError(null);
       setCoursesError(null);
       setSubmitting(false);
+      readingFile.current = false;
+      lastFileKey.current = "";
     }
   }, [open]);
 
@@ -190,32 +194,42 @@ export function BroadcastDialog({
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
     if (!selected) return;
-    const meta = resolveFileMeta(selected);
-    if (!meta) {
-      setError("Apenas ficheiros PDF, DOCX ou XLSX são aceites.");
-      return;
-    }
-    if (selected.size > 20 * 1024 * 1024) {
-      setError("O ficheiro deve ter no máximo 20 MB.");
-      return;
-    }
-    const buffer = new Uint8Array(await selected.arrayBuffer());
-    console.log(`[BroadcastDialog] fileBytes.length = ${buffer.length}, file.size = ${selected.size}`);
-    if (buffer.length === 0) {
-      setError("O ficheiro parece estar vazio. Tente novamente.");
-      return;
-    }
-    setFile(selected);
-    setFileBytes(buffer);
-    setFileMimeType(meta.mimeType);
-    setFileExtension(meta.extension);
+    const key = `${selected.name}:${selected.size}:${selected.lastModified}`;
+    if (key === lastFileKey.current && readingFile.current) return;
+    if (readingFile.current) return;
+    readingFile.current = true;
+    try {
+      const meta = resolveFileMeta(selected);
+      if (!meta) {
+        setError("Apenas ficheiros PDF, DOCX ou XLSX são aceites.");
+        return;
+      }
+      if (selected.size > 20 * 1024 * 1024) {
+        setError("O ficheiro deve ter no máximo 20 MB.");
+        return;
+      }
+      const buffer = new Uint8Array(await selected.arrayBuffer());
+      console.log(`[BroadcastDialog] fileBytes.length = ${buffer.length}, file.size = ${selected.size}`);
+      if (buffer.length === 0) {
+        setError("O ficheiro parece estar vazio. Tente novamente.");
+        return;
+      }
+      lastFileKey.current = key;
+      setFile(selected);
+      setFileBytes(buffer);
+      setFileMimeType(meta.mimeType);
+      setFileExtension(meta.extension);
 
-    if (!meta.isPdf) {
-      setEnableSignatureFlow(false);
-      setSignatureRoles([]);
-    }
+      if (!meta.isPdf) {
+        setEnableSignatureFlow(false);
+        setSignatureRoles([]);
+      }
 
-    setError(null);
+      setError(null);
+      event.target.value = "";
+    } finally {
+      readingFile.current = false;
+    }
   };
 
   const toggleCourse = (courseId: string) => {
