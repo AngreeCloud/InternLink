@@ -13,9 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 const EDUCATION_LEVELS = [
   "Secundária/Profissional",
-  "Licenciatura",
-  "Mestrado",
-  "Doutoramento",
+  "Ensino Superior (Universitário)",
+  "Ensino Superior (Politécnico)",
 ];
 
 type SchoolInfo = {
