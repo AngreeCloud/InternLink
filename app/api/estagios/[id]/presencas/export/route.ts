@@ -314,7 +314,7 @@ async function createTablePages(
   pageStart: number,
   totalPages: number
 ): Promise<void> {
-  const MAX_ROWS_PER_PAGE = 32;
+  const MAX_ROWS_PER_PAGE = 31;
   let batch = [...rows];
   let pageNum = pageStart;
 
@@ -633,7 +633,7 @@ export async function GET(
     const bold = await doc.embedFont(StandardFonts.HelveticaBold);
 
     // Calculate pages: cover (1) + table pages + signatures (1)
-    const MAX_ROWS_PER_PAGE = 32;
+  const MAX_ROWS_PER_PAGE = 31;
     const tablePageCount = Math.max(1, Math.ceil(rows.length / MAX_ROWS_PER_PAGE));
     const totalPages = 1 + tablePageCount + 1;
 
