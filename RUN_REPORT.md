@@ -1,113 +1,87 @@
-# RUN_REPORT — Assinaturas no Relatório Final
+# RUN_REPORT — Validação de Presenças + PDF Export + Transição "concluido"
 
-## Resumo
+## Commits (português)
 
-Implementado o plano completo de assinaturas no relatório final (PLAN.md). 9 ficheiros alterados, 1 ficheiro criado.
+### 1. `lib/estagios/presencas.ts` — Lógica pura validação presenças
+- `checkPresencasCanValidate()`: verifica se `totalRealizado >= totalPrevisto` OU `restante < horasPorDia * 2`
+- Retorna `podeValidar`, `motivo`, `diasRestantes`
 
----
+### 2. `lib/estagios/estagio-status.ts` — Lógica transição estado
+- `checkShouldTransitionToConcluido()`: retorna `true` se horas cumpridas OU término antecipado aprovado
 
-## Checklist por Passo
+### 3. `app/api/estagios/[id]/presencas/notify-tutor/route.ts` — Notificação push tutor
+- `POST` endpoint, só aluno pode disparar
+- Verifica condições via `checkPresencasCanValidate`
+- Escreve em `estagios/{id}/notifications/` com `type: "presencas_ready"`, `userId: tutorId`
+- Deduplica: não cria se já existe notificação não lida do mesmo tipo
 
-### 1. API relatorio-final — signatureBoxes, bloqueio, allSigned corrigido ✅
+### 4. `app/api/estagios/[id]/presencas/validar/route.ts` — Validação pelo tutor
+- `PATCH` endpoint, só tutor
+- Soma presenças no servidor (seguro, não confia no cliente)
+- Verifica `checkPresencasCanValidate`
+- Marca `presencasValidatedByTutor: true` + timestamp + nome
+- Se `totalRealizado >= totalHoras` OU término antecipado aprovado → `estado: "concluido"`, `estadoEstagio: "concluido"`
+- Audit log
 
-**Ficheiro:** `app/api/estagios/[id]/relatorio-final/route.ts`
+### 5. `components/estagios/horario-tab.tsx` — UI validação + trigger notificação
+- **Botão "Validar presenças"** no card resumo, visível só p/ tutor quando condições satisfeitas
+- **Badge** "Presenças validadas pelo tutor" após validação
+- **AlertDialog** confirmação com declaração, total realizado, dias registados
+- **Trigger notificação**: após `handleSave()` bem-sucedido, se `checkPresencasCanValidate` retorna `podeValidar` e tutor ainda não validou, chama `POST /api/estagios/{id}/presencas/notify-tutor`
+- **Export panel** integrado no final (condicional a `totalRealizado > 0`)
 
-- Adicionado tipo `SignatureBox`, `sanitizeRoles()`, `sanitizeBoxes()` com validação rigorosa (página >= 1, coordenadas 0..1, roles permitidas)
-- `SubmitBody` expandido para aceitar `signatureBoxes` e `signatureRoles`
-- **POST (update):** Bloqueia se `estado === "assinado"` — erro `already_signed`
-- **POST (update):** Aceita boxes/roles; se `hasSignatureFlow`, limpa `signedBy`, `signedByRoles` para reiniciar ciclo de assinaturas
-- **POST (create):** `estado: "aguarda_assinatura"` (em vez de `"pendente"`) quando há fluxo de assinatura
-- **POST (create):** `signatureRoles` default: `["aluno", "professor", "tutor"]`
-- **GET:** `allSigned = boxes.length > 0 && sigsSnap.size >= boxes.length` (em vez de hardcoded `>= 2`)
-- **GET:** Retorna `estado`, `signatureBoxes`, `signatureRoles` no objeto `report`
+### 6. `app/api/estagios/[id]/presencas/export/route.ts` — PDF export
+- Reutiliza `pdf-lib` (mesma palette, fontes, helpers do export sumários)
+- Cover page: título "REGISTO DE PRESENÇAS", curso, formando, tutor, orientador, período
+- **Tabela paginada**: colunas `Dia | Mês | Horas`, linhas alternadas (bege/branco)
+- Dias com 0h excluídos
+- Linha total (fundo verde) no fim
+- Páginas de assinaturas (opcional, mode=signed)
+- Até ~32 linhas/página, header repete em cada página
 
-**Segurança:** `sanitizeBoxes()` valida todos os campos (página, coordenadas, roles), previne injeção de dados arbitrários.
+### 7. `app/api/estagios/[id]/presencas/export/preflight/route.ts` — Preflight
+- Verifica: existem presenças? Tutor já validou? Aluno/tutor têm assinatura?
+- Retorna `canExportSigned`, `schoolHasAddress`
 
-### 2. Student upload — step de signature boxes ✅
+### 8. `components/estagios/presencas-export-panel.tsx` — UI export
+- Checklist requisitos: validação tutor, assinaturas
+- Botões download c/ e s/ assinaturas
+- Pré-visualização
+- Mesmo padrão do `sumarios-export-panel.tsx`
 
-**Ficheiro:** `components/student/student-reports-manager.tsx`
-
-- Importações de `SignatureBoxEditor`, `SignatureBoxModel`, `EstagioRole`
-- State: `sigBoxes`, `sigSelectedBoxId`, `sigActiveRole`, `sigDrawing`, `showSigBoxes`
-- Secção "Posicionar assinaturas" aparece quando PDF selecionado — toggle "Posicionar caixas" / "Ocultar editor"
-- Usa `PdfViewer` com `renderPageOverlay` → `SignatureBoxEditor` (idêntico ao upload-wizard)
-- Sidebar: 3 botões de papel (Aluno, Orientador, Tutor), checkbox "Modo desenho", lista de caixas com ✕ delete
-- `handleSubmit`: inclui `signatureRoles` e `signatureBoxes` no POST
-- `clearFile`: reseta todo o state de assinaturas
-
-### 3. ReportSignDialog — consentimento + assinatura ✅
-
-**Ficheiro:** `components/estagios/documentos/report-sign-dialog.tsx` (NOVO)
-
-- 2 passos: AlertDialog de consentimento → SignDialog de assinatura
-- Textos de consentimento por papel:
-  - **Aluno:** "Declaro que o presente relatório final de estágio é da minha autoria..."
-  - **Professor:** "Declaro que revi o relatório final de estágio apresentado pelo aluno..."
-  - **Tutor:** "Declaro que tomei conhecimento do relatório final de estágio apresentado pelo formando..."
-- Estilo visual: bloco de citação `&ldquo;...&rdquo;` com `rounded-md border bg-muted/30` (igual ao sumários)
-- Aviso: "Esta ação fica registada com a sua identidade e não pode ser revertida."
-- Prop `currentUserRole` determina qual texto mostrar
-- Reutiliza `SignDialog` existente para o passo de desenho/assinatura guardada
-
-### 4. DocumentList — integração ReportSignDialog + esconder Nova versão ✅
-
-**Ficheiro:** `components/estagios/documentos/document-list.tsx`
-
-- `SignDialog` genérico vs `ReportSignDialog`: condicional por `templateCode === "RELATORIO_FINAL"`
-- Botão "Nova versão" / "Carregar": oculto quando `d.estado === "assinado"` (linha 391)
-
-### 5. Documentos PATCH — bloquear bump se assinado ✅
-
-**Ficheiro:** `app/api/estagios/[id]/documentos/[docId]/route.ts`
-
-- No caminho `bumpVersion`: verifica `estado === "assinado"` e lança `EstagioAccessError("doc_archived", "Documento assinado por todas as partes. Não pode ser alterado.")`
-
-### 6. Archive — forçar arquivo para school-admin ✅
-
-**Ficheiros:**
-- `lib/estagios/archive-validations.ts` — `checkForceArchive()` com validações mínimas (não eliminado, não já arquivado)
-- `components/estagios/archive-estagio-button.tsx` — prop `isSchoolAdmin`, botão "Forçar arquivo" (destructive style), diálogo de confirmação com aviso, PATCH com `forceArchive: true`
-- `components/estagios/estagio-detail-view.tsx` — passa `isSchoolAdmin={currentUserRole === "admin_escolar"}`
-
-**Lógica:** School-admin vê botão "Forçar arquivo" (vermelho) quando condições normais de arquivo não estão preenchidas. Ao forçar, ignora relatório não assinado, sumários pendentes, avaliações incompletas. Mantém apenas validações estruturais (não eliminado, não já arquivado).
-
-### 7. Tutor reports view — acesso school-admin ✅
-
-**Ficheiro:** `components/tutor/tutor-internship-reports-view.tsx`
-
-- Verificação de acesso expandida: além de `tutorId === user.uid`, verifica `users/{uid}` para `role === "admin_escolar"` com `schoolId` correspondente
-- School-admin da mesma escola pode ver todos os relatórios da página dedicada
+### 9. `app/api/estagios/[id]/termino-antecipado/[docId]/aprovar/route.ts` — Transição concluido
+- Após aprovar término antecipado, verifica se deve transitar para `concluido`
+- Usa `checkShouldTransitionToConcluido()`
 
 ---
 
-## Ficheiros Alterados
+## Riscos / Notas
 
-| # | Ficheiro | Mudança |
-|---|----------|---------|
-| 1 | `app/api/estagios/[id]/relatorio-final/route.ts` | Boxes, bloqueio, allSigned |
-| 2 | `components/student/student-reports-manager.tsx` | Step de signature boxes |
-| 3 | `components/estagios/documentos/report-sign-dialog.tsx` | **NOVO** — consentimento + assinatura |
-| 4 | `components/estagios/documentos/document-list.tsx` | Integração ReportSignDialog + ocultar upload |
-| 5 | `app/api/estagios/[id]/documentos/[docId]/route.ts` | Bloquear bump assinado |
-| 6 | `lib/estagios/archive-validations.ts` | `checkForceArchive()` |
-| 7 | `components/estagios/archive-estagio-button.tsx` | Botão forçar arquivo |
-| 8 | `components/estagios/estagio-detail-view.tsx` | Pass `isSchoolAdmin` |
-| 9 | `components/tutor/tutor-internship-reports-view.tsx` | Acesso school-admin |
+| Risco | Mitigação |
+|-------|-----------|
+| Concorrência: aluno regista horas enquanto tutor valida | Validação servidor-side soma presenças no momento, não confia no `totalRealizado` do cliente |
+| Múltiplas notificações duplicadas | Deduplicação: verifica existência de notificação não lida do mesmo tipo antes de criar |
+| Presenças com 0h entram no cômputo de `totalRealizado` | Já excluídas: `if (horas <= 0) return` no export; soma inclui zeros mas são neutros |
+| Nome do mês no PDF (português vs data ISO) | `mesFromIso()` extrai mês do ISO e mapeia para array `MESES` PT |
+| `EstagioAccessSession.user` não existe | Corrigido: usar `session.displayName` em vez de `session.user?.nome` |
+| `AuditAction` type não inclui `"presencas_validated"` | Corrigido: usar `"update"` com metadata descritivo |
+| Firestore rules não precisam de alteração | API routes usam admin SDK (bypass rules). Client-side writes mantêm-se só p/ presenças (já permitido) |
 
-**Total:** 8 ficheiros alterados, 1 ficheiro criado.
+## Ficheiros (agrupados)
 
----
+### NOVOS (6 ficheiros)
+```
+lib/estagios/presencas.ts
+lib/estagios/estagio-status.ts
+app/api/estagios/[id]/presencas/notify-tutor/route.ts
+app/api/estagios/[id]/presencas/validar/route.ts
+app/api/estagios/[id]/presencas/export/route.ts
+app/api/estagios/[id]/presencas/export/preflight/route.ts
+components/estagios/presencas-export-panel.tsx
+```
 
-## Verificações de Segurança
-
-| Item | Implementação |
-|------|---------------|
-| `sanitizeBoxes()` | Valida página >= 1, coordenadas 0..1, roles da whitelist, previne campos extra |
-| `sanitizeRoles()` | Filtra contra whitelist de `ALLOWED_ROLES` |
-| Bloqueio de re-submissão | API verifica `estado === "assinado"` antes de aceitar update |
-| Bloqueio de bump | API verifica `estado === "assinado"` antes de aceitar bumpVersion |
-| Acesso school-admin | Verifica `users/{uid}` doc para `role === "admin_escolar"` + `schoolId` |
-| Force archive | Apenas visível para `isSchoolAdmin=true`; validações mínimas (não eliminado/já arquivado) |
-| Consentimento | Textos de compromisso específicos por papel antes da assinatura digital |
-| Assinatura digital | Reutiliza o sistema existente (SignDialog → assinar/route.ts → subcoleção assinaturas) |
-| Notificações | Já implementadas no passo anterior; professor, tutor, diretor notificados na submissão |
+### MODIFICADOS (2 ficheiros)
+```
+components/estagios/horario-tab.tsx
+app/api/estagios/[id]/termino-antecipado/[docId]/aprovar/route.ts
+```
