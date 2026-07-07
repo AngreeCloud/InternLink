@@ -4,6 +4,7 @@ import { getFirebaseAdminDb } from "@/lib/firebase-admin";
 import { assertEstagioAccess, toApiErrorResponse, EstagioAccessError } from "@/lib/estagios/estagio-access";
 import { validateApproval, type TerminoAntecipado } from "@/lib/estagios/termino-antecipado";
 import { toIsoDate } from "@/lib/estagios/workdays";
+import { checkShouldTransitionToConcluido } from "@/lib/estagios/estagio-status";
 import {
   buildTerminoAntecipadoNotification,
 } from "@/lib/notifications/termino-antecipado-notifications";
@@ -81,6 +82,27 @@ export async function PATCH(
     }
 
     await batch.commit();
+
+    // Transition estagio to concluido on termino-antecipado approval
+    const estagioRef = db.collection("estagios").doc(id);
+    const estagioSnap = await estagioRef.get();
+    const estagioData = estagioSnap.data() as Record<string, unknown> | undefined;
+    if (estagioData && estagioData.estado !== "concluido" && estagioData.estado !== "arquivado" && estagioData.estado !== "eliminado") {
+      const totalHoras = Number(estagioData.totalHoras ?? 0) || 0;
+      const presencasSnap = await estagioRef.collection("presencas").get();
+      let totalRealizado = 0;
+      presencasSnap.forEach((d) => {
+        const data = d.data() as Record<string, unknown>;
+        totalRealizado += Number(data.hoursWorked ?? 0) || 0;
+      });
+      if (checkShouldTransitionToConcluido({ totalHoras, totalRealizado, hasTerminoAprovado: true })) {
+        await estagioRef.update({
+          estadoEstagio: "concluido",
+          estado: "concluido",
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

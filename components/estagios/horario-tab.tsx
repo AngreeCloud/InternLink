@@ -16,7 +16,18 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronRight,
+  Lock,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   formatIsoPt,
   groupWorkDaysByWeek,
@@ -31,6 +42,9 @@ import {
 import type { ScheduleChangeRequest } from "@/lib/estagios/schedule-change-requests";
 import type { EstagioRole } from "@/lib/estagios/permissions";
 import { calcularDataFimEstimada, type DiasSemana } from "@/lib/estagios/date-calc";
+import { checkPresencasCanValidate } from "@/lib/estagios/presencas";
+import { PresencasExportPanel } from "@/components/estagios/presencas-export-panel";
+import type { Timestamp } from "firebase/firestore";
 
 type Props = {
   estagioId: string;
@@ -54,7 +68,7 @@ type PresencaDoc = {
 const MAX_HOURS_PER_DAY = 12;
 const MIN_HOURS_PER_DAY = 0;
 
-export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole }: Props) {
+export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole, isArchived }: Props) {
   const dataInicio = (estagio.dataInicio as string | undefined) ?? "";
   const dataFim =
     (estagio.dataFimEstimada as string | undefined) ??
@@ -150,6 +164,9 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
   const [collapsedWeeks, setCollapsedWeeks] = useState<Record<string, boolean>>({});
+  const [validateDialogOpen, setValidateDialogOpen] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [validateError, setValidateError] = useState<string | null>(null);
   const prevPresencasKeyRef = useRef("");
 
   // Subscribe to all presencas of this estagio.
@@ -191,6 +208,7 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
   }, [estagioId]);
 
   const canEdit = currentUserRole === "aluno";
+  const isTutor = currentUserRole === "tutor";
 
   const todayIso = toIsoDate(new Date());
 
@@ -353,6 +371,16 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
       }).then((r) => r.json().then((data) => {
         console.log("[recalcular-data-fim] resposta pós-save:", data);
       })).catch((err) => { console.error("recalcular-data-fim falhou:", err); });
+
+      // Notify tutor if conditions met (non-blocking)
+      if (currentUserRole === "aluno") {
+        const check = checkPresencasCanValidate(totalRealizado + v.value, totalHoras, horasDiarias);
+        if (check.podeValidar && !estagio.presencasValidatedByTutor) {
+          fetch(`/api/estagios/${estagioId}/presencas/notify-tutor`, {
+            method: "POST",
+          }).catch((err) => { console.error("notify-tutor falhou:", err); });
+        }
+      }
     } catch (err) {
       console.error("[v0] save presenca", err);
       setErrors((e) => ({
@@ -361,6 +389,28 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
       }));
     } finally {
       setSaving(null);
+    }
+  }
+
+  async function handleTutorValidate() {
+    setValidateError(null);
+    setValidating(true);
+    try {
+      const res = await fetch(`/api/estagios/${estagioId}/presencas/validar`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setValidateError(data.error || "Erro ao validar presenças.");
+        return;
+      }
+      setValidateDialogOpen(false);
+    } catch (err) {
+      console.error("[v0] tutor validate presencas", err);
+      setValidateError("Erro de rede. Tenta novamente.");
+    } finally {
+      setValidating(false);
     }
   }
 
@@ -428,6 +478,41 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
             <div className="sm:col-span-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
               Atingiste o limite de dias previstos mas ainda faltam {formatHours(restante)}h.
               O calendário está a ser recalculado. Se os novos dias não aparecerem, reguarda uma presença existente para forçar o recálculo.
+            </div>
+          )}
+
+          {/* Tutor validation status */}
+          {estagio.presencasValidatedByTutor ? (
+            <div className="sm:col-span-4 flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span>
+                Presenças validadas pelo tutor{" "}
+                <span className="font-medium">
+                  {(estagio.presencasValidatedByName as string) || ""}
+                </span>
+              </span>
+            </div>
+          ) : isTutor && totalRealizado > 0 && !isArchived && (
+            <div className="sm:col-span-4 flex items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300">
+              <span className="flex items-center gap-2">
+                <Clock className="h-4 w-4 shrink-0" />
+                {restante <= 0
+                  ? "O formando completou todas as horas previstas."
+                  : restante < horasDiarias * 2
+                    ? `Faltam ${formatHours(restante)}h (menos de 2 dias).`
+                    : `Ainda faltam ${formatHours(restante)}h para validar.`
+                }
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="default"
+                disabled={restante >= horasDiarias * 2 && restante > 0}
+                onClick={() => setValidateDialogOpen(true)}
+              >
+                <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                Validar presenças
+              </Button>
             </div>
           )}
         </CardContent>
@@ -625,6 +710,78 @@ export function HorarioTab({ estagioId, estagio, currentUserId, currentUserRole 
           })}
         </div>
       )}
+
+      {totalRealizado > 0 && (
+        <PresencasExportPanel
+          estagioId={estagioId}
+          currentUserRole={currentUserRole}
+          alunoId={estagio.alunoId as string | undefined}
+          tutorId={estagio.tutorId as string | undefined}
+        />
+      )}
+
+      <AlertDialog
+        open={validateDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) setValidateDialogOpen(false);
+          setValidateError(null);
+        }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Validar presenças do estágio</AlertDialogTitle>
+          </AlertDialogHeader>
+          <div className="space-y-3 text-sm">
+            <p className="text-muted-foreground">
+              Total realizado: <strong>{formatHours(totalRealizado)}h</strong> de{" "}
+              <strong>{totalHoras}h</strong> previstas
+            </p>
+            <p className="text-muted-foreground">
+              Dias registados: <strong>{diasRegistados}</strong> de{" "}
+              <strong>{workDays.length}</strong>
+            </p>
+            {(() => {
+              const studentName = estagio.alunoNome as string | undefined;
+              return studentName ? (
+                <p className="text-muted-foreground">Formando: {studentName}</p>
+              ) : null;
+            })()}
+            <div className="rounded-md border bg-muted/30 px-4 py-3 text-justify text-xs leading-relaxed text-muted-foreground">
+              &ldquo;Declaro que verifiquei e confirmo as horas registadas pelo formando
+              e que as mesmas correspondem ao trabalho efetivamente realizado.&rdquo;
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Esta ação fica registada com a sua identidade e não pode ser revertida.
+            </p>
+            {validateError && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {validateError}
+              </div>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={validating}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={validating}
+              onClick={(e) => {
+                e.preventDefault();
+                handleTutorValidate();
+              }}
+            >
+              {validating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  A validar...
+                </>
+              ) : (
+                "Confirmar validação"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
