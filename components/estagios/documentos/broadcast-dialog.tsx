@@ -111,6 +111,7 @@ export function BroadcastDialog({
   const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null);
   const [fileMimeType, setFileMimeType] = useState("");
   const [fileExtension, setFileExtension] = useState("");
+  const fileDataRef = useRef<{ buffer: ArrayBuffer; mimeType: string; extension: string } | null>(null);
 
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -165,6 +166,7 @@ export function BroadcastDialog({
       setCourseIds([]);
       setFile(null);
       setFileBytes(null);
+      fileDataRef.current = null;
       setFileMimeType("");
       setFileExtension("");
       setNome("");
@@ -208,15 +210,16 @@ export function BroadcastDialog({
         setError("O ficheiro deve ter no máximo 20 MB.");
         return;
       }
-      const buffer = new Uint8Array(await selected.arrayBuffer());
-      console.log(`[BroadcastDialog] fileBytes.length = ${buffer.length}, file.size = ${selected.size}`);
-      if (buffer.length === 0) {
+      const rawBuffer = await selected.arrayBuffer();
+      console.log(`[BroadcastDialog] fileBytes.length = ${rawBuffer.byteLength}, file.size = ${selected.size}`);
+      if (rawBuffer.byteLength === 0) {
         setError("O ficheiro parece estar vazio. Tente novamente.");
         return;
       }
       lastFileKey.current = key;
+      fileDataRef.current = { buffer: rawBuffer, mimeType: meta.mimeType, extension: meta.extension };
       setFile(selected);
-      setFileBytes(buffer);
+      setFileBytes(new Uint8Array(rawBuffer));
       setFileMimeType(meta.mimeType);
       setFileExtension(meta.extension);
 
@@ -251,7 +254,7 @@ export function BroadcastDialog({
   const shouldConfigureSignatures = isPdfFile && enableSignatureFlow;
 
   const handleSubmit = async () => {
-    if (!file || !fileBytes) {
+    if (!file) {
       setError("Ficheiro em falta.");
       return;
     }
@@ -270,6 +273,17 @@ export function BroadcastDialog({
     setSubmitting(true);
     setError(null);
     try {
+      // Use ref-stored buffer (not React state) to avoid binary data corruption
+      let uploadBuffer = fileDataRef.current?.buffer ?? null;
+      if (!uploadBuffer) {
+        uploadBuffer = await file.arrayBuffer();
+      }
+      if (uploadBuffer.byteLength === 0) {
+        setError("O ficheiro foi carregado com 0 bytes. Tente novamente.");
+        setSubmitting(false);
+        return;
+      }
+
       const storage = await getStorageRuntime();
       const extension = fileExtension || resolveExtension(file.name) || "pdf";
       // Use sorted course IDs to build a stable, unique path independent of selection order
@@ -278,9 +292,14 @@ export function BroadcastDialog({
         storage,
         `estagios/__broadcast__/${pathKey}/${Date.now()}.${extension}`
       );
-      await uploadBytes(sRef, fileBytes, {
+      const uploadResult = await uploadBytes(sRef, uploadBuffer, {
         contentType: fileMimeType || file.type || "application/octet-stream",
       });
+      if (!uploadResult.metadata || uploadResult.metadata.size === 0) {
+        setError("O ficheiro foi carregado com 0 bytes. Tente novamente.");
+        setSubmitting(false);
+        return;
+      }
       const downloadUrl = await getDownloadURL(sRef);
 
       const res = await fetch("/api/estagios/broadcast/documentos", {
