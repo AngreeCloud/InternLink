@@ -550,6 +550,16 @@ async function seedSumarios(db) {
   }
 }
 
+async function seedTutorSchoolAssociation(db) {
+  await db.collection("schools").doc(SCHOOL_ID).collection("tutors").doc(PERSONAGENS.tutor.uid).set({
+    nome: PERSONAGENS.tutor.nome,
+    email: PERSONAGENS.tutor.email,
+    empresa: "Ramada & Associados",
+    createdAt: ts(),
+  }, { merge: true });
+  console.log(`  ✓ Tutor associado à escola: ${PERSONAGENS.tutor.nome}`);
+}
+
 // ══════════════════════════════════════════════
 // Run
 // ══════════════════════════════════════════════
@@ -580,6 +590,9 @@ async function run() {
 
   console.log("\n4/6 Empresa...");
   await seedEmpresa(db);
+
+  console.log("\n   Tutor→Escola...");
+  await seedTutorSchoolAssociation(db);
 
   console.log("\n5/6 Estágio...");
   await seedEstagio(db);
