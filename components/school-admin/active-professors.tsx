@@ -528,7 +528,7 @@ export function ActiveProfessorsSection() {
                                         Diretor
                                       </span>
                                     )}
-                                    {course.directorCanDeleteEstagio && (
+                                    {isDirector && course.directorCanDeleteEstagio && (
                                       <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded">
                                         Pode eliminar estágios
                                       </span>
