@@ -272,14 +272,20 @@ export function BroadcastDialog({
     try {
       const storage = await getStorageRuntime();
       const extension = fileExtension || resolveExtension(file.name) || "pdf";
-      const primaryCourseId = courseIds[0] ?? "multi";
+      // Use sorted course IDs to build a stable, unique path independent of selection order
+      const pathKey = [...courseIds].sort().join("_") || "multi";
       const sRef = ref(
         storage,
-        `estagios/__broadcast__/${primaryCourseId}/${Date.now()}.${extension}`
+        `estagios/__broadcast__/${pathKey}/${Date.now()}.${extension}`
       );
-      await uploadBytes(sRef, fileBytes, {
+      const uploadResult = await uploadBytes(sRef, fileBytes, {
         contentType: fileMimeType || file.type || "application/octet-stream",
       });
+      if (uploadResult.metadata.size === 0) {
+        setError("O ficheiro foi carregado com 0 bytes. Tente novamente.");
+        setSubmitting(false);
+        return;
+      }
       const downloadUrl = await getDownloadURL(sRef);
 
       const res = await fetch("/api/estagios/broadcast/documentos", {
