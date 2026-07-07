@@ -385,9 +385,15 @@ export function DocumentManager() {
                       </Badge>
                       {documento.isBroadcast ? <Badge className="text-xs">Broadcast</Badge> : null}
                     </div>
-                    <p className="text-xs text-muted-foreground">Estágio: {documento.estagioTitulo}</p>
+                    {documento.isBroadcast ? (
+                      <p className="text-xs text-muted-foreground">Turma: {documento.courseNome}</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Estágio: {documento.estagioTitulo}</p>
+                    )}
                     <p className="text-xs text-muted-foreground">
-                      Aluno: {documento.alunoNome} • Empresa: {documento.empresa} • Curso: {documento.courseNome}
+                      {documento.isBroadcast
+                        ? `Aluno: ${documento.alunoNome} • Empresa: ${documento.empresa}`
+                        : `Aluno: ${documento.alunoNome} • Empresa: ${documento.empresa} • Curso: ${documento.courseNome}`}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Estado: {documento.estado} • Versão: {documento.currentVersion} • Atualizado em:{" "}
@@ -399,12 +405,14 @@ export function DocumentManager() {
                     <Button size="sm" variant="outline" onClick={() => openNewVersionWizard(documento)}>
                       Nova versão
                     </Button>
-                    <Button size="sm" variant="outline" asChild>
-                      <Link href={`/professor/estagios/${documento.estagioId}`}>
-                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                        Abrir estágio
-                      </Link>
-                    </Button>
+                    {!documento.isBroadcast && (
+                      <Button size="sm" variant="outline" asChild>
+                        <Link href={`/professor/estagios/${documento.estagioId}`}>
+                          <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                          Abrir estágio
+                        </Link>
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}

@@ -120,13 +120,7 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
     prevOpen.current = open;
   }, [open]);
 
-  const fileBytesRef = useRef(fileBytes);
-  useEffect(() => {
-    if (fileBytes === null && fileBytesRef.current !== null && fileBytesRef.current.length > 0) {
-      console.error("[UploadWizard] fileBytes CLEARED! previous length =", fileBytesRef.current.length);
-    }
-    fileBytesRef.current = fileBytes;
-  }, [fileBytes]);
+  const rawBufferRef = useRef<ArrayBuffer | null>(null);
   const [fileMimeType, setFileMimeType] = useState(doc.fileMimeType ?? "");
   const [fileExtension, setFileExtension] = useState((doc.fileExtension ?? "").toLowerCase());
 
@@ -179,15 +173,16 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
         setError("O ficheiro deve ter no máximo 20 MB.");
         return;
       }
-      const buffer = new Uint8Array(await selected.arrayBuffer());
-      console.log(`[UploadWizard] fileBytes.length = ${buffer.length}, file.size = ${selected.size}`);
-      if (buffer.length === 0) {
+      const rawBuffer = await selected.arrayBuffer();
+      console.log(`[UploadWizard] fileBytes.length = ${rawBuffer.byteLength}, file.size = ${selected.size}`);
+      if (rawBuffer.byteLength === 0) {
         setError("O ficheiro parece estar vazio. Tente novamente.");
         return;
       }
       lastFileKey.current = key;
+      rawBufferRef.current = rawBuffer;
       setFile(selected);
-      setFileBytes(buffer);
+      setFileBytes(new Uint8Array(rawBuffer));
       setFileMimeType(meta.mimeType);
       setFileExtension(meta.extension);
 
@@ -210,12 +205,19 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
   };
 
   const handleSubmit = async () => {
-    if (!fileBytes || !file) {
+    if (!file) {
       setError("Ficheiro em falta.");
       return;
     }
-    if (fileBytes.length === 0) {
-      console.error(`[UploadWizard] SUBMIT_BUG: fileBytes.length=0, file?.size=${file?.size}, file?.name=${file?.name}`);
+
+    // Use ref-stored buffer to avoid React state binary corruption
+    let uploadBuffer = rawBufferRef.current;
+    if (!uploadBuffer || uploadBuffer.byteLength === 0) {
+      console.warn("[UploadWizard] rawBufferRef empty, re-reading from File object");
+      uploadBuffer = await file.arrayBuffer();
+    }
+    if (uploadBuffer.byteLength === 0) {
+      console.error(`[UploadWizard] SUBMIT_BUG: uploadBuffer.byteLength=0, file?.size=${file?.size}, file?.name=${file?.name}`);
       setError("O ficheiro selecionado está vazio (0 bytes).");
       return;
     }
@@ -235,9 +237,14 @@ export function UploadWizard({ estagioId, doc, open, onOpenChange, onSuccess }: 
       const extension = fileExtension || resolveExtension(file.name) || "pdf";
       const storagePath = `estagios/${estagioId}/documentos/${doc.id}/v${Date.now()}.${extension}`;
       const sRef = ref(storage, storagePath);
-      await uploadBytes(sRef, fileBytes, {
+      const uploadResult = await uploadBytes(sRef, uploadBuffer, {
         contentType: fileMimeType || file.type || "application/octet-stream",
       });
+      if (!uploadResult.metadata || uploadResult.metadata.size === 0) {
+        setError("O ficheiro foi carregado com 0 bytes. Tente novamente.");
+        setSubmitting(false);
+        return;
+      }
       const downloadUrl = await getDownloadURL(sRef);
 
       const body = {

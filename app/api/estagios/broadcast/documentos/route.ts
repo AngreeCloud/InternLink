@@ -195,7 +195,11 @@ export async function POST(request: Request) {
       const estagiosMap = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
       for (const doc of alunoSnap.docs) estagiosMap.set(doc.id, doc);
       for (const doc of estagioCourseSnap.docs) estagiosMap.set(doc.id, doc);
-      const estagiosList = Array.from(estagiosMap.values());
+      const estagiosList = Array.from(estagiosMap.values()).filter((doc) => {
+        const d = doc.data() as { estado?: string; estadoEstagio?: string };
+        const estado = d.estado || d.estadoEstagio || "";
+        return estado !== "arquivado" && estado !== "eliminado";
+      });
 
       let createdInCourse = 0;
       let skippedInCourse = 0;
@@ -205,8 +209,10 @@ export async function POST(request: Request) {
           professorId?: string;
           schoolId?: string;
         };
-        const canWrite =
-          estagioData.professorId === uid || isDirector /* director manages all in course */;
+        // Professors associated with the course (director, teacher, supporting)
+        // can broadcast to all internships in that course, regardless of which
+        // professor is individually assigned to each internship.
+        const canWrite = isDirector || isTeacher || isSupporting || estagioData.professorId === uid;
         if (!canWrite) {
           skipped.push({ estagioId: estagioSnap.id, reason: "not_manager" });
           skippedInCourse += 1;
