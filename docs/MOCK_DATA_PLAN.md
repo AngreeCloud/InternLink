@@ -243,3 +243,81 @@ node scripts/seed-mock-data.js
 - Password definida em variáveis ou hardcoded (só para dev/mock)
 - Horas restantes: 120h (400 - 280) — tutor pode validar? Faltam 120h / 8 = 15 dias → ainda não, mas próximo
 - `dataFimEstimada` calculada com `calcularDataFimEstimada()` importada
+
+---
+
+## 4. Dados Adicionais — Notificações, Chat, Pedidos
+
+Após seed base, alimentar o ecossistema com dados que geram alerts/badges na UI.
+
+### 4.1 `estagios/{id}/schedule_change_requests/` — 3 Pedidos
+
+| # | Tipo | Data | Estado | Criado por |
+|---|------|------|--------|-----------|
+| 1 | `future_absence` | 2026-03-20 | `approved` (prof+tutor) | Aluno |
+| 2 | `past_absence_justification` | 2026-02-10 | `pending_professor` | Aluno |
+| 3 | `company_closure` | 2026-03-25 | `approved` (tutor direto) | Tutor |
+
+Cada pedido com `reason` + `comments[]` realistas.
+
+### 4.2 `estagios/{id}/notifications/{notifId}` — 10 Notificações
+
+Distribuídas entre os 4 participantes, algumas lidas outras não:
+
+| # | userId | type | title | read? |
+|---|--------|------|-------|-------|
+| 1 | prof-eca | schedule_change_request | "Nova justificação de falta" | ❌ |
+| 2 | tutor-ega | schedule_change_request | "Pedido aprovado pelo professor" | ❌ |
+| 3 | aluno-carlos | schedule_change_request | "Falta futura aprovada" | ❌ |
+| 4 | tutor-ega | presencas_ready | "Presenças prontas para validação" | ❌ |
+| 5 | aluno-carlos | doc_signed | "Documento assinado" | ✅ |
+| 6 | prof-eca | termino_antecipado | "Pedido de término antecipado" | ❌ |
+| 7 | admin-esrp | schedule_change_request | "Comunicado de empresa" | ✅ |
+| 8 | tutor-ega | avaliacao_tutor_assinada | "Avaliação do tutor pendente" | ❌ |
+| 9 | aluno-carlos | relatorio_submitted | "Relatório final submetido" | ✅ |
+| 10 | prof-eca | doc_awaits_signature | "Documento aguarda assinatura" | ❌ |
+
+### 4.3 Chat (Realtime Database) — Conversa Grupo
+
+Conversa `type: "group"` entre aluno-carlos, prof-eca, tutor-ega com 6 mensagens:
+
+| # | De | Texto | Timestamp (relativo) |
+|---|----|-------|---------------------|
+| 1 | prof-eca | "Bom dia a ambos. Espero que o estágio esteja a correr bem." | -7d |
+| 2 | aluno-carlos | "Bom dia, professor. Está a correr muito bem, já aprendi o sistema de reservas." | -6d |
+| 3 | tutor-ega | "O Carlos está a evoluir bem. Já faz atendimento autónomo." | -5d |
+| 4 | aluno-carlos | "Obrigado, tutor! Esta semana ajudei na organização de um seminário." | -3d |
+| 5 | prof-eca | "Excelente. Não te esqueças de ir escrevendo os sumários." | -2d |
+| 6 | aluno-carlos | "Já escrevi até à semana 6. Falta a 7 e 8." | -1d |
+
+### 4.4 `estagios/{id}/sumarios/_state` — Estado Agregado
+
+```typescript
+{ allPreenchidos: true, allAssinados: false }
+```
+
+(Pois semanas 6-8 estão preenchidas mas não assinadas pelo tutor)
+
+---
+
+## 5. Script `scripts/seed-mock-data-extra.js`
+
+Ficheiro separado do seed base para não o poluir. Executa depois.
+
+### Estrutura
+
+```
+1. Conexão Firebase Admin
+2. seedScheduleChangeRequests()  → 3 pedidos
+3. seedNotifications()           → 10 notificações
+4. seedChatConversation()        → 1 conversa grupo + 6 mensagens
+5. seedSumariosState()           → _state doc
+```
+
+### Execução
+
+```bash
+node scripts/seed-mock-data-extra.js
+```
+
+Re-executável: apaga docs existentes com os mesmos IDs antes de recriar (para notificações e pedidos usa IDs fixos).
