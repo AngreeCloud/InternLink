@@ -577,7 +577,9 @@ async function run() {
 
   console.log("\n2/6 Utilizadores...");
   const adminUid = await seedUser(db, auth, PERSONAGENS.admin);
-  const profUid = await seedUser(db, auth, PERSONAGENS.professor);
+  const profUid = await seedUser(db, auth, PERSONAGENS.professor, {
+    escola: "Universidade do Porto",
+  });
   const tutorUid = await seedUser(db, auth, PERSONAGENS.tutor, {
     empresa: "Ramada & Associados",
   });

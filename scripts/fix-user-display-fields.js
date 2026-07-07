@@ -16,9 +16,14 @@ function bc() {
 admin.initializeApp({ credential: bc() });
 const db = admin.firestore();
 async function run() {
-  await db.collection("users").doc("aluno-carlos").set({ curso: "Técnico de Turismo", escola: "Universidade do Porto", updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  const TS = admin.firestore.FieldValue.serverTimestamp;
+  await db.collection("users").doc("aluno-carlos").set({ curso: "Técnico de Turismo", escola: "Universidade do Porto", updatedAt: TS() }, { merge: true });
   console.log("✓ aluno-carlos");
-  await db.collection("users").doc("aluno-campos").set({ curso: "Técnico de Comunicação e Marketing", escola: "Universidade do Porto", updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  await db.collection("users").doc("aluno-campos").set({ curso: "Técnico de Comunicação e Marketing", escola: "Universidade do Porto", updatedAt: TS() }, { merge: true });
   console.log("✓ aluno-campos");
+  await db.collection("users").doc("prof-eca").set({ escola: "Universidade do Porto", updatedAt: TS() }, { merge: true });
+  console.log("✓ prof-eca");
+  await db.collection("users").doc("prof-pessoa").set({ escola: "Universidade do Porto", updatedAt: TS() }, { merge: true });
+  console.log("✓ prof-pessoa");
 }
 run().catch(console.error);
