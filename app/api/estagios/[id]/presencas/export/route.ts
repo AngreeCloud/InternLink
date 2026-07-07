@@ -49,6 +49,13 @@ function formatIsoDate(iso: string): string {
   return `${pad(d)}/${pad(m)}/${y}`;
 }
 
+function formatHoras(decimal: number): string {
+  const h = Math.floor(decimal);
+  const min = Math.round((decimal - h) * 60);
+  if (min === 0) return `${h}h`;
+  return `${h}h ${min}min`;
+}
+
 function mesFromIso(iso: string): string {
   const m = Number(iso.split("-")[1]);
   return m >= 1 && m <= 12 ? MESES[m - 1] : "?";
@@ -339,7 +346,7 @@ async function createTablePages(
       const isEven = (rows.indexOf(row) % 2 === 0);
       cy = drawTableRow(
         page, font, TABLE_X, cy,
-        formatIsoDate(row.dia), row.mes, `${row.horas.toFixed(2)}h`,
+        formatIsoDate(row.dia), row.mes, formatHoras(row.horas),
         false,
         isEven ? BEGE : undefined
       );
@@ -348,7 +355,7 @@ async function createTablePages(
     if (isLastPage) {
       cy = drawTableRow(
         page, bold, TABLE_X, cy,
-        "", "TOTAL", `${totalHoras.toFixed(2)}h`,
+        "", "TOTAL", formatHoras(totalHoras),
         true, GREEN_BG
       );
     }
