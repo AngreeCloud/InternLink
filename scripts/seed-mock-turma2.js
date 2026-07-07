@@ -155,7 +155,11 @@ async function run() {
   console.log("1/6 Utilizadores...");
   await seedUser(PESSOAS.professor);
   await seedUser(PESSOAS.tutor, { empresa: "Publicitas Portuguesa, Lda." });
-  await seedUser(PESSOAS.aluno, { courseId: CURSO_ID });
+  await seedUser(PESSOAS.aluno, {
+    courseId: CURSO_ID,
+    curso: "Técnico de Comunicação e Marketing",
+    escola: "Universidade do Porto",
+  });
 
   // 2. Curso
   console.log("\n2/6 Curso...");

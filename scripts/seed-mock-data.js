@@ -583,6 +583,8 @@ async function run() {
   });
   const alunoUid = await seedUser(db, auth, PERSONAGENS.aluno, {
     courseId: CURSO_ID,
+    curso: "Técnico de Turismo",
+    escola: "Universidade do Porto",
   });
 
   console.log("\n3/6 Curso...");
