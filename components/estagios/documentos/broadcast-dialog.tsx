@@ -278,14 +278,9 @@ export function BroadcastDialog({
         storage,
         `estagios/__broadcast__/${pathKey}/${Date.now()}.${extension}`
       );
-      const uploadResult = await uploadBytes(sRef, fileBytes, {
+      await uploadBytes(sRef, fileBytes, {
         contentType: fileMimeType || file.type || "application/octet-stream",
       });
-      if (uploadResult.metadata.size === 0) {
-        setError("O ficheiro foi carregado com 0 bytes. Tente novamente.");
-        setSubmitting(false);
-        return;
-      }
       const downloadUrl = await getDownloadURL(sRef);
 
       const res = await fetch("/api/estagios/broadcast/documentos", {
