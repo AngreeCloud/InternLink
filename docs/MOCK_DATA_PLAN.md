@@ -5,9 +5,12 @@
 | Role | Personagem | Origem | Razão |
 |------|-----------|--------|-------|
 | **Admin Escolar** | D. Afonso Henriques | História de Portugal | Imponência — primeiro rei, figura fundadora |
-| **Professor** | Eça de Queirós | *Os Maias* | Escritor, crítico social, orientador nato |
-| **Tutor** | João da Ega | *Os Maias* | Amigo de Carlos, boémio mas leal — tutor informal |
-| **Aluno** | Carlos da Maia | *Os Maias* | Estudante de Medicina, estagiário nato |
+| **Professor (Turma 1)** | Eça de Queirós | *Os Maias* | Escritor, crítico social, orientador nato |
+| **Tutor (Turma 1)** | João da Ega | *Os Maias* | Amigo de Carlos, boémio mas leal — tutor informal |
+| **Aluno (Turma 1)** | Carlos da Maia | *Os Maias* | Estudante de Medicina, estagiário nato |
+| **Professor (Turma 2)** | Fernando Pessoa | Heterónimos | Poeta multifacetado, orientador de comunicação |
+| **Tutor (Turma 2)** | Bernardo Soares | *Livro do Desassossego* | Guarda-livros na Publicitas, tutor pragmático |
+| **Aluno (Turma 2)** | Álvaro de Campos | Heterónimo de Pessoa | Engenheiro naval, estagiário de marketing |
 
 ---
 
@@ -58,11 +61,11 @@ Cada user tem um documento em `users/{uid}` + conta Auth.
 | email | `afonso.henriques@up.pt` |
 | nome | D. Afonso Henriques |
 | role | `admin_escolar` |
-| schoolId | `esrp` |
+| schoolId | `uporto` |
 | estado | `ativo` |
 | password | `ReiDePortugal123!` |
 
-#### Professor — Eça de Queirós
+#### Professor (Turma 1) — Eça de Queirós
 
 | Campo | Valor |
 |---|---|
@@ -70,12 +73,12 @@ Cada user tem um documento em `users/{uid}` + conta Auth.
 | email | `eca.queiros@up.pt` |
 | nome | Eça de Queirós |
 | role | `professor` |
-| schoolId | `esrp` |
+| schoolId | `uporto` |
 | estado | `ativo` |
 | courseId | `curso-turismo` |
 | password | `OsMaias1888!` |
 
-#### Tutor — João da Ega
+#### Tutor (Turma 1) — João da Ega
 
 | Campo | Valor |
 |---|---|
@@ -83,12 +86,12 @@ Cada user tem um documento em `users/{uid}` + conta Auth.
 | email | `joao.ega@ramada.pt` |
 | nome | João da Ega |
 | role | `tutor` |
-| schoolId | `esrp` |
+| schoolId | `uporto` |
 | empresa | Ramada & Associados |
 | estado | `ativo` |
 | password | `EgaBoemio!123` |
 
-#### Aluno — Carlos da Maia
+#### Aluno (Turma 1) — Carlos da Maia
 
 | Campo | Valor |
 |---|---|
@@ -96,91 +99,157 @@ Cada user tem um documento em `users/{uid}` + conta Auth.
 | email | `carlos.maia@up.pt` |
 | nome | Carlos da Maia |
 | role | `aluno` |
-| schoolId | `esrp` |
+| schoolId | `uporto` |
 | courseId | `curso-turismo` |
 | estado | `ativo` |
 | password | `CarlosMedico!456` |
 
+#### Professor (Turma 2) — Fernando Pessoa
+
+| Campo | Valor |
+|---|---|
+| uid | `prof-pessoa` (fixo) |
+| email | `fernando.pessoa@up.pt` |
+| nome | Fernando Pessoa |
+| role | `professor` |
+| schoolId | `uporto` |
+| estado | `ativo` |
+| courseId | `curso-comunicacao` |
+| password | `Heteronimos1925!` |
+
+#### Tutor (Turma 2) — Bernardo Soares
+
+| Campo | Valor |
+|---|---|
+| uid | `tutor-soares` (fixo) |
+| email | `bernardo.soares@publicitas.pt` |
+| nome | Bernardo Soares |
+| role | `tutor` |
+| schoolId | `uporto` |
+| empresa | Publicitas Portuguesa, Lda. |
+| estado | `ativo` |
+| password | `LivroDesassossego!` |
+
+#### Aluno (Turma 2) — Álvaro de Campos
+
+| Campo | Valor |
+|---|---|
+| uid | `aluno-campos` (fixo) |
+| email | `alvaro.campos@up.pt` |
+| nome | Álvaro de Campos |
+| role | `aluno` |
+| schoolId | `uporto` |
+| courseId | `curso-comunicacao` |
+| estado | `ativo` |
+| password | `Tabacaria1928!` |
+
 ---
 
-### 2.3 `courses/{courseId}` — Curso
+### 2.3 Cursos
 
-**ID**: `curso-turismo`
+#### Turma 1 — `curso-turismo`
 
 | Campo | Valor |
 |---|---|
 | nome | Técnico de Turismo |
-| schoolId | `esrp` |
+| schoolId | `uporto` |
 | courseDirectorId | `prof-eca` |
 | teacherIds | `["prof-eca"]` |
-| supportingTeacherIds | `[]` |
+| reportMinHours | 300 |
+| reportWaitDays | 5 |
+| directorCanDeleteEstagio | true |
+
+#### Turma 2 — `curso-comunicacao`
+
+| Campo | Valor |
+|---|---|
+| nome | Técnico de Comunicação e Marketing |
+| schoolId | `uporto` |
+| courseDirectorId | `prof-pessoa` |
+| teacherIds | `["prof-pessoa"]` |
 | reportMinHours | 300 |
 | reportWaitDays | 5 |
 | directorCanDeleteEstagio | true |
 
 ---
 
-### 2.4 `empresas/{empresaId}` — Empresa
+### 2.4 Empresas
 
-**ID**: `ramada-associados`
+#### Ramada & Associados — `ramada-associados`
 
 | Campo | Valor |
 |---|---|
 | nome | Ramada & Associados |
 | nomeNormalizado | ramada-e-associados |
 | nif | 500123456 |
-| nifNormalizado | 500123456 |
 | setor | Turismo e Hotelaria |
 | morada | Avenida dos Descobrimentos, 15 |
 | codigoPostal | 4490-050 |
 | localidade | Póvoa de Varzim |
-| concelho | Póvoa de Varzim |
 | distrito | Porto |
-| pais | Portugal |
 | emailGeral | info@ramada.pt |
 | telefone | 252 987 654 |
-| schoolId | `esrp` |
+| schoolId | `uporto` |
 | tutorIds | `["tutor-ega"]` |
 | empresaGrants | `{ "prof-eca": "write" }` |
 | ativa | true |
-| createdBy | `admin-esrp` |
-| website | https://ramada.pt |
+
+#### Publicitas Portuguesa — `publicitas-portuguesa`
+
+| Campo | Valor |
+|---|---|
+| nome | Publicitas Portuguesa, Lda. |
+| nomeNormalizado | publicitas-portuguesa |
+| nif | 500654321 |
+| setor | Comunicação e Publicidade |
+| morada | Rua do Alecrim, 48 |
+| codigoPostal | 1200-018 |
+| localidade | Lisboa |
+| distrito | Lisboa |
+| emailGeral | contacto@publicitas.pt |
+| telefone | 213 456 789 |
+| schoolId | `uporto` |
+| tutorIds | `["tutor-soares"]` |
+| empresaGrants | `{ "prof-pessoa": "write" }` |
+| ativa | true |
 
 ---
 
-### 2.5 `estagios/{estagioId}` — Estágio
+### 2.5 Estágios
 
-**ID**: `estagio-carlos`
+#### Estágio Carlos da Maia — `estagio-carlos`
 
 | Campo | Valor |
 |---|---|
 | titulo | Estágio Carlos da Maia — Ramada & Associados |
 | alunoId | `aluno-carlos` |
-| alunoNome | Carlos da Maia |
-| alunoEmail | carlos.maia@esrp.pt |
-| alunoCourseId | `curso-turismo` |
 | professorId | `prof-eca` |
-| professorNome | Eça de Queirós |
 | tutorId | `tutor-ega` |
-| tutorNome | João da Ega |
-| tutorEmail | joao.ega@ramada.pt |
-| tutorEmpresa | Ramada & Associados |
 | cursoNome | Técnico de Turismo |
-| schoolId | `esrp` |
-| courseId | `curso-turismo` |
 | empresa | Ramada & Associados |
-| empresaId | `ramada-associados` |
-| entidadeAcolhimento | Ramada & Associados |
-| empresaSnapshot | Cópia dos dados da empresa |
-| dataInicio | `2026-01-05` (primeira seg-feira de Janeiro) |
+| dataInicio | 2026-01-05 |
 | totalHoras | 400 |
 | horasRealizadas | 280 |
 | horasDiarias | 8 |
-| diasSemana | `{ seg: true, ter: true, qua: true, qui: true, sex: true }` |
-| dataFimEstimada | Calculada pelo script |
-| estado | `ativo` |
-| estadoEstagio | `em_curso` |
-| presencasValidatedByTutor | false |
+| diasSemana | seg-sex |
+| estado | ativo |
+
+#### Estágio Álvaro de Campos — `estagio-campos`
+
+| Campo | Valor |
+|---|---|
+| titulo | Estágio Álvaro de Campos — Publicitas Portuguesa |
+| alunoId | `aluno-campos` |
+| professorId | `prof-pessoa` |
+| tutorId | `tutor-soares` |
+| cursoNome | Técnico de Comunicação e Marketing |
+| empresa | Publicitas Portuguesa, Lda. |
+| dataInicio | 2026-02-02 |
+| totalHoras | 400 |
+| horasRealizadas | 112 |
+| horasDiarias | 7 |
+| diasSemana | seg-sex |
+| estado | ativo |
 
 ---
 
@@ -321,3 +390,74 @@ node scripts/seed-mock-data-extra.js
 ```
 
 Re-executável: apaga docs existentes com os mesmos IDs antes de recriar (para notificações e pedidos usa IDs fixos).
+
+---
+
+## 6. Avaliação
+
+### 6.1 Config (`schools/uporto.avaliacaoConfig`)
+
+| Campo | Valor |
+|---|---|
+| parâmetros | Assiduidade e Pontualidade, Iniciativa e Autonomia, Qualidade do Trabalho, Relacionamento Interpessoal, Capacidade de Aprendizagem |
+| escala | 0-20 |
+| método | média |
+| notaFinalEsperada | 0-20 |
+| permitirTutorVerNotaFinal | true |
+
+### 6.2 Datas (`courses/curso-turismo/settings/avaliacao_datas`)
+
+| Data | Valor |
+|------|-------|
+| disponibilidadePreenchimento | 2026-03-09 |
+| publicacaoNotaFinal | 2026-03-29 |
+
+### 6.3 Tutor (`estagios/estagio-carlos/avaliacao/tutor`)
+
+| Parâmetro | Nota |
+|-----------|------|
+| Assiduidade e Pontualidade | 17 |
+| Iniciativa e Autonomia | 15 |
+| Qualidade do Trabalho | 16 |
+| Relacionamento Interpessoal | 18 |
+| Capacidade de Aprendizagem | 14 |
+| **Média** | **16** |
+| estado | pendente |
+
+### 6.4 Professor (`estagios/estagio-carlos/avaliacao/professor`)
+
+| Parâmetro | Nota |
+|-----------|------|
+| Assiduidade e Pontualidade | 16 |
+| Iniciativa e Autonomia | 15 |
+| Qualidade do Trabalho | 17 |
+| Relacionamento Interpessoal | 18 |
+| Capacidade de Aprendizagem | 15 |
+| **Nota Final** | **16 valores** |
+| estado | pendente |
+
+---
+
+## 7. Scripts
+
+| Script | O quê | Ordem |
+|--------|-------|-------|
+| `scripts/seed-mock-data.js` | Escola + users + curso + empresa + estágio + presenças + sumários (Turma 1) | 1º |
+| `scripts/seed-mock-data-extra.js` | Schedule requests + notificações + chat + sumários _state | 2º |
+| `scripts/seed-mock-audit.js` | 20 registos de auditoria | 3º |
+| `scripts/seed-mock-avaliacao.js` | Config avaliação + notas tutor + notas professor | 4º |
+| `scripts/seed-mock-turma2.js` | Turma 2 (Pessoa): curso + users + empresa + estágio + presenças + sumários | 5º |
+
+---
+
+## 8. Credenciais de Login
+
+| Personagem | Email | Password |
+|-----------|-------|----------|
+| D. Afonso Henriques (admin) | afonso.henriques@up.pt | ReiDePortugal123! |
+| Eça de Queirós (professor) | eca.queiros@up.pt | OsMaias1888! |
+| João da Ega (tutor) | joao.ega@ramada.pt | EgaBoemio!123 |
+| Carlos da Maia (aluno) | carlos.maia@up.pt | CarlosMedico!456 |
+| Fernando Pessoa (professor) | fernando.pessoa@up.pt | Heteronimos1925! |
+| Bernardo Soares (tutor) | bernardo.soares@publicitas.pt | LivroDesassossego! |
+| Álvaro de Campos (aluno) | alvaro.campos@up.pt | Tabacaria1928! |
